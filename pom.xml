@@ -11,6 +11,7 @@
 
     <properties>
         <kotlin.version>1.9.23</kotlin.version>
+        <coroutines.version>1.8.0</coroutines.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -31,6 +32,25 @@
             <version>${kotlin.version}</version>
         </dependency>
 
+        <!-- Kotlin Coroutines for async operations -->
+        <dependency>
+            <groupId>org.jetbrains.kotlinx</groupId>
+            <artifactId>kotlinx-coroutines-core</artifactId>
+            <version>${coroutines.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlinx</groupId>
+            <artifactId>kotlinx-coroutines-jdk8</artifactId>
+            <version>${coroutines.version}</version>
+        </dependency>
+
+        <!-- jSerialComm for serial port communication -->
+        <dependency>
+            <groupId>com.fazecast</groupId>
+            <artifactId>jSerialComm</artifactId>
+            <version>2.10.4</version>
+        </dependency>
+
         <!-- Logging (du kommer til å ville logge EHL/RS-485-pakker) -->
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -44,6 +64,14 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Kotlin test -->
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-test-junit5</artifactId>
+            <version>${kotlin.version}</version>
+            <scope>test</scope>
+        </dependency>
+        
         <!-- JUnit 5 for tester -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

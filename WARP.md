@@ -6,6 +6,15 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 LPG-EHL Core is a Kotlin implementation of the EHL (European Hexadecimal Language) protocol for controlling LPG dispensers via RS-485 communication. This project modernizes legacy Visual Basic 6 code into a type-safe, testable architecture.
 
+### Legacy Code Location
+
+The original Visual Basic 6 code that is being modernized is located at:
+```
+~/git/NorgesGass
+```
+
+This Kotlin implementation is a clean rewrite of the legacy VB6 codebase, preserving the EHL protocol logic while bringing it into a modern, maintainable architecture.
+
 ## Development Environment Setup
 
 ### Java and Maven

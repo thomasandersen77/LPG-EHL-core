@@ -1,0 +1,52 @@
+version: '3.8'
+
+# Development override - use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: lpg_ehl_dev
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_password
+
+  lpg-ehl-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      # Use dev Dockerfile with hot reload
+    environment:
+      DB_HOST: postgres
+      DB_NAME: lpg_ehl_dev
+      DB_USER: dev_user
+      DB_PASSWORD: dev_password
+      LOG_LEVEL: DEBUG
+      SPRING_PROFILES_ACTIVE: dev
+    volumes:
+      # Mount source code for hot reload
+      - ./src:/app/src
+      - ./pom.xml:/app/pom.xml
+      - maven-cache:/root/.m2
+    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+    ports:
+      - "8080:8080"
+      - "5005:5005"  # Debug port
+
+  # Mock Serial Port Simulator (for testing without hardware)
+  serial-simulator:
+    build:
+      context: ./tools/serial-simulator
+      dockerfile: Dockerfile
+    container_name: lpg-ehl-simulator
+    ports:
+      - "9000:9000"
+    networks:
+      - lpg-network
+    environment:
+      SIMULATOR_PORT: 9000
+      DISPENSER_COUNT: 4
+
+volumes:
+  maven-cache:
+    driver: local
