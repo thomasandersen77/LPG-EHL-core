@@ -325,7 +325,6 @@ Thomas Andersen - [@thomasandersen77](https://github.com/thomasandersen77)
 
 Project Link: [https://github.com/thomasandersen77/LPG-EHL-core](https://github.com/thomasandersen77/LPG-EHL-core)
 
----
 
-**Built with ❤️ using Kotlin**
->>>>>>> 6a8b7f6 (Initial commit: EHL protocol implementation)
+
+
