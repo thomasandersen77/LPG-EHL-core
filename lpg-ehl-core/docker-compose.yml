@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: lpg-ehl-postgres
+    environment:
+      POSTGRES_DB: lpg_ehl
+      POSTGRES_USER: lpg_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lpg_user -d lpg_ehl"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lpg-network
+
+  # LPG-EHL Core application
+  lpg-ehl-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lpg-ehl-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: lpg_ehl
+      DB_USER: lpg_user
+      DB_PASSWORD: ${DB_PASSWORD:-changeme123}
+      
+      # Application configuration
+      APP_PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      
+      # Serial port configuration (host device mapping required)
+      SERIAL_PORT: ${SERIAL_PORT:-/dev/ttyUSB0}
+      SERIAL_BAUD_RATE: ${SERIAL_BAUD_RATE:-9600}
+      
+      # Dispenser configuration
+      DISPENSER_ADDRESSES: ${DISPENSER_ADDRESSES:-1,2,3,4}
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-1000}
+      
+      # Transaction configuration
+      TRANSACTION_TIMEOUT_SECONDS: ${TRANSACTION_TIMEOUT_SECONDS:-300}
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount serial device (Linux/Mac)
+      - /dev:/dev
+    # Required for serial port access
+    privileged: true
+    restart: unless-stopped
+    networks:
+      - lpg-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Adminer - Database management UI
+  adminer:
+    image: adminer:latest
+    container_name: lpg-ehl-adminer
+    depends_on:
+      - postgres
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: nette
+    networks:
+      - lpg-network
+
+networks:
+  lpg-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
