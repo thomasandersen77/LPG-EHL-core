@@ -1,3 +1,6 @@
+# LPG-EHL-core
+Re-engineering av gammel VBS-kode. 
+
 # LPG-EHL Core 🚀
 
 **Modern Kotlin implementation of the EHL (European Hexadecimal Language) protocol for LPG dispenser control**
@@ -322,6 +325,6 @@ Thomas Andersen - [@thomasandersen77](https://github.com/thomasandersen77)
 
 Project Link: [https://github.com/thomasandersen77/LPG-EHL-core](https://github.com/thomasandersen77/LPG-EHL-core)
 
----
 
-**Built with ❤️ using Kotlin**
+
+
