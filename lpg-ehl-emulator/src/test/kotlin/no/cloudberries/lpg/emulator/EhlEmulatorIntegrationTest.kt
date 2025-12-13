@@ -181,4 +181,90 @@ class EhlEmulatorIntegrationTest {
         val bufferSize = comm.getBufferSize()
         assertEquals(0, bufferSize, "Emulator should ignore packets with wrong address")
     }
+    
+    @Test
+    fun `should handle BLOCK command`() = runBlocking {
+        // Start delivery
+        comm.send(EhlPacket(1, EhlCommand.UNBLOCK))
+        comm.receive() // OK
+        comm.receive() // STATE
+        
+        delay(500)
+        
+        // Send BLOCK to stop
+        comm.send(EhlPacket(1, EhlCommand.BLOCK))
+        val ack = comm.receive()
+        assertEquals(EhlCommand.OK, ack.command)
+        
+        val state = comm.receive()
+        assertEquals(EhlCommand.STATE, state.command)
+        assertEquals(3, state.data[0].toInt()) // Should be FINISHED
+    }
+    
+    @Test
+    fun `should handle PRICE query`() = runBlocking {
+        // Query current price
+        comm.send(EhlPacket(1, EhlCommand.PRICE))
+        val priceResponse = comm.receive()
+        
+        assertEquals(EhlCommand.PRICE, priceResponse.command)
+        assertEquals(4, priceResponse.data.size)
+        
+        // Price should be 10.00 (from setup)
+        // Encoded as ASCII '0', '0', '0', '1' (reversed)
+        assertEquals('0'.code.toByte(), priceResponse.data[0])
+        assertEquals('0'.code.toByte(), priceResponse.data[1])
+    }
+    
+    @Test
+    fun `should handle PROG_PRC command`() = runBlocking {
+        // Program new price: 15.90 kr/l
+        // Encoded as ASCII '0', '9', '5', '1' (reversed)
+        val priceData = byteArrayOf(
+            '0'.code.toByte(),
+            '9'.code.toByte(),
+            '5'.code.toByte(),
+            '1'.code.toByte()
+        )
+        
+        comm.send(EhlPacket(1, EhlCommand.PROG_PRC, priceData))
+        val ack = comm.receive()
+        assertEquals(EhlCommand.OK, ack.command)
+        
+        val priceResponse = comm.receive()
+        assertEquals(EhlCommand.PRICE, priceResponse.command)
+        
+        // Verify price was updated
+        assertEquals('0'.code.toByte(), priceResponse.data[0])
+        assertEquals('9'.code.toByte(), priceResponse.data[1])
+        assertEquals('5'.code.toByte(), priceResponse.data[2])
+        assertEquals('1'.code.toByte(), priceResponse.data[3])
+    }
+    
+    @Test
+    fun `should handle LINETEST command`() = runBlocking {
+        comm.send(EhlPacket(1, EhlCommand.LINETEST))
+        val response = comm.receive()
+        
+        assertEquals(EhlCommand.OK, response.command)
+    }
+    
+    @Test
+    fun `should handle ZER reset command`() = runBlocking {
+        // Start delivery
+        comm.send(EhlPacket(1, EhlCommand.UNBLOCK))
+        comm.receive() // OK
+        comm.receive() // STATE
+        
+        delay(500)
+        
+        // Reset
+        comm.send(EhlPacket(1, EhlCommand.ZER))
+        val ack = comm.receive()
+        assertEquals(EhlCommand.OK, ack.command)
+        
+        val state = comm.receive()
+        assertEquals(EhlCommand.STATE, state.command)
+        assertEquals(0, state.data[0].toInt()) // Should be IDLE after reset
+    }
 }

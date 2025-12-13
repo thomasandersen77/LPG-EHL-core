@@ -32,6 +32,7 @@ class EhlDispenserEmulator(
 
     private var volumeLitres: Double = 0.0
     private var amountCents: Int = 0
+    private var currentPricePerLitreCents: Int = pricePerLitreCents
 
     /**
      * Dispenser state machine states.
@@ -90,11 +91,18 @@ class EhlDispenserEmulator(
         }
 
         return when (packet.command) {
-            EhlCommand.STATE   -> listOf(buildStateResponse())
-            EhlCommand.UNBLOCK -> handleUnblock(packet)
-            EhlCommand.STOP    -> handleStop(packet)
-            EhlCommand.VOLUME  -> listOf(buildVolumeResponse())
-            else               -> listOf(buildErrorPacket(0x10)) // Unsupported command
+            EhlCommand.STATE     -> listOf(buildStateResponse())
+            EhlCommand.UNBLOCK   -> handleUnblock(packet)
+            EhlCommand.STOP      -> handleStop(packet)
+            EhlCommand.BLOCK     -> handleBlock(packet)
+            EhlCommand.VOLUME    -> listOf(buildVolumeResponse())
+            EhlCommand.PRICE     -> listOf(buildPriceResponse())
+            EhlCommand.PROG_PRC  -> handlePriceProgram(packet)
+            EhlCommand.PROG_W    -> handleValuePreset(packet)
+            EhlCommand.PROG_I    -> handleVolumePreset(packet)
+            EhlCommand.LINETEST  -> listOf(EhlPacket(address, EhlCommand.OK))
+            EhlCommand.ZER       -> handleReset(packet)
+            else                 -> listOf(buildErrorPacket(0x10)) // Unsupported command
         }
     }
 
@@ -126,6 +134,76 @@ class EhlDispenserEmulator(
             buildVolumeResponse()
         )
     }
+    
+    private fun handleBlock(packet: EhlPacket): List<EhlPacket> {
+        // BLOCK is similar to STOP - stops delivery and blocks further operations
+        if (state == DispenserState.DELIVERING) {
+            logger.info("Emulator: BLOCK - stopping and blocking delivery")
+            updateDelivery() // Calculate final volume/amount
+            state = DispenserState.FINISHED
+        } else {
+            logger.info("Emulator: BLOCK - dispenser blocked")
+            state = DispenserState.IDLE
+        }
+        return listOf(
+            EhlPacket(address, EhlCommand.OK),
+            buildStateResponse()
+        )
+    }
+    
+    private fun handlePriceProgram(packet: EhlPacket): List<EhlPacket> {
+        if (packet.data.size != 4) {
+            logger.warn("Emulator: Invalid PROG_PRC data size: ${packet.data.size}")
+            return listOf(buildErrorPacket(0x03)) // Invalid data size
+        }
+        
+        // Parse price from ASCII digits (reversed: pennies, dimes, ones, tens)
+        try {
+            val digit1 = (packet.data[3].toInt() and 0xFF).toChar()
+            val digit2 = (packet.data[2].toInt() and 0xFF).toChar()
+            val digit3 = (packet.data[1].toInt() and 0xFF).toChar()
+            val digit4 = (packet.data[0].toInt() and 0xFF).toChar()
+            
+            if (!digit1.isDigit() || !digit2.isDigit() || !digit3.isDigit() || !digit4.isDigit()) {
+                return listOf(buildErrorPacket(0x04)) // Invalid price format
+            }
+            
+            val priceString = "$digit1$digit2.$digit3$digit4"
+            currentPricePerLitreCents = (priceString.toDouble() * 100).toInt()
+            logger.info("Emulator: Price programmed to $priceString kr/L ($currentPricePerLitreCents øre/L)")
+            
+            return listOf(
+                EhlPacket(address, EhlCommand.OK),
+                buildPriceResponse()
+            )
+        } catch (e: Exception) {
+            logger.error("Emulator: Failed to parse price", e)
+            return listOf(buildErrorPacket(0x04))
+        }
+    }
+    
+    private fun handleValuePreset(packet: EhlPacket): List<EhlPacket> {
+        // PROG_W: Program value (amount) preset
+        // For simplicity, emulator just acknowledges
+        logger.info("Emulator: Value preset programmed (not implemented in emulator)")
+        return listOf(EhlPacket(address, EhlCommand.OK))
+    }
+    
+    private fun handleVolumePreset(packet: EhlPacket): List<EhlPacket> {
+        // PROG_I: Program volume preset
+        // For simplicity, emulator just acknowledges
+        logger.info("Emulator: Volume preset programmed (not implemented in emulator)")
+        return listOf(EhlPacket(address, EhlCommand.OK))
+    }
+    
+    private fun handleReset(packet: EhlPacket): List<EhlPacket> {
+        logger.info("Emulator: Reset (ZER) command received")
+        reset()
+        return listOf(
+            EhlPacket(address, EhlCommand.OK),
+            buildStateResponse()
+        )
+    }
 
     /**
      * Update volume and amount based on time since delivery started.
@@ -135,7 +213,7 @@ class EhlDispenserEmulator(
         val start = startedAtMs ?: return
         val seconds = (System.currentTimeMillis() - start) / 1000.0
         volumeLitres = (seconds * litresPerSecond).coerceAtLeast(0.0)
-        amountCents = (volumeLitres * pricePerLitreCents).roundToInt()
+        amountCents = (volumeLitres * currentPricePerLitreCents).roundToInt()
     }
 
     private fun buildStateResponse(): EhlPacket {
@@ -162,6 +240,19 @@ class EhlDispenserEmulator(
         return EhlPacket(address, EhlCommand.VOLUME, data)
     }
 
+    private fun buildPriceResponse(): EhlPacket {
+        // Format: Price as 4 ASCII digits (reversed: pennies, dimes, ones, tens)
+        val priceString = "%.2f".format(currentPricePerLitreCents / 100.0)
+        val parts = priceString.split(".")
+        val data = byteArrayOf(
+            parts[1][1].code.toByte(),  // Pennies
+            parts[1][0].code.toByte(),  // Dimes
+            parts[0][parts[0].length - 1].code.toByte(),  // Ones
+            parts[0][parts[0].length - 2].code.toByte()   // Tens
+        )
+        return EhlPacket(address, EhlCommand.PRICE, data)
+    }
+    
     private fun buildErrorPacket(code: Int): EhlPacket {
         val data = byteArrayOf(code.toByte())
         return EhlPacket(address, EhlCommand.ERROR, data)

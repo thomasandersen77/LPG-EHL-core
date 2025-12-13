@@ -190,6 +190,7 @@ object EhlPacketBuilder {
      */
     fun createValuePreset(address: Int, amount: Int): EhlPacket {
         require(amount >= 0) { "Amount must be non-negative" }
+        require(amount <= 99999999) { "Amount exceeds maximum (99999999 øre)" }
         
         // Convert amount to 4-byte BCD format
         val amountStr = "%08d".format(amount)
@@ -199,5 +200,81 @@ object EhlPacketBuilder {
         }
         
         return EhlPacket(address, EhlCommand.PROG_W, data)
+    }
+}
+
+/**
+ * Helper functions for parsing EHL packet data payloads
+ */
+object EhlDataParser {
+    
+    /**
+     * Parse VOLUME response data
+     * Format: volume in deciliters (2 bytes, big-endian) + amount in øre (2 bytes, big-endian)
+     * 
+     * @param data Raw data bytes from VOLUME response
+     * @return Pair of (volumeLitres, amountCents)
+     * @throws IllegalArgumentException if data format is invalid
+     */
+    fun parseVolumeData(data: ByteArray): Pair<Double, Int> {
+        require(data.size == 4) { "VOLUME data must be exactly 4 bytes" }
+        
+        // Parse volume in deciliters (big-endian)
+        val volumeDeciliters = ((data[0].toInt() and 0xFF) shl 8) or (data[1].toInt() and 0xFF)
+        val volumeLitres = volumeDeciliters / 10.0
+        
+        // Parse amount in øre (big-endian)
+        val amountCents = ((data[2].toInt() and 0xFF) shl 8) or (data[3].toInt() and 0xFF)
+        
+        return Pair(volumeLitres, amountCents)
+    }
+    
+    /**
+     * Parse STATE response data
+     * 
+     * @param data Raw data bytes from STATE response
+     * @return State code (0-9)
+     * @throws IllegalArgumentException if data format is invalid
+     */
+    fun parseStateData(data: ByteArray): Int {
+        require(data.size == 1) { "STATE data must be exactly 1 byte" }
+        return data[0].toInt() and 0xFF
+    }
+    
+    /**
+     * Parse PRICE response data
+     * Format: Price as 4 ASCII digits (reversed: pennies, dimes, ones, tens)
+     * Example: "15.90" is encoded as ASCII '0', '9', '5', '1'
+     * 
+     * @param data Raw data bytes from PRICE response
+     * @return Price as string in format "XX.XX"
+     * @throws IllegalArgumentException if data format is invalid
+     */
+    fun parsePriceData(data: ByteArray): String {
+        require(data.size == 4) { "PRICE data must be exactly 4 bytes" }
+        
+        // Extract ASCII digits (reversed order)
+        val digit1 = (data[3].toInt() and 0xFF).toChar()  // Tens
+        val digit2 = (data[2].toInt() and 0xFF).toChar()  // Ones
+        val digit3 = (data[1].toInt() and 0xFF).toChar()  // Dimes
+        val digit4 = (data[0].toInt() and 0xFF).toChar()  // Pennies
+        
+        require(digit1.isDigit() && digit2.isDigit() && digit3.isDigit() && digit4.isDigit()) {
+            "PRICE data contains non-ASCII digits"
+        }
+        
+        return "$digit1$digit2.$digit3$digit4"
+    }
+    
+    /**
+     * Parse ERROR response data
+     * 
+     * @param data Raw data bytes from ERROR response
+     * @return Error code
+     * @throws IllegalArgumentException if data format is invalid
+     */
+    fun parseErrorData(data: ByteArray): Int {
+        require(data.size == 1) { "ERROR data must be exactly 1 byte" }
+        return data[0].toInt() and 0xFF
     }
 }
