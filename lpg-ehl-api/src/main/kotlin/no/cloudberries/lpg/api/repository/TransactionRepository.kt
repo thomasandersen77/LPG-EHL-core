@@ -1,0 +1,72 @@
+package no.cloudberries.lpg.api.repository
+
+import no.cloudberries.lpg.api.model.Transaction
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
+import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
+import org.springframework.stereotype.Repository
+import java.time.LocalDateTime
+import java.util.*
+
+@Repository
+interface TransactionRepository : JpaRepository<Transaction, UUID> {
+
+    /**
+     * Find transactions by dispenser address with pagination
+     */
+    fun findByDispenserAddress(dispenserAddress: Int, pageable: Pageable): Page<Transaction>
+
+    /**
+     * Find transactions within a time range with pagination
+     */
+    fun findByTimestampBetween(
+        from: LocalDateTime,
+        to: LocalDateTime,
+        pageable: Pageable
+    ): Page<Transaction>
+
+    /**
+     * Find transactions by dispenser and time range
+     */
+    @Query(
+        """
+        SELECT t FROM Transaction t 
+        WHERE t.dispenserAddress = :dispenserAddress 
+        AND t.timestamp BETWEEN :from AND :to
+        ORDER BY t.timestamp DESC
+        """
+    )
+    fun findByDispenserAndTimeRange(
+        @Param("dispenserAddress") dispenserAddress: Int,
+        @Param("from") from: LocalDateTime,
+        @Param("to") to: LocalDateTime,
+        pageable: Pageable
+    ): Page<Transaction>
+
+    /**
+     * Get unsynced transactions (query the view)
+     */
+    @Query(
+        nativeQuery = true,
+        value = """
+        SELECT t.* FROM transactions t
+        INNER JOIN azure_sync_queue asq ON asq.entity_id = t.transaction_id
+        WHERE asq.status != 'SYNCED'
+        ORDER BY t.timestamp DESC
+        LIMIT :limit
+        """
+    )
+    fun findUnsyncedTransactions(@Param("limit") limit: Int): List<Transaction>
+
+    /**
+     * Count transactions by dispenser
+     */
+    fun countByDispenserAddress(dispenserAddress: Int): Long
+
+    /**
+     * Get latest transaction for a dispenser
+     */
+    fun findFirstByDispenserAddressOrderByTimestampDesc(dispenserAddress: Int): Transaction?
+}

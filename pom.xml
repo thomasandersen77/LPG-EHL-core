@@ -17,11 +17,13 @@
     <modules>
         <module>lpg-ehl-core</module>
         <module>lpg-ehl-emulator</module>
+        <module>lpg-ehl-api</module>
     </modules>
 
     <properties>
         <kotlin.version>2.1.10</kotlin.version>
         <coroutines.version>1.8.0</coroutines.version>
+        <spring-boot.version>3.2.1</spring-boot.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -29,10 +31,21 @@
         <logback.version>1.5.6</logback.version>
         <junit.version>5.10.2</junit.version>
         <jserialcomm.version>2.10.4</jserialcomm.version>
+        <azure-storage.version>12.24.0</azure-storage.version>
+        <wiremock.version>3.3.1</wiremock.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Spring Boot BOM -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- Kotlin -->
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
@@ -86,6 +99,13 @@
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter</artifactId>
                 <version>${junit.version}</version>
+            </dependency>
+
+            <!-- Azure Storage Queue -->
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-storage-queue</artifactId>
+                <version>${azure-storage.version}</version>
             </dependency>
 
             <!-- Internal modules -->

@@ -1,0 +1,91 @@
+spring:
+  application:
+    name: lpg-ehl-api
+  
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lpg_ehl}
+    username: ${DB_USER:lpg_user}
+    password: ${DB_PASSWORD:lpg_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+# Azure Storage Queue Configuration
+azure:
+  enabled: ${AZURE_ENABLED:true}
+  storage:
+    connection-string: ${AZURE_CONNECTION_STRING:UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite:10001}
+    queue-name: ${AZURE_QUEUE_NAME:lpg-transactions}
+  sync:
+    interval-seconds: ${AZURE_SYNC_INTERVAL:300}
+    batch-size: ${AZURE_SYNC_BATCH_SIZE:10}
+    max-retries: ${AZURE_SYNC_MAX_RETRIES:3}
+
+# Security Configuration
+security:
+  api-token: ${API_AUTH_TOKEN:dev-token-12345}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+# Logging
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true

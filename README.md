@@ -16,20 +16,25 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 
 - **lpg-ehl-core**: Core protocol implementation with real serial port communication
 - **lpg-ehl-emulator**: Emulator for testing without physical hardware
+- **lpg-ehl-api**: Spring Boot REST API with Azure sync and full observability
 - **Docker + PostgreSQL**: Production-ready containerized deployment with local database
-- **Azure Sync**: Automatic cloud backup and reporting integration
+- **Azure Sync**: Automatic cloud backup and reporting integration with retry logic
 
 ## 🏗️ Project Structure
 
 ```
 lpg-ehl/
 ├── pom.xml                        # Parent POM with dependency management
+├── Makefile                       # Common development tasks
 ├── docker-compose.yml             # Production deployment
 ├── docker-compose-local.yaml      # Local development with emulator
 ├── init-db.sql                    # Database schema
 ├── .env.example                   # Environment configuration template
 ├── scripts/
 │   └── backup.sh                  # Automatic database backup
+├── wiremock/                      # WireMock stubs for testing
+│   ├── mappings/                  # Mock API definitions
+│   └── __files/                   # Mock response files
 ├── lpg-ehl-core/                  # Core protocol implementation
 │   ├── pom.xml
 │   └── src/
@@ -38,13 +43,25 @@ lpg-ehl/
 │       │   ├── communication/         # Serial port communication
 │       │   └── transaction/           # Transaction state machine
 │       └── test/kotlin/               # Unit tests (50 tests)
-└── lpg-ehl-emulator/              # Testing emulator
+├── lpg-ehl-emulator/              # Testing emulator
+│   ├── pom.xml
+│   └── src/
+│       ├── main/kotlin/no/cloudberries/lpg/emulator/
+│       │   ├── EhlDispenserEmulator.kt    # Dispenser state machine
+│       │   └── InMemorySerialPort.kt      # In-memory serial port
+│       └── test/kotlin/                   # Integration tests (11 tests)
+└── lpg-ehl-api/                   # Spring Boot REST API
+    ├── README.md                      # API-specific documentation
     ├── pom.xml
     └── src/
-        ├── main/kotlin/no/cloudberries/lpg/emulator/
-        │   ├── EhlDispenserEmulator.kt    # Dispenser state machine
-        │   └── InMemorySerialPort.kt      # In-memory serial port
-        └── test/kotlin/                   # Integration tests (11 tests)
+        ├── main/kotlin/no/cloudberries/lpg/api/
+        │   ├── controller/                # REST endpoints
+        │   ├── service/                   # Business logic + Azure sync
+        │   ├── repository/                # JPA repositories
+        │   ├── model/                     # JPA entities
+        │   ├── dto/                       # Response DTOs
+        │   └── config/                    # Security, Database, Azure
+        └── test/kotlin/                   # Integration tests (Testcontainers)
 ```
 
 ## 🚀 Quick Start
