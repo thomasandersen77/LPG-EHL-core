@@ -1,10 +1,7 @@
 package no.cloudberries.lpg.communication
 
 import kotlinx.coroutines.*
-import no.cloudberries.lpg.protocol.EhlCodec
-import no.cloudberries.lpg.protocol.EhlPacket
-import no.cloudberries.lpg.protocol.EhlPacketParseResult
-import no.cloudberries.lpg.protocol.EhlProtocol
+import no.cloudberries.lpg.protocol.*
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeoutException
@@ -52,12 +49,15 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
         }
 
         val bytes = EhlCodec.encode(packet)
-        logger.debug("Sending EHL packet to address ${packet.address}: $packet")
+        
+        // Human-readable logging
+        logger.info(EhlPacketFormatter.formatPacketForLogging(packet, EhlPacketFormatter.Direction.SENDING))
+        if (logger.isDebugEnabled) {
+            logger.debug("Raw bytes (${bytes.size}): ${bytes.toHexString()}")
+        }
         
         serialPort.write(bytes)
         serialPort.flush()
-        
-        logger.debug("Sent ${bytes.size} bytes: ${bytes.toHexString()}")
     }
 
     /**
@@ -88,7 +88,9 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                 if (newData.isNotEmpty()) {
                     synchronized(bufferLock) {
                         receiveBuffer.addAll(newData.toList())
-                        logger.debug("Buffer now has ${receiveBuffer.size} bytes")
+                        if (logger.isDebugEnabled) {
+                            logger.debug(EhlPacketFormatter.formatBufferStatus(receiveBuffer.size, "received data"))
+                        }
                     }
                     invalidByteStreak = 0
                 } else {
@@ -99,13 +101,19 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                 // Prevent buffer overflow
                 synchronized(bufferLock) {
                     if (receiveBuffer.size > MAX_BUFFER_SIZE) {
-                        logger.warn("Receive buffer overflow (${receiveBuffer.size} bytes), clearing oldest bytes")
+                        logger.warn(EhlPacketFormatter.formatError(
+                            "Buffer Overflow",
+                            "Buffer exceeded ${MAX_BUFFER_SIZE} bytes (${receiveBuffer.size}), clearing oldest data"
+                        ))
                         receiveBuffer.subList(0, receiveBuffer.size - MAX_BUFFER_SIZE).clear()
                     }
                     
                     // If we keep receiving invalid data, something is wrong - clear buffer and reset
                     if (invalidByteStreak >= maxInvalidStreak) {
-                        logger.error("Too many consecutive invalid bytes ($invalidByteStreak), clearing buffer")
+                        logger.error(EhlPacketFormatter.formatError(
+                            "Too Many Invalid Bytes",
+                            "$invalidByteStreak consecutive invalid bytes, clearing buffer to recover"
+                        ))
                         receiveBuffer.clear()
                         invalidByteStreak = 0
                     }
@@ -133,13 +141,18 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
             if (stxIndex == -1) {
                 // No STX in buffer - clear garbage data
                 if (receiveBuffer.size > 10) {
-                    logger.warn("No STX found in buffer of ${receiveBuffer.size} bytes, clearing garbage")
+                    logger.warn(EhlPacketFormatter.formatError(
+                        "Synchronization Lost",
+                        "No STX byte found in ${receiveBuffer.size} bytes, clearing garbage data"
+                    ))
                     receiveBuffer.clear()
                 }
                 return null
             } else if (stxIndex > 0) {
                 // Found STX but not at start - remove garbage before it
-                logger.debug("Removing $stxIndex garbage bytes before STX")
+                if (logger.isDebugEnabled) {
+                    logger.debug("🔧 Synchronization: Removed $stxIndex garbage bytes before STX")
+                }
                 receiveBuffer.subList(0, stxIndex).clear()
             }
 
@@ -147,33 +160,60 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
             
             when (val result = EhlCodec.decode(bufferArray)) {
                 is EhlPacketParseResult.Success -> {
-                    logger.debug("Successfully parsed EHL packet: ${result.packet}")
+                    // Human-readable logging
+                    logger.info(EhlPacketFormatter.formatPacketForLogging(
+                        result.packet,
+                        EhlPacketFormatter.Direction.RECEIVING
+                    ))
+                    
                     // Clear the parsed bytes from buffer
                     val packetLength = result.packet.packetLength
                     if (packetLength <= receiveBuffer.size) {
                         receiveBuffer.subList(0, packetLength).clear()
+                        if (logger.isDebugEnabled) {
+                            logger.debug(EhlPacketFormatter.formatBufferStatus(
+                                receiveBuffer.size,
+                                "after parsing packet"
+                            ))
+                        }
                     } else {
-                        logger.error("Packet length mismatch: $packetLength vs buffer ${receiveBuffer.size}")
+                        logger.error(EhlPacketFormatter.formatError(
+                            "Packet Length Mismatch",
+                            "Expected $packetLength bytes but buffer has ${receiveBuffer.size}"
+                        ))
                         receiveBuffer.clear()
                     }
                     return result.packet
                 }
                 
                 is EhlPacketParseResult.Incomplete -> {
-                    logger.debug("Incomplete packet in buffer (${receiveBuffer.size} bytes), waiting for more data")
+                    if (logger.isDebugEnabled) {
+                        logger.debug("⏳ Incomplete packet: ${receiveBuffer.size} bytes received, waiting for more data")
+                    }
                     // Edge case: if buffer has been incomplete for too long, it might be corrupt
                     if (receiveBuffer.size >= EhlProtocol.MIN_PACKET_LENGTH + 10) {
-                        logger.warn("Buffer has ${receiveBuffer.size} bytes but still incomplete, might be corrupt")
+                        logger.warn(EhlPacketFormatter.formatError(
+                            "Possibly Corrupt Data",
+                            "Buffer has ${receiveBuffer.size} bytes but packet still incomplete"
+                        ))
                     }
                     return null
                 }
                 
                 is EhlPacketParseResult.ChecksumError -> {
-                    logger.error("Checksum error: expected 0x%02X, got 0x%02X".format(result.expected, result.actual))
+                    logger.error(EhlPacketFormatter.formatError(
+                        "Checksum Mismatch",
+                        "Expected 0x%02X, got 0x%02X (data corrupted in transmission)".format(
+                            result.expected,
+                            result.actual
+                        )
+                    ))
                     // Try to find next STX to recover
                     val nextStx = receiveBuffer.drop(1).indexOfFirst { it == EhlProtocol.STX }
                     if (nextStx >= 0) {
-                        logger.debug("Found next STX at offset ${nextStx + 1}, skipping corrupt packet")
+                        if (logger.isDebugEnabled) {
+                            logger.debug("🔧 Recovery: Found next STX at offset ${nextStx + 1}, skipping corrupt packet")
+                        }
                         receiveBuffer.subList(0, nextStx + 1).clear()
                     } else {
                         // No next STX, just remove first byte
@@ -183,11 +223,16 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                 }
                 
                 is EhlPacketParseResult.InvalidFormat -> {
-                    logger.error("Invalid packet format: ${result.reason}")
+                    logger.error(EhlPacketFormatter.formatError(
+                        "Invalid Packet Format",
+                        result.reason
+                    ))
                     // Try to find next STX to recover
                     val nextStx = receiveBuffer.drop(1).indexOfFirst { it == EhlProtocol.STX }
                     if (nextStx >= 0) {
-                        logger.debug("Found next STX at offset ${nextStx + 1}, skipping invalid packet")
+                        if (logger.isDebugEnabled) {
+                            logger.debug("🔧 Recovery: Found next STX at offset ${nextStx + 1}, skipping invalid packet")
+                        }
                         receiveBuffer.subList(0, nextStx + 1).clear()
                     } else {
                         // No next STX, just remove first byte

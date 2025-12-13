@@ -1,9 +1,6 @@
 package no.cloudberries.lpg.emulator
 
-import no.cloudberries.lpg.protocol.EhlCodec
-import no.cloudberries.lpg.protocol.EhlCommand
-import no.cloudberries.lpg.protocol.EhlPacket
-import no.cloudberries.lpg.protocol.EhlPacketParseResult
+import no.cloudberries.lpg.protocol.*
 import org.slf4j.LoggerFactory
 import kotlin.math.roundToInt
 
@@ -66,55 +63,105 @@ class EhlDispenserEmulator(
 
         return when (val parsed = EhlCodec.decode(bytes)) {
             is EhlPacketParseResult.Success -> {
-                logger.info("Emulator received: ${parsed.packet}")
-                handlePacket(parsed.packet).map { EhlCodec.encode(it) }
+                logger.info("\n" + "=".repeat(80))
+                logger.info(EhlPacketFormatter.formatPacketForLogging(
+                    parsed.packet,
+                    EhlPacketFormatter.Direction.RECEIVING
+                ))
+                
+                val responses = handlePacket(parsed.packet)
+                responses.forEach { response ->
+                    logger.info(EhlPacketFormatter.formatPacketForLogging(
+                        response,
+                        EhlPacketFormatter.Direction.SENDING
+                    ))
+                }
+                logger.info("=".repeat(80))
+                
+                responses.map { EhlCodec.encode(it) }
             }
             is EhlPacketParseResult.Incomplete -> {
-                logger.warn("Emulator received incomplete packet")
+                logger.warn("⚠️ EMULATOR: Received incomplete packet (${bytes.size} bytes)")
                 emptyList()
             }
             is EhlPacketParseResult.ChecksumError -> {
-                logger.warn("Emulator checksum error: expected ${parsed.expected} vs ${parsed.actual}")
-                listOf(EhlCodec.encode(buildErrorPacket(0x01)))   // Checksum error code
+                logger.warn(EhlPacketFormatter.formatError(
+                    "EMULATOR Checksum Error",
+                    "Expected 0x%02X, got 0x%02X".format(parsed.expected, parsed.actual)
+                ))
+                listOf(EhlCodec.encode(buildErrorPacket(0x01)))
             }
             is EhlPacketParseResult.InvalidFormat -> {
-                logger.warn("Emulator invalid format: ${parsed.reason}")
-                listOf(EhlCodec.encode(buildErrorPacket(0x02)))   // Invalid format error code
+                logger.warn(EhlPacketFormatter.formatError(
+                    "EMULATOR Invalid Format",
+                    parsed.reason
+                ))
+                listOf(EhlCodec.encode(buildErrorPacket(0x02)))
             }
         }
     }
 
     private fun handlePacket(packet: EhlPacket): List<EhlPacket> {
         if (packet.address != address) {
-            // Wrong address - ignore
+            logger.warn("📪 IGNORED: Packet addressed to #${packet.address} (I am #$address)")
             return emptyList()
         }
 
         return when (packet.command) {
-            EhlCommand.STATE     -> listOf(buildStateResponse())
+            EhlCommand.STATE     -> {
+                logger.info("📊 Processing STATE query")
+                listOf(buildStateResponse())
+            }
             EhlCommand.UNBLOCK   -> handleUnblock(packet)
             EhlCommand.STOP      -> handleStop(packet)
             EhlCommand.BLOCK     -> handleBlock(packet)
-            EhlCommand.VOLUME    -> listOf(buildVolumeResponse())
-            EhlCommand.PRICE     -> listOf(buildPriceResponse())
+            EhlCommand.VOLUME    -> {
+                updateDelivery() // Update live values
+                logger.info("📊 Processing VOLUME query")
+                listOf(buildVolumeResponse())
+            }
+            EhlCommand.PRICE     -> {
+                logger.info("📊 Processing PRICE query")
+                listOf(buildPriceResponse())
+            }
             EhlCommand.PROG_PRC  -> handlePriceProgram(packet)
             EhlCommand.PROG_W    -> handleValuePreset(packet)
             EhlCommand.PROG_I    -> handleVolumePreset(packet)
-            EhlCommand.LINETEST  -> listOf(EhlPacket(address, EhlCommand.OK))
+            EhlCommand.LINETEST  -> {
+                logger.info("🔌 Processing LINETEST - communication OK")
+                listOf(EhlPacket(address, EhlCommand.OK))
+            }
             EhlCommand.ZER       -> handleReset(packet)
-            else                 -> listOf(buildErrorPacket(0x10)) // Unsupported command
+            else                 -> {
+                logger.warn("⚠️ Unsupported command: ${packet.command.name} (code=${packet.command.code})")
+                listOf(buildErrorPacket(0x10))
+            }
         }
     }
 
     private fun handleUnblock(packet: EhlPacket): List<EhlPacket> {
+        val previousState = state.name
+        
         // Start delivery if in IDLE, READY, or FINISHED state
         if (state == DispenserState.IDLE || state == DispenserState.READY || state == DispenserState.FINISHED) {
-            logger.info("Emulator: UNBLOCK - starting delivery")
             state = DispenserState.DELIVERING
             startedAtMs = System.currentTimeMillis()
             volumeLitres = 0.0
             amountCents = 0
+            
+            logger.info(EhlPacketFormatter.formatStateTransition(
+                previousState,
+                state.name,
+                "UNBLOCK command received"
+            ))
+            logger.info("🚀 DELIVERY STARTED: Price=%.2f kr/L | Flow rate=%.2f L/s".format(
+                currentPricePerLitreCents / 100.0,
+                litresPerSecond
+            ))
+        } else {
+            logger.warn("⚠️ UNBLOCK ignored - already in $previousState state")
         }
+        
         // Respond with OK + STATE
         return listOf(
             EhlPacket(address, EhlCommand.OK),
@@ -123,11 +170,30 @@ class EhlDispenserEmulator(
     }
 
     private fun handleStop(packet: EhlPacket): List<EhlPacket> {
+        val previousState = state.name
+        
         if (state == DispenserState.DELIVERING) {
-            logger.info("Emulator: STOP - finishing delivery")
             updateDelivery() // Calculate final volume/amount
             state = DispenserState.FINISHED
+            
+            logger.info(EhlPacketFormatter.formatStateTransition(
+                previousState,
+                state.name,
+                "STOP command received"
+            ))
+            logger.info(EhlPacketFormatter.formatDeliveryProgress(
+                volumeLitres,
+                amountCents,
+                currentPricePerLitreCents
+            ))
+            logger.info("🏁 DELIVERY FINISHED: %.2f L delivered for %.2f kr".format(
+                volumeLitres,
+                amountCents / 100.0
+            ))
+        } else {
+            logger.warn("⚠️ STOP received but not delivering (state=$previousState)")
         }
+        
         return listOf(
             EhlPacket(address, EhlCommand.OK),
             buildStateResponse(),
@@ -136,15 +202,31 @@ class EhlDispenserEmulator(
     }
     
     private fun handleBlock(packet: EhlPacket): List<EhlPacket> {
+        val previousState = state.name
+        
         // BLOCK is similar to STOP - stops delivery and blocks further operations
         if (state == DispenserState.DELIVERING) {
-            logger.info("Emulator: BLOCK - stopping and blocking delivery")
             updateDelivery() // Calculate final volume/amount
             state = DispenserState.FINISHED
+            
+            logger.info(EhlPacketFormatter.formatStateTransition(
+                previousState,
+                state.name,
+                "BLOCK command during delivery"
+            ))
+            logger.info("🛑 DELIVERY BLOCKED: %.2f L | %.2f kr".format(
+                volumeLitres,
+                amountCents / 100.0
+            ))
         } else {
-            logger.info("Emulator: BLOCK - dispenser blocked")
             state = DispenserState.IDLE
+            logger.info(EhlPacketFormatter.formatStateTransition(
+                previousState,
+                state.name,
+                "BLOCK command - dispenser blocked"
+            ))
         }
+        
         return listOf(
             EhlPacket(address, EhlCommand.OK),
             buildStateResponse()
@@ -153,8 +235,11 @@ class EhlDispenserEmulator(
     
     private fun handlePriceProgram(packet: EhlPacket): List<EhlPacket> {
         if (packet.data.size != 4) {
-            logger.warn("Emulator: Invalid PROG_PRC data size: ${packet.data.size}")
-            return listOf(buildErrorPacket(0x03)) // Invalid data size
+            logger.warn(EhlPacketFormatter.formatError(
+                "Invalid PROG_PRC Data",
+                "Expected 4 bytes, got ${packet.data.size}"
+            ))
+            return listOf(buildErrorPacket(0x03))
         }
         
         // Parse price from ASCII digits (reversed: pennies, dimes, ones, tens)
@@ -165,40 +250,57 @@ class EhlDispenserEmulator(
             val digit4 = (packet.data[0].toInt() and 0xFF).toChar()
             
             if (!digit1.isDigit() || !digit2.isDigit() || !digit3.isDigit() || !digit4.isDigit()) {
-                return listOf(buildErrorPacket(0x04)) // Invalid price format
+                logger.warn(EhlPacketFormatter.formatError(
+                    "Invalid Price Format",
+                    "Non-digit ASCII characters in price data"
+                ))
+                return listOf(buildErrorPacket(0x04))
             }
             
+            val oldPrice = currentPricePerLitreCents / 100.0
             val priceString = "$digit1$digit2.$digit3$digit4"
             currentPricePerLitreCents = (priceString.toDouble() * 100).toInt()
-            logger.info("Emulator: Price programmed to $priceString kr/L ($currentPricePerLitreCents øre/L)")
+            
+            logger.info("💰 PRICE PROGRAMMED: %.2f kr/L → %.2f kr/L".format(oldPrice, currentPricePerLitreCents / 100.0))
             
             return listOf(
                 EhlPacket(address, EhlCommand.OK),
                 buildPriceResponse()
             )
         } catch (e: Exception) {
-            logger.error("Emulator: Failed to parse price", e)
+            logger.error(EhlPacketFormatter.formatError(
+                "Price Parse Failed",
+                e.message ?: "Unknown error"
+            ))
             return listOf(buildErrorPacket(0x04))
         }
     }
     
     private fun handleValuePreset(packet: EhlPacket): List<EhlPacket> {
         // PROG_W: Program value (amount) preset
-        // For simplicity, emulator just acknowledges
-        logger.info("Emulator: Value preset programmed (not implemented in emulator)")
+        val hex = packet.data.joinToString("") { "%02X".format(it) }
+        logger.info("💳 VALUE PRESET: Amount=$hex (BCD) - Acknowledged but not enforced in emulator")
         return listOf(EhlPacket(address, EhlCommand.OK))
     }
     
     private fun handleVolumePreset(packet: EhlPacket): List<EhlPacket> {
         // PROG_I: Program volume preset
-        // For simplicity, emulator just acknowledges
-        logger.info("Emulator: Volume preset programmed (not implemented in emulator)")
+        val hex = packet.data.joinToString(" ") { "%02X".format(it) }
+        logger.info("⛽ VOLUME PRESET: Volume=$hex (BCD) - Acknowledged but not enforced in emulator")
         return listOf(EhlPacket(address, EhlCommand.OK))
     }
     
     private fun handleReset(packet: EhlPacket): List<EhlPacket> {
-        logger.info("Emulator: Reset (ZER) command received")
+        val previousState = state.name
         reset()
+        
+        logger.info(EhlPacketFormatter.formatStateTransition(
+            previousState,
+            state.name,
+            "ZER (Reset) command received"
+        ))
+        logger.info("🔄 DISPENSER RESET: All counters cleared, state → IDLE")
+        
         return listOf(
             EhlPacket(address, EhlCommand.OK),
             buildStateResponse()
@@ -220,6 +322,13 @@ class EhlDispenserEmulator(
         // Update during delivery for "live" status
         if (state == DispenserState.DELIVERING) {
             updateDelivery()
+            if (logger.isDebugEnabled) {
+                logger.debug(EhlPacketFormatter.formatDeliveryProgress(
+                    volumeLitres,
+                    amountCents,
+                    currentPricePerLitreCents
+                ))
+            }
         }
         val data = byteArrayOf(state.code.toByte())
         return EhlPacket(address, EhlCommand.STATE, data)
