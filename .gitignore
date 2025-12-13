@@ -79,3 +79,14 @@ logs/
 *.swp
 *~.nib
 local.properties
+
+# Docker & Database
+local-data/
+.env
+!.env.example
+
+# Backups
+backups/
+*.sql
+!init-db.sql
+*.sql.gz

@@ -1,0 +1,161 @@
+version: '3.8'
+
+# Production Docker Compose for LPG-EHL on Pump Linux Machine
+# This runs on the physical pump hardware
+
+services:
+  # PostgreSQL database - Master database on pump
+  postgres:
+    image: postgres:16-alpine
+    container_name: lpg-ehl-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lpg_ehl}
+      POSTGRES_USER: ${POSTGRES_USER:-lpg_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - /opt/lpg-ehl/data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "127.0.0.1:5432:5432"  # Only localhost access
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lpg_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - lpg-ehl-network
+
+  # LPG-EHL Application
+  lpg-ehl-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lpg-ehl-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database connection
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-lpg_ehl}
+      DB_USER: ${POSTGRES_USER:-lpg_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      
+      # Serial port configuration
+      SERIAL_PORT: ${SERIAL_PORT:-/dev/ttyUSB0}
+      SERIAL_BAUD_RATE: ${SERIAL_BAUD_RATE:-9600}
+      
+      # Dispenser configuration
+      DISPENSER_ADDRESS: ${DISPENSER_ADDRESS:-1}
+      PRICE_PER_LITRE_CENTS: ${PRICE_PER_LITRE_CENTS:-1590}
+      
+      # Azure sync configuration
+      AZURE_ENABLED: ${AZURE_ENABLED:-true}
+      AZURE_CONNECTION_STRING: ${AZURE_CONNECTION_STRING}
+      AZURE_STORAGE_QUEUE: ${AZURE_STORAGE_QUEUE:-lpg-transactions}
+      AZURE_SYNC_INTERVAL_SECONDS: ${AZURE_SYNC_INTERVAL_SECONDS:-300}
+      
+      # API configuration
+      API_ENABLED: ${API_ENABLED:-true}
+      API_PORT: 8080
+      API_AUTH_TOKEN: ${API_AUTH_TOKEN}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - /opt/lpg-ehl/logs:/app/logs
+      - /opt/lpg-ehl/config:/app/config:ro
+    devices:
+      - ${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}  # Pass-through serial port
+    ports:
+      - "${API_PORT:-8080}:8080"  # REST API for external access
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - lpg-ehl-network
+
+  # Automatic backup service
+  backup:
+    image: postgres:16-alpine
+    container_name: lpg-ehl-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lpg_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-lpg_ehl}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+      BACKUP_KEEP_HOURS: ${BACKUP_KEEP_HOURS:-24}
+    volumes:
+      - /opt/lpg-ehl/backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    networks:
+      - lpg-ehl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # Azure sync service (separate container for resilience)
+  azure-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lpg-ehl-azure-sync
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-lpg_ehl}
+      DB_USER: ${POSTGRES_USER:-lpg_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      AZURE_CONNECTION_STRING: ${AZURE_CONNECTION_STRING}
+      AZURE_STORAGE_QUEUE: ${AZURE_STORAGE_QUEUE:-lpg-transactions}
+      SYNC_INTERVAL_SECONDS: ${AZURE_SYNC_INTERVAL_SECONDS:-300}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    command: ["java", "-jar", "/app/azure-sync.jar"]
+    volumes:
+      - /opt/lpg-ehl/logs:/app/logs
+    networks:
+      - lpg-ehl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  lpg-ehl-network:
+    driver: bridge
+
+# Volume notes:
+# /opt/lpg-ehl/data     - PostgreSQL data (CRITICAL - must be backed up)
+# /opt/lpg-ehl/backups  - Automatic database backups
+# /opt/lpg-ehl/logs     - Application logs
+# /opt/lpg-ehl/config   - Configuration files

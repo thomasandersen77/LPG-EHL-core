@@ -3,7 +3,7 @@
 **Modern Kotlin implementation of the EHL (European Hexadecimal Language) protocol for LPG dispenser control**
 
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/thomasandersen77/LPG-EHL-core)
-[![Tests](https://img.shields.io/badge/tests-44%20passed-brightgreen)](https://github.com/thomasandersen77/LPG-EHL-core)
+[![Tests](https://img.shields.io/badge/tests-61%20passed-brightgreen)](https://github.com/thomasandersen77/LPG-EHL-core)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.9.23-blue)](https://kotlinlang.org/)
 [![Java](https://img.shields.io/badge/java-21-orange)](https://openjdk.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -16,27 +16,35 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 
 - **lpg-ehl-core**: Core protocol implementation with real serial port communication
 - **lpg-ehl-emulator**: Emulator for testing without physical hardware
+- **Docker + PostgreSQL**: Production-ready containerized deployment with local database
+- **Azure Sync**: Automatic cloud backup and reporting integration
 
 ## 🏗️ Project Structure
 
 ```
 lpg-ehl/
-├── pom.xml                    # Parent POM with dependency management
-├── lpg-ehl-core/              # Core protocol implementation
+├── pom.xml                        # Parent POM with dependency management
+├── docker-compose.yml             # Production deployment
+├── docker-compose-local.yaml      # Local development with emulator
+├── init-db.sql                    # Database schema
+├── .env.example                   # Environment configuration template
+├── scripts/
+│   └── backup.sh                  # Automatic database backup
+├── lpg-ehl-core/                  # Core protocol implementation
 │   ├── pom.xml
 │   └── src/
 │       ├── main/kotlin/no/cloudberries/lpg/
-│       │   ├── protocol/          # EHL packet encoding/decoding
-│       │   ├── communication/     # Serial port communication
-│       │   └── transaction/       # Transaction state machine
-│       └── test/kotlin/           # Unit tests (38 tests)
-└── lpg-ehl-emulator/          # Testing emulator
+│       │   ├── protocol/              # EHL packet encoding/decoding
+│       │   ├── communication/         # Serial port communication
+│       │   └── transaction/           # Transaction state machine
+│       └── test/kotlin/               # Unit tests (50 tests)
+└── lpg-ehl-emulator/              # Testing emulator
     ├── pom.xml
     └── src/
         ├── main/kotlin/no/cloudberries/lpg/emulator/
         │   ├── EhlDispenserEmulator.kt    # Dispenser state machine
         │   └── InMemorySerialPort.kt      # In-memory serial port
-        └── test/kotlin/                   # Integration tests (6 tests)
+        └── test/kotlin/                   # Integration tests (11 tests)
 ```
 
 ## 🚀 Quick Start
@@ -73,9 +81,195 @@ lpg-ehl/
    
    Expected output:
    ```
-   Tests run: 44, Failures: 0, Errors: 0, Skipped: 0
+   Tests run: 61, Failures: 0, Errors: 0, Skipped: 0
    BUILD SUCCESS
    ```
+
+## 🐳 Docker Deployment
+
+### Local Development (Mac / Linux VM)
+
+Run with emulator for testing without hardware:
+
+```bash
+# Start all services (PostgreSQL + App with Emulator + pgAdmin)
+docker-compose -f docker-compose-local.yaml up
+
+# Access services:
+# - Application API:  http://localhost:8080
+# - PostgreSQL:       localhost:5432 (user: lpg_user, password: lpg_dev_password)
+# - pgAdmin:          http://localhost:5050 (admin@lpg-ehl.local / admin)
+# - Azure Emulator:   localhost:10001
+
+# View logs
+docker-compose -f docker-compose-local.yaml logs -f lpg-ehl-app
+
+# Stop
+docker-compose -f docker-compose-local.yaml down
+```
+
+### Production Deployment (Pump Linux Machine)
+
+1. **Prepare environment**
+   ```bash
+   # Create directories
+   sudo mkdir -p /opt/lpg-ehl/{data,backups,logs,config}
+   
+   # Copy configuration
+   cp .env.example .env
+   nano .env  # Edit with production settings
+   ```
+
+2. **Configure environment**
+   ```bash
+   # .env file
+   POSTGRES_PASSWORD=<strong-password>
+   SERIAL_PORT=/dev/ttyUSB0
+   DISPENSER_ADDRESS=1
+   PRICE_PER_LITRE_CENTS=1590
+   AZURE_CONNECTION_STRING=<your-azure-connection>
+   API_AUTH_TOKEN=<random-token>
+   ```
+
+3. **Start production services**
+   ```bash
+   docker-compose up -d
+   
+   # Monitor logs
+   docker-compose logs -f lpg-ehl-app
+   
+   # Check status
+   docker-compose ps
+   ```
+
+4. **Verify deployment**
+   ```bash
+   # Health check
+   curl http://localhost:8080/health
+   
+   # Check database
+   docker exec lpg-ehl-postgres psql -U lpg_user -d lpg_ehl -c "SELECT COUNT(*) FROM transactions;"
+   
+   # View backups
+   ls -lh /opt/lpg-ehl/backups/
+   ```
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────┐
+│         Pump Linux Machine                      │
+│                                                 │
+│  ┌──────────────┐    ┌──────────────┐          │
+│  │ lpg-ehl-app  │───>│  PostgreSQL  │          │
+│  │  (Docker)    │    │   (Docker)   │          │
+│  │              │    │              │          │
+│  │ - Protocol   │    │ - Transactions│         │
+│  │ - REST API   │    │ - Events     │         │
+│  │ - Serial I/O │    │ - Outbox     │         │
+│  └──────┬───────┘    └──────┬───────┘          │
+│         │                   │                  │
+│         │              /opt/lpg-ehl/           │
+│         │              ├─ data/     (DB)       │
+│         │              ├─ backups/  (Hourly)   │
+│         │              └─ logs/     (App)      │
+│         │                                      │
+│    /dev/ttyUSB0 (RS-485)                       │
+│         │                                      │
+│         ↓                                      │
+│   ┌─────────────┐                              │
+│   │  Dispenser  │                              │
+│   │   Hardware  │                              │
+│   └─────────────┘                              │
+│                                                 │
+│  ┌──────────────────────────────┐              │
+│  │  Azure Sync (Background)     │              │
+│  │  - Outbox pattern            │              │
+│  │  - Retry queue               │              │
+│  │  - 5min interval             │              │
+│  └────────────┬─────────────────┘              │
+│               │                                │
+└───────────────┼────────────────────────────────┘
+                ↓ (when network available)
+       ┌────────────────┐
+       │  Azure Cloud   │
+       │  - PostgreSQL  │  (Replica/Backup)
+       │  - Reports     │  (Norges Gass)
+       │  - Invoicing   │
+       └────────────────┘
+```
+
+### Database Schema
+
+The PostgreSQL database includes:
+
+- **transactions** - Master record of all fuel deliveries
+- **protocol_events** - Detailed EHL protocol communication log
+- **system_events** - Application health and errors
+- **dispenser_status** - Current state of each dispenser
+- **azure_sync_queue** - Outbox pattern for resilient cloud sync
+- **daily_summary** (view) - Quick reporting
+- **unsynced_transactions** (view) - Azure sync monitoring
+
+See `init-db.sql` for complete schema.
+
+### Backup Strategy
+
+**Automatic backups:**
+- Hourly backups (kept for 24 hours)
+- Daily backups (kept for 7 days)
+- Stored in `/opt/lpg-ehl/backups/`
+
+**Manual backup:**
+```bash
+# Create manual backup
+docker exec lpg-ehl-postgres pg_dump -U lpg_user lpg_ehl | gzip > manual_backup_$(date +%Y%m%d).sql.gz
+
+# Restore from backup
+gunzip < backup.sql.gz | docker exec -i lpg-ehl-postgres psql -U lpg_user -d lpg_ehl
+```
+
+### API Endpoints
+
+The application exposes a REST API for external access:
+
+```bash
+# Health check (no auth)
+GET /health
+
+# Get transactions (requires API_AUTH_TOKEN)
+GET /api/transactions?from=2024-01-01&to=2024-01-31
+Authorization: Bearer <API_AUTH_TOKEN>
+
+# Get dispenser status
+GET /api/dispensers
+Authorization: Bearer <API_AUTH_TOKEN>
+
+# Daily summary
+GET /api/reports/daily?date=2024-01-15
+Authorization: Bearer <API_AUTH_TOKEN>
+```
+
+### Monitoring
+
+```bash
+# View all logs
+docker-compose logs
+
+# Follow specific service
+docker-compose logs -f lpg-ehl-app
+docker-compose logs -f postgres
+docker-compose logs -f azure-sync
+
+# Check disk usage
+du -sh /opt/lpg-ehl/*
+
+# Monitor database size
+docker exec lpg-ehl-postgres psql -U lpg_user -d lpg_ehl -c "\l+"
+
+# Check unsynced transactions
+docker exec lpg-ehl-postgres psql -U lpg_user -d lpg_ehl -c "SELECT * FROM unsynced_transactions;"
+```
 
 ## 📦 Modules
 

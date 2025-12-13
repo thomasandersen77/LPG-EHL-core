@@ -1,0 +1,145 @@
+version: '3.8'
+
+# Local Development Docker Compose for LPG-EHL
+# Use this for development on Mac or Linux VM (Parallels, etc.)
+# Includes emulator instead of real serial port
+
+services:
+  # PostgreSQL database - Same as production
+  postgres:
+    image: postgres:16-alpine
+    container_name: lpg-ehl-postgres-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lpg_ehl
+      POSTGRES_USER: lpg_user
+      POSTGRES_PASSWORD: lpg_dev_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./local-data/postgres:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"  # Exposed for local tools (pgAdmin, DBeaver, etc.)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lpg_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - lpg-ehl-local
+
+  # LPG-EHL Application with Emulator
+  lpg-ehl-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_ENV: development
+    container_name: lpg-ehl-app-local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database connection
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: lpg_ehl
+      DB_USER: lpg_user
+      DB_PASSWORD: lpg_dev_password
+      
+      # Emulator mode (no real serial port)
+      EMULATOR_ENABLED: true
+      EMULATOR_ADDRESS: 1
+      EMULATOR_PRICE_PER_LITRE_CENTS: 1590  # 15.90 kr/L
+      EMULATOR_LITRES_PER_SECOND: 0.5
+      
+      # Azure sync (disabled in local dev)
+      AZURE_ENABLED: false
+      
+      # API configuration
+      API_ENABLED: true
+      API_PORT: 8080
+      API_AUTH_TOKEN: dev-token-12345
+      
+      # Logging (more verbose for development)
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./local-data/logs:/app/logs
+      - ./local-data/config:/app/config
+      - .:/app/src:ro  # Mount source for live reload (optional)
+    ports:
+      - "8080:8080"   # REST API
+      - "5005:5005"   # JVM Debug port
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - lpg-ehl-local
+
+  # pgAdmin for database management (development only)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: lpg-ehl-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@lpg-ehl.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - ./local-data/pgadmin:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - lpg-ehl-local
+
+  # Optional: Azure Storage Emulator (Azurite)
+  # Use this to test Azure integration without real Azure account
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: lpg-ehl-azurite
+    restart: unless-stopped
+    command: "azurite-queue --queueHost 0.0.0.0 --queuePort 10001 --loose"
+    ports:
+      - "10001:10001"  # Queue service
+    volumes:
+      - ./local-data/azurite:/data
+    networks:
+      - lpg-ehl-local
+
+  # Test client - Simulate external system calling API
+  test-client:
+    image: alpine:latest
+    container_name: lpg-ehl-test-client
+    depends_on:
+      - lpg-ehl-app
+    command: |
+      sh -c '
+      apk add --no-cache curl jq
+      echo "Waiting for API to be ready..."
+      sleep 10
+      echo "Testing API health endpoint..."
+      curl -f http://lpg-ehl-app:8080/health || exit 1
+      echo "API is healthy!"
+      tail -f /dev/null
+      '
+    networks:
+      - lpg-ehl-local
+
+networks:
+  lpg-ehl-local:
+    driver: bridge
+
+# Local development notes:
+# 1. Start: docker-compose -f docker-compose-local.yaml up
+# 2. Stop:  docker-compose -f docker-compose-local.yaml down
+# 3. Logs:  docker-compose -f docker-compose-local.yaml logs -f lpg-ehl-app
+# 4. Access pgAdmin: http://localhost:5050
+# 5. Access API: http://localhost:8080
+# 6. Connect to DB: localhost:5432, user: lpg_user, password: lpg_dev_password
