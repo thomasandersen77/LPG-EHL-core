@@ -302,8 +302,8 @@ curl -H "Authorization: Bearer dev-token-12345" http://localhost:8080/api/v1/tra
 
 ## License
 
-Proprietary - Cloudberries / Norges Gass
+Proprietary - Cloudberries
 
 ## Support
 
-For issues or questions, contact: Tormod Andersen
+For issues or questions, contact: Thomas Andersen
