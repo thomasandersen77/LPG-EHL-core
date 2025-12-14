@@ -1,4 +1,25 @@
+import { DispenserSimulator } from './components/DispenserSimulator';
+import { useState } from 'react';
+
+type Page = 'home' | 'simulator';
+
 function App() {
+  const [currentPage, setCurrentPage] = useState<Page>('home');
+
+  if (currentPage === 'simulator') {
+    return (
+      <div>
+        <button
+          onClick={() => setCurrentPage('home')}
+          className="fixed top-4 left-4 z-50 px-4 py-2 bg-white/90 backdrop-blur-sm text-gray-800 rounded-lg hover:bg-white transition shadow-lg flex items-center gap-2"
+        >
+          <span>← Tilbake til hovedside</span>
+        </button>
+        <DispenserSimulator />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100">
       <div className="w-full max-w-4xl bg-white shadow-2xl rounded-3xl p-12 space-y-8">
@@ -41,8 +62,21 @@ function App() {
           />
         </div>
 
-        <footer className="text-center space-y-4 pt-8 border-t">
-          <div className="flex justify-center gap-6">
+        <footer className="text-center space-y-6 pt-8 border-t">
+          <div className="mb-6">
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Demo & Testing</h3>
+            <p className="text-sm text-slate-600 mb-4">
+              Test pumpefunksjonaliteten med vår interaktive simulator
+            </p>
+            <button
+              onClick={() => setCurrentPage('simulator')}
+              className="px-8 py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-bold text-lg shadow-lg hover:shadow-xl"
+            >
+              ⛽ Åpne Pumpe Simulator
+            </button>
+          </div>
+          
+          <div className="flex justify-center gap-4 flex-wrap">
             <a
               href="http://localhost:8080/swagger-ui.html"
               target="_blank"
@@ -55,14 +89,21 @@ function App() {
               href="http://localhost:8080/actuator/health"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
+              className="px-6 py-3 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition font-semibold"
             >
               ✓ Health Check
             </a>
           </div>
-          <p className="text-sm text-slate-500">
-            All services are running on localhost. Check docker-compose logs for details.
-          </p>
+          <div className="text-sm text-slate-600 space-y-2">
+            <p className="font-semibold">System Features:</p>
+            <ul className="text-left max-w-2xl mx-auto space-y-1">
+              <li>• <strong>Real-time pumpe-kontroll:</strong> Start, stopp og nullstill drivstoffleveringer</li>
+              <li>• <strong>Live data-oppdatering:</strong> Se liter og beløp oppdateres i sanntid (0.5s polling)</li>
+              <li>• <strong>EHL Protocol:</strong> Komplett implementasjon av EHL for LPG-dispensere</li>
+              <li>• <strong>Database persistence:</strong> Alle transaksjoner lagres i PostgreSQL</li>
+              <li>• <strong>Azure sync:</strong> Automatisk synkronisering til sky (emulert lokalt)</li>
+            </ul>
+          </div>
         </footer>
       </div>
     </div>

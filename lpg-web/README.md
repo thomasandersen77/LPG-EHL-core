@@ -1,14 +1,14 @@
-# LPG Pumpestyring - Web Frontend
+# LPG EHL Web Frontend
 
-Modern React-basert web frontend for testing og demonstrasjon av LPG dispenser-systemet.
+React-basert frontend for LPG EHL systemet med interaktiv pumpe-simulator.
 
-## Funksjonalitet
+## Funksjoner
 
-- **Sanntidsvisning** av dispenser-status (poller API hvert sekund)
-- **Tre store metrikk-kort**: Beløp, Liter, Pris kr/L
-- **To kontrollknapper**: Frigi dispenser og Stopp dispenser
-- **Statusbar** som viser tilkoblingsstatus til emulator/API
-- **Modus-indikatorer**: Kort aktiv, Dag modus, Stasjonskreditt aktiv
+- 🏠 **Landing Page**: Oversikt over alle kjørende tjenester
+- ⛽ **Pumpe Simulator**: Interaktiv simulator for testing av pumpefunksjonalitet
+- 📊 **Live Data**: Real-time oppdatering av pumpetilstand (500ms når levering pågår)
+- 🎨 **Moderne UI**: Bygget med React 19, TypeScript og Tailwind CSS
+- 🔄 **State Management**: TanStack Query for data caching og synkronisering
 
 ## Teknologi
 

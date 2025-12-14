@@ -1,0 +1,481 @@
+openapi: 3.0.3
+info:
+  title: LPG EHL API
+  version: 1.0.0
+  description: REST API for LPG dispenser transaction management and Azure sync
+  license:
+    name: Proprietary
+    url: https://cloudberries.no
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Demo Dispenser
+    description: Demo endpoints for frontend testing (no authentication required)
+  - name: Dispensers
+    description: Dispenser status endpoints
+  - name: Transactions
+    description: Transaction management endpoints
+  - name: Reports
+    description: Reporting and analytics endpoints
+  - name: Sync
+    description: Azure cloud sync endpoints
+
+components:
+  securitySchemes:
+    bearer-token:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter your API token (without 'Bearer' prefix)
+
+  schemas:
+    DispenserStateDto:
+      type: object
+      required:
+        - state
+        - amountToPay
+        - litres
+        - pricePerLitre
+        - includeRoadTax
+        - cardModeActive
+        - dayMode
+        - stationCreditActive
+        - connected
+      properties:
+        state:
+          type: string
+          enum: [IDLE, READY, DELIVERING, FINISHED, ERROR]
+          description: Current state of the dispenser
+        amountToPay:
+          type: number
+          format: double
+          description: Total amount to pay in NOK
+        litres:
+          type: number
+          format: double
+          description: Total litres delivered
+        pricePerLitre:
+          type: number
+          format: double
+          description: Price per litre in NOK
+        includeRoadTax:
+          type: boolean
+          description: Whether road tax is included in price
+        cardModeActive:
+          type: boolean
+          description: Card payment mode is active
+        dayMode:
+          type: boolean
+          description: Day mode is active (vs night mode)
+        stationCreditActive:
+          type: boolean
+          description: Station credit is active
+        connected:
+          type: boolean
+          description: Dispenser is connected
+
+    TransactionResponse:
+      type: object
+      required:
+        - transactionId
+        - dispenserAddress
+        - nozzleNumber
+        - volumeLiters
+        - amountKr
+        - timestamp
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+          description: Unique transaction identifier
+        dispenserAddress:
+          type: integer
+          description: Dispenser address (0-254)
+        nozzleNumber:
+          type: integer
+          description: Nozzle number
+        productCode:
+          type: string
+          nullable: true
+          description: Product code (if available)
+        volumeLiters:
+          type: number
+          format: decimal
+          description: Volume in liters
+        amountKr:
+          type: number
+          format: decimal
+          description: Amount in NOK
+        pricePerLiter:
+          type: number
+          format: decimal
+          nullable: true
+          description: Price per liter
+        timestamp:
+          type: string
+          format: date-time
+          description: Transaction timestamp
+        decodedData:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Additional decoded EHL data
+
+    DispenserStatusResponse:
+      type: object
+      required:
+        - dispenserAddress
+        - totalTransactions
+        - totalVolumeLiters
+        - totalAmountKr
+        - lastSeen
+      properties:
+        dispenserAddress:
+          type: integer
+          description: Dispenser address
+        lastTransactionId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Last transaction ID
+        totalTransactions:
+          type: integer
+          description: Total number of transactions
+        totalVolumeLiters:
+          type: number
+          format: decimal
+          description: Total volume delivered
+        totalAmountKr:
+          type: number
+          format: decimal
+          description: Total amount in NOK
+        lastSeen:
+          type: string
+          format: date-time
+          description: Last seen timestamp
+
+    PageResponse:
+      type: object
+      required:
+        - content
+        - totalElements
+        - totalPages
+        - currentPage
+        - pageSize
+        - hasNext
+        - hasPrevious
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionResponse'
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        currentPage:
+          type: integer
+        pageSize:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrevious:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+paths:
+  # Demo Dispenser Endpoints
+  /api/v1/dispenser/state:
+    get:
+      tags:
+        - Demo Dispenser
+      summary: Get current dispenser state
+      description: Returns the current state of the demo dispenser
+      operationId: getDispenserState
+      responses:
+        '200':
+          description: Current dispenser state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispenserStateDto'
+
+  /api/v1/dispenser/unblock:
+    post:
+      tags:
+        - Demo Dispenser
+      summary: Start fuel delivery
+      description: Unblock the dispenser and start delivery
+      operationId: unblockDispenser
+      responses:
+        '200':
+          description: Dispenser started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispenserStateDto'
+
+  /api/v1/dispenser/stop:
+    post:
+      tags:
+        - Demo Dispenser
+      summary: Stop fuel delivery
+      description: Stop the current delivery and finalize the transaction
+      operationId: stopDispenser
+      responses:
+        '200':
+          description: Dispenser stopped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispenserStateDto'
+
+  /api/v1/dispenser/reset:
+    post:
+      tags:
+        - Demo Dispenser
+      summary: Reset dispenser
+      description: Reset the dispenser to IDLE state
+      operationId: resetDispenser
+      responses:
+        '200':
+          description: Dispenser reset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispenserStateDto'
+
+  # Dispenser Endpoints (requires authentication)
+  /api/v1/dispensers:
+    get:
+      tags:
+        - Dispensers
+      summary: List all dispensers
+      description: Get status for all dispensers
+      operationId: getAllDispensers
+      security:
+        - bearer-token: []
+      responses:
+        '200':
+          description: List of dispensers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DispenserStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/dispensers/active:
+    get:
+      tags:
+        - Dispensers
+      summary: List active dispensers
+      description: Get dispensers that have been seen recently
+      operationId: getActiveDispensers
+      security:
+        - bearer-token: []
+      parameters:
+        - name: minutesSinceLastSeen
+          in: query
+          description: Minutes since last seen (default 60)
+          schema:
+            type: integer
+            format: int64
+            default: 60
+      responses:
+        '200':
+          description: List of active dispensers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DispenserStatusResponse'
+        '401':
+          description: Unauthorized
+
+  /api/v1/dispensers/{address}:
+    get:
+      tags:
+        - Dispensers
+      summary: Get dispenser status
+      description: Get status for a specific dispenser by address
+      operationId: getDispenserStatus
+      security:
+        - bearer-token: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Dispenser address
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Dispenser found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispenserStatusResponse'
+        '404':
+          description: Dispenser not found
+        '401':
+          description: Unauthorized
+
+  # Transaction Endpoints
+  /api/v1/transactions:
+    get:
+      tags:
+        - Transactions
+      summary: List transactions
+      description: Get a paginated list of transactions with optional filters
+      operationId: getTransactions
+      security:
+        - bearer-token: []
+      parameters:
+        - name: from
+          in: query
+          description: Start date (ISO format)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End date (ISO format)
+          schema:
+            type: string
+            format: date-time
+        - name: dispenserAddress
+          in: query
+          description: Filter by dispenser address
+          schema:
+            type: integer
+        - name: page
+          in: query
+          description: Page number (0-indexed)
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: Page size (max 100)
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Paginated list of transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageResponse'
+        '401':
+          description: Unauthorized
+
+  /api/v1/transactions/{id}:
+    get:
+      tags:
+        - Transactions
+      summary: Get transaction by ID
+      description: Retrieve a single transaction by its UUID
+      operationId: getTransactionById
+      security:
+        - bearer-token: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Transaction UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transaction found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '404':
+          description: Transaction not found
+        '401':
+          description: Unauthorized
+
+  /api/v1/transactions/unsynced:
+    get:
+      tags:
+        - Transactions
+      summary: List unsynced transactions
+      description: Get transactions that have not been synced to Azure yet
+      operationId: getUnsyncedTransactions
+      security:
+        - bearer-token: []
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: List of unsynced transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransactionResponse'
+        '401':
+          description: Unauthorized
+
+  /api/v1/transactions/count:
+    get:
+      tags:
+        - Transactions
+      summary: Count transactions
+      description: Get the total number of transactions, optionally filtered by dispenser
+      operationId: getTransactionCount
+      security:
+        - bearer-token: []
+      parameters:
+        - name: dispenserAddress
+          in: query
+          description: Filter by dispenser address
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Transaction count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    format: int64
