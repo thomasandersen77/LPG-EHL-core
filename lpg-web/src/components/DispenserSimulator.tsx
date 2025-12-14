@@ -1,9 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { dispenserApi } from '../api/dispenser';
 import type { DispenserStateDto } from '../types/api';
+import type { PaymentMethod, PaymentStatus } from '../api/payments';
+import { startPayment, getPayment } from '../api/payments';
 
 export function DispenserSimulator() {
   const queryClient = useQueryClient();
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
+  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
 
   // Poll state every 500ms when delivering
   const { data: state, isLoading, error } = useQuery<DispenserStateDto>({
@@ -14,6 +20,48 @@ export function DispenserSimulator() {
       return data?.state === 'DELIVERING' ? 500 : 2000;
     },
   });
+
+  // Poll payment status when payment is pending
+  useEffect(() => {
+    if (!paymentId || paymentStatus !== 'PENDING') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const payment = await getPayment(paymentId);
+        setPaymentStatus(payment.status);
+
+        if (payment.status === 'APPROVED') {
+          // Auto-start pump when payment approved
+          await dispenserApi.unblock();
+          queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
+        }
+      } catch (error) {
+        console.error('Failed to check payment status', error);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [paymentId, paymentStatus, queryClient]);
+
+  const handleStartWithPayment = async () => {
+    if (paymentMethod === 'CASH') {
+      // Cash payment - start immediately
+      unblockMutation.mutate();
+    } else {
+      // Card/Credit - initiate payment first
+      try {
+        const payment = await startPayment({
+          amountCents: 10000, // 100 kr preset for demo
+          method: paymentMethod,
+          reference: `PUMP-${Date.now()}`,
+        });
+        setPaymentId(payment.id);
+        setPaymentStatus(payment.status);
+      } catch (error) {
+        console.error('Failed to start payment', error);
+      }
+    }
+  };
 
   const unblockMutation = useMutation({
     mutationFn: dispenserApi.unblock,
@@ -26,6 +74,9 @@ export function DispenserSimulator() {
     mutationFn: dispenserApi.stop,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
+      // Reset payment state when stopped
+      setPaymentId(null);
+      setPaymentStatus(null);
     },
   });
 
@@ -33,6 +84,9 @@ export function DispenserSimulator() {
     mutationFn: dispenserApi.reset,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
+      // Reset payment state when reset
+      setPaymentId(null);
+      setPaymentStatus(null);
     },
   });
 
@@ -137,24 +191,57 @@ export function DispenserSimulator() {
             )}
           </div>
 
+          {/* Payment Method Selector */}
+          <div className="mb-6">
+            <label className="block text-sm text-gray-400 mb-2">Betalingsmetode</label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              disabled={state?.state === 'DELIVERING'}
+              className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="CASH">💰 Kontant</option>
+              <option value="CARD">💳 Kort (simulert)</option>
+              <option value="CREDIT">🏪 Stasjonskreditt</option>
+            </select>
+          </div>
+
+          {/* Payment Status Modal */}
+          {paymentStatus === 'PENDING' && (
+            <div className="mb-6 bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4">
+              <div className="flex items-center justify-center space-x-3">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-400"></div>
+                <span className="text-yellow-300">Vennligst vent – terminalen behandler betalingen...</span>
+              </div>
+            </div>
+          )}
+
+          {paymentStatus === 'DECLINED' && (
+            <div className="mb-6 bg-red-900/30 border border-red-500/50 rounded-lg p-4">
+              <div className="text-center text-red-300">
+                ❌ Betaling avvist. Prøv igjen.
+              </div>
+            </div>
+          )}
+
           {/* Status Indicators */}
           <div className="grid grid-cols-2 gap-4 mb-8">
             <div className={`p-3 rounded-lg text-center text-sm ${state?.dayMode ? 'bg-yellow-900/30 text-yellow-300' : 'bg-gray-700 text-gray-500'}`}>
               {state?.dayMode ? '☀️ Dagmodus' : '🌙 Nattmodus'}
             </div>
-            <div className={`p-3 rounded-lg text-center text-sm ${state?.cardModeActive ? 'bg-blue-900/30 text-blue-300' : 'bg-gray-700 text-gray-500'}`}>
-              {state?.cardModeActive ? '💳 Kortbetaling' : '💰 Kontant'}
+            <div className={`p-3 rounded-lg text-center text-sm ${paymentMethod === 'CARD' ? 'bg-blue-900/30 text-blue-300' : paymentMethod === 'CREDIT' ? 'bg-purple-900/30 text-purple-300' : 'bg-gray-700 text-gray-500'}`}>
+              {paymentMethod === 'CARD' ? '💳 Kort' : paymentMethod === 'CREDIT' ? '🏪 Kreditt' : '💰 Kontant'}
             </div>
           </div>
 
           {/* Control Buttons */}
           <div className="grid grid-cols-3 gap-4">
             <button
-              onClick={() => unblockMutation.mutate()}
-              disabled={state?.state === 'DELIVERING' || unblockMutation.isPending}
+              onClick={handleStartWithPayment}
+              disabled={state?.state === 'DELIVERING' || unblockMutation.isPending || paymentStatus === 'PENDING'}
               className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg"
             >
-              {unblockMutation.isPending ? '...' : '▶ Start'}
+              {paymentStatus === 'PENDING' ? '⏳ Betaler...' : unblockMutation.isPending ? '...' : '▶ Start'}
             </button>
 
             <button
