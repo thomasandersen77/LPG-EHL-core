@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+14/09/2016 23:58
+Valuta: NOK
+Sesjon.: 161
+
+Avstemming
+
+VISA                   3
+Beløp=            841,11
+
+------------------------
+Innsamlet              3
+Total=            841,11
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

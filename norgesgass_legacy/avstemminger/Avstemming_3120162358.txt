@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+03/01/2016 23:58
+Valuta: NOK
+Overf.: 910
+
+Avstemming
+
+VISA                   1
+Beløp=            405,16
+
+------------------------
+Innsamlet              1
+Total=            405,16
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

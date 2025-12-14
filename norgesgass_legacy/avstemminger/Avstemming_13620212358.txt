@@ -1,0 +1,22 @@
+Bax: 14139877-533955
+13/06/2021 23:58
+Valuta: NOK
+Sesjon.: 610
+
+Avstemming
+
+VISA                   7
+Beløp=           2236,16
+
+MASTERCARD             1
+Beløp=            440,81
+
+------------------------
+Innsamlet              8
+Total=           2676,97
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

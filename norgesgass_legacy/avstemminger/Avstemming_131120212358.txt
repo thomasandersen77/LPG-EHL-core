@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+13/11/2021 23:58
+Valuta: NOK
+Sesjon.: 712
+
+Avstemming
+
+MASTERCARD             1
+Beløp=            376,18
+
+------------------------
+Innsamlet              1
+Total=            376,18
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

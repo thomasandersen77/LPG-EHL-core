@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+11/06/2020 23:58
+Valuta: NOK
+Sesjon.: 444
+
+Avstemming
+
+VISA                   4
+Beløp=            740,60
+
+------------------------
+Innsamlet              4
+Total=            740,60
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

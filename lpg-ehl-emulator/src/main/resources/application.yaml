@@ -1,0 +1,25 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: lpg-ehl-emulator
+
+emulator:
+  address: ${EMULATOR_ADDRESS:1}
+  price-per-litre-cents: ${EMULATOR_PRICE_PER_LITRE_CENTS:1590}
+  litres-per-second: ${EMULATOR_LITRES_PER_SECOND:0.5}
+  port: ${EMULATOR_PORT:9000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    no.cloudberries.lpg: INFO

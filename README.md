@@ -520,7 +520,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgments
 
-- Ported from legacy Visual Basic 6 codebase
+- Re-implements and modernizes the original VB6 codebase (see `norgesgass_legacy/` for original source)
 - EHL protocol specification from fuel dispenser manufacturers
 - Built with Kotlin and modern JVM best practices
 

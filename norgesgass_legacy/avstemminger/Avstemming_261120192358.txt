@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+26/11/2019 23:58
+Valuta: NOK
+Sesjon.: 265
+
+Avstemming
+
+MASTERCARD             1
+Beløp=            339,46
+
+------------------------
+Innsamlet              1
+Total=            339,46
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

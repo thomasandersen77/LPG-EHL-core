@@ -1,0 +1,16 @@
+Bax: 14139877-533955
+12/04/2021 23:59
+Valuta: NOK
+Sesjon.: 585
+
+Avstemming
+
+------------------------
+Innsamlet              0
+Total=              0,00
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

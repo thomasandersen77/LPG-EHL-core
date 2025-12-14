@@ -1,0 +1,145 @@
+[Root]
+Most Recent Package=Dispenserklient
+
+
+[Package|Dispenserklient|Root]
+SubWizProgID=PDWizard.SetupPkgSubWiz
+BuildFolder=\\Lpghorten\delte filer
+
+[Package|Dispenserklient|Configure DAO ISAMs]
+Applicable=No
+
+[Package|Dispenserklient|Configure DAO ODBC]
+JetWorkspace=
+ODBCDirect=
+
+[Package|Dispenserklient|Files Found]
+
+[Package|Dispenserklient|Files Released]
+
+[Package|Dispenserklient|Missing Dependency Information]
+
+[Package|Dispenserklient|Out-of-Date Dependency Information]
+C:\WINNT\system32\MSCOMCTL.OCX=
+C:\WINNT\system32\MSSTDFMT.DLL=
+C:\WINNT\system32\MSWINSCK.OCX=
+C:\WINNT\system32\RICHTX32.OCX=
+C:\WINDOWS\system32\RICHTX32.OCX=
+C:\WINDOWS\system32\MSCOMCTL.OCX=
+C:\WINDOWS\system32\MSSTDFMT.DLL=
+C:\WINDOWS\system32\MSWINSCK.OCX=
+
+[Package|Dispenserklient|Files Added]
+
+[Package|Dispenserklient|Files Removed]
+
+[Package|Dispenserklient|Files In Project]
+C:\WINDOWS\system32\msvbvm60.dll=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\OLEAUT32.DLL=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\OLEPRO32.DLL=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\ASYCFILT.DLL=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\STDOLE2.TLB=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\COMCAT.DLL=Yes
+C:\WINDOWS\system32\MSWINSCK.OCX=Yes
+C:\WINDOWS\system32\MSSTDFMT.DLL=Yes
+C:\WINDOWS\system32\COMCT332.OCX=Yes
+C:\WINDOWS\system32\MSCOMCTL.OCX=Yes
+C:\WINDOWS\system32\RICHTX32.OCX=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\RICHED32.DLL=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP.EXE=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP1.EXE=Yes
+C:\WINDOWS\system32\VB6STKIT.DLL=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\ST6UNST.EXE=Yes
+C:\WINDOWS\system32\MSCOMCT2.OCX=Yes
+C:\WINDOWS\system32\MSDATGRD.OCX=Yes
+C:\WINDOWS\system32\MSADODC.OCX=Yes
+C:\WINDOWS\system32\MSDBRPTR.DLL=Yes
+C:\Programfiler\Fellesfiler\designer\MSDERUN.DLL=Yes
+C:\WINDOWS\system32\MSBIND.DLL=Yes
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\MDAC_TYP.EXE=Yes
+C:\WINDOWS\system32\DBLIST32.OCX=Yes
+C:\Pumpestyring\Dispenserklient\Dispenserkontroll=Yes
+
+[Package|Dispenserklient|Configure Registry Files]
+Applicable=No
+
+[Package|Dispenserklient|Configure Remote Servers]
+Applicable=No
+
+[Package|Dispenserklient|Install Locations]
+C:\Pumpestyring\Dispenserclient\Dispenserkontroll.exe=$(AppPath)
+C:\WINNT\system32\msvbvm60.dll=$(WinSysPathSysFile)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\OLEAUT32.DLL=$(WinSysPathSysFile)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\OLEPRO32.DLL=$(WinSysPathSysFile)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\ASYCFILT.DLL=$(WinSysPathSysFile)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\STDOLE2.TLB=$(WinSysPathSysFile)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\COMCAT.DLL=$(WinSysPathSysFile)
+C:\WINNT\system32\MSWINSCK.OCX=$(WinSysPath)
+C:\WINNT\system32\MSSTDFMT.DLL=$(WinSysPath)
+C:\WINNT\system32\COMCT332.OCX=$(WinSysPath)
+C:\WINNT\system32\MSCOMCTL.OCX=$(WinSysPath)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP.EXE=$(AppPath)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP1.EXE=$(WinPath)
+C:\WINNT\system32\VB6STKIT.DLL=$(WinSysPathSysFile)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\ST6UNST.EXE=$(WinPath)
+C:\WINNT\system32\RICHTX32.OCX=$(WinSysPath)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\RICHED32.DLL=$(WinSysPathSysFile)
+C:\WINDOWS\system32\msvbvm60.dll=$(WinSysPathSysFile)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\OLEAUT32.DLL=$(WinSysPathSysFile)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\OLEPRO32.DLL=$(WinSysPathSysFile)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\ASYCFILT.DLL=$(WinSysPathSysFile)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\STDOLE2.TLB=$(WinSysPathSysFile)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\COMCAT.DLL=$(WinSysPathSysFile)
+C:\WINDOWS\system32\MSWINSCK.OCX=$(WinSysPath)
+C:\WINDOWS\system32\MSSTDFMT.DLL=$(WinSysPath)
+C:\WINDOWS\system32\COMCT332.OCX=$(WinSysPath)
+C:\WINDOWS\system32\MSCOMCTL.OCX=$(WinSysPath)
+C:\WINDOWS\system32\RICHTX32.OCX=$(WinSysPath)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\RICHED32.DLL=$(WinSysPathSysFile)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP.EXE=$(AppPath)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP1.EXE=$(WinPath)
+C:\WINDOWS\system32\VB6STKIT.DLL=$(WinSysPathSysFile)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\ST6UNST.EXE=$(WinPath)
+C:\WINDOWS\system32\MSCOMCT2.OCX=$(WinSysPath)
+C:\WINDOWS\system32\MSDATGRD.OCX=$(WinSysPath)
+C:\WINDOWS\system32\MSADODC.OCX=$(WinSysPath)
+C:\WINDOWS\system32\MSDBRPTR.DLL=$(WinSysPath)
+C:\Programfiler\Fellesfiler\designer\MSDERUN.DLL=$(CommonFiles)\designer
+C:\WINDOWS\system32\MSBIND.DLL=$(WinSysPath)
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\MDAC_TYP.EXE=$(AppPath)
+C:\Klient_test\Dispenserkontroll.exe=$(AppPath)
+C:\WINDOWS\system32\DBLIST32.OCX=$(WinSysPath)
+C:\Pumpestyring\Dispenserklient\Dispenserkontroll=$(AppPath)
+
+[Package|Dispenserklient|Configure Shared Files]
+Applicable=Yes
+C:\Pumpestyring\Dispenserclient\Dispenserkontroll.exe=No
+C:\Programfiler\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\MDAC_TYP.EXE=No
+C:\Klient_test\Dispenserkontroll.exe=No
+C:\Pumpestyring\Dispenserklient\Dispenserkontroll=No
+
+[Package|Dispenserklient|Distribution]
+Type=single
+Size=
+Title=LPG Dispenserklient
+
+[Package|Dispenserklient|IconGroups]
+Group0=LPG Dispenserklient
+PrivateGroup0=-1
+Parent0=$(Programs)
+
+[Package|Dispenserklient|LPG Dispenserklient]
+Icon1=Dispenserkontroll.exe
+Title1=LPG Dispenserklient
+StartIn1=$(AppPath)
+Key1=Icon1
+
+[Package|Dispenserklient|Package]
+PackageFolder=\\Lpghorten\delte filer
+ProjectFolder=C:\Pumpestyring\Dispenserklient
+ServerSideCab=
+File1=\\Lpghorten\delte filer\setup.exe
+File2=\\Lpghorten\delte filer\Setup.Lst
+File3=\\Lpghorten\delte filer\Dispenserkontroll.CAB
+Handler1=PDWizard.FolderDplySubWiz
+Handler2=PDWizard.WebPostDplySubWiz

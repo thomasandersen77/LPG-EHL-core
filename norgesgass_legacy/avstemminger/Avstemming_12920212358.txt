@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+12/09/2021 23:58
+Valuta: NOK
+Sesjon.: 677
+
+Avstemming
+
+VISA                   2
+Beløp=            756,02
+
+------------------------
+Innsamlet              2
+Total=            756,02
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

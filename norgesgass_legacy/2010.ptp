@@ -1,0 +1,206 @@
+VERSION
+8
+
+COMMSETTINGS
+0
+COM2
+COM10
+9600
+2
+0
+4
+0
+0
+
+COMMDISPLAY
+0
+
+SEND
+0
+Parameter cr/LF
+1B 26 50 21 00
+0
+5
+
+SEND
+1
+Lagre i eeprom
+1B 26 04
+0
+5
+
+SEND
+2
+self test
+1B 50 00
+0
+5
+
+SEND
+3
+FF
+0C
+0
+5
+
+SEND
+4
+status
+1B 05 01
+0
+5
+
+SEND
+5
+factorydefault
+1B 26 46
+0
+5
+
+SEND
+6
+vertical mode
+1B 26 50 39 FB
+0
+5
+
+SEND
+7
+wall compensation
+1B 26 50 47 10
+0
+5
+
+SEND
+8
+cut position calib
+1B 26 50 46 FF
+0
+5
+
+SEND
+9
+flowctrl
+1B 26 50 04 00
+0
+5
+
+SEND
+10
+Loop present
+1B 26 50 09 00
+0
+5
+
+SEND
+11
+tekst
+61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61 61
+0
+5
+
+SEND
+12
+Parameter printwidth 50mm
+1B 26 50 30 32
+0
+5
+
+SEND
+13
+Tabstop
+1B 26 50 00 0F 10 01 10 15 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0
+5
+
+SEND
+14
+Parameter near end
+1B 26 50 34 01
+0
+5
+
+SEND
+15
+Papirmengde måler
+1B 05 02
+0
+5
+
+SEND
+16
+Clear presenter
+13 01
+0
+5
+
+SEND
+17
+Reset(Full)
+1B 3F
+0
+5
+
+SEND
+18
+Enforce presenter
+19 00
+0
+5
+
+SEND
+19
+Presenter loop length
+1B 26 50 09 15
+0
+5
+
+SEND
+20
+Reset(initial)
+1B 40
+0
+5
+
+SEND
+21
+Sensor enquiry
+1B 05 05
+0
+5
+
+SEND
+22
+Paper width
+1B 26 50 30 00
+0
+5
+
+SEND
+23
+Print
+1B 70
+0
+5
+
+SEND
+24
+Warning level
+1B 26 50 34 01
+0
+5
+
+SEND
+25
+Autocut after FF
+1B 26 50 22 00
+0
+5
+
+SEND
+26
+CONFIG
+1B 26 50 21 00 1B 26 50 39 FB 1B 26 50 47 10 1B 26 50 04 00 1B 26 50 09 00 1B 26 50 30 32 1B 26 50 00 0F 10 01 10 15 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 1B 26 50 34 01 1B 05 02 1B 26 50 30 00 1B 26 50 34 01 1B 26 50 22 00 1B 26 04
+0
+5
+

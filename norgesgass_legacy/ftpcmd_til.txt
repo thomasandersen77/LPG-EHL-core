@@ -1,0 +1,5 @@
+open ftp.domeneshop.no 
+lpgstasjon
+QDog7ggc
+put \\lpgromerike_pos\deltefiler\cardexport.txt /synch/ebgass/Fra/Cards.txt 
+quit 

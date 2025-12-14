@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+05/09/2019 23:58
+Valuta: NOK
+Sesjon.: 183
+
+Avstemming
+
+VISA                   2
+Beløp=            386,72
+
+------------------------
+Innsamlet              2
+Total=            386,72
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

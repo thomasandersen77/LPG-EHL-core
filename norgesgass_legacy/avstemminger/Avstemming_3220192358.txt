@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+03/02/2019 23:58
+Valuta: NOK
+Sesjon.: 991
+
+Avstemming
+
+VISA                   3
+Beløp=           1323,65
+
+------------------------
+Innsamlet              3
+Total=           1323,65
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

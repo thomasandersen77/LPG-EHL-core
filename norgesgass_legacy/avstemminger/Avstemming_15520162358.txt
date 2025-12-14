@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+15/05/2016 23:58
+Valuta: NOK
+Sesjon.: 041
+
+Avstemming
+
+VISA                   1
+Beløp=            302,78
+
+------------------------
+Innsamlet              1
+Total=            302,78
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

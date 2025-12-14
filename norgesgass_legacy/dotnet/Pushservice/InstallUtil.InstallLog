@@ -1,0 +1,14 @@
+﻿
+Kjører en utført installasjon.
+
+Begynner installasjonens Install-fase.
+Se innholdet i loggfilen for fremdriften for samlingen c:\pumpestyring\dotnet\pushservice\pushservice.exe.
+Filen befinner seg i c:\pumpestyring\dotnet\pushservice\pushservice.InstallLog.
+
+Install-fasen ble fullført, og Commit-fasen begynner.
+Se innholdet i loggfilen for fremdriften for samlingen c:\pumpestyring\dotnet\pushservice\pushservice.exe.
+Filen befinner seg i c:\pumpestyring\dotnet\pushservice\pushservice.InstallLog.
+
+Commit-fasen ble fullført.
+
+Installasjonen er fullført.

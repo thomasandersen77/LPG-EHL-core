@@ -1,11 +1,10 @@
 # Local Development Profile
+# Note: datasource config is inherited from application.yaml which uses environment variables
+# This allows the same profile to work both locally and in Docker
 spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/lpg_ehl
-    username: lpg_user
-    password: lpg_password
-  
   jpa:
+    hibernate:
+      ddl-auto: update  # Auto-create/update schema for local development
     show-sql: true
     properties:
       hibernate:
@@ -13,14 +12,14 @@ spring:
 
 # Azure - Use Azurite for local development
 azure:
-  enabled: true
+  enabled: ${AZURE_ENABLED:true}
   storage:
-    connection-string: UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://localhost:10001
-    queue-name: lpg-transactions
+    connection-string: ${AZURE_CONNECTION_STRING:UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://localhost:10001}
+    queue-name: ${AZURE_QUEUE_NAME:lpg-transactions}
   sync:
-    interval-seconds: 30  # More frequent for local testing
-    batch-size: 5
-    max-retries: 3
+    interval-seconds: ${AZURE_SYNC_INTERVAL:30}  # More frequent for local testing
+    batch-size: ${AZURE_SYNC_BATCH_SIZE:5}
+    max-retries: ${AZURE_SYNC_MAX_RETRIES:3}
 
 # Security - Simple token for local dev
 security:

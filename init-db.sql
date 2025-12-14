@@ -131,27 +131,29 @@ CREATE TABLE IF NOT EXISTS dispenser_status (
 
 -- Azure sync queue table - Outbox pattern for resilient Azure sync
 CREATE TABLE IF NOT EXISTS azure_sync_queue (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    queue_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id UUID NOT NULL,
     
     -- Queue management
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    attempts INTEGER NOT NULL DEFAULT 0,
-    next_retry_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_attempt_at TIMESTAMP,
+    payload JSONB NOT NULL,                           -- Data to sync
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',     -- PENDING, IN_PROGRESS, SYNCED, FAILED
+    retry_count INTEGER NOT NULL DEFAULT 0,
     
     -- Error tracking
     last_error TEXT,
     
-    -- Payload
-    payload JSONB NOT NULL,                           -- Transaction data to sync
+    -- Timestamps
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    synced_at TIMESTAMP,
     
-    CONSTRAINT max_attempts CHECK (attempts <= 100)
+    CONSTRAINT valid_status CHECK (status IN ('PENDING', 'IN_PROGRESS', 'SYNCED', 'FAILED')),
+    CONSTRAINT max_retries CHECK (retry_count <= 100)
 );
 
 -- Indexes for sync queue
-CREATE INDEX IF NOT EXISTS idx_sync_queue_next_retry ON azure_sync_queue(next_retry_at) WHERE attempts < 100;
-CREATE INDEX IF NOT EXISTS idx_sync_queue_transaction ON azure_sync_queue(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON azure_sync_queue(status, created_at) WHERE status != 'SYNCED';
+CREATE INDEX IF NOT EXISTS idx_sync_queue_entity ON azure_sync_queue(entity_type, entity_id);
 
 -- Daily summary view - For quick reporting
 CREATE OR REPLACE VIEW daily_summary AS

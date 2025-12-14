@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+09/10/2020 23:59
+Valuta: NOK
+Sesjon.: 503
+
+Avstemming
+
+MASTERCARD             2
+Beløp=            725,74
+
+------------------------
+Innsamlet              2
+Total=            725,74
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

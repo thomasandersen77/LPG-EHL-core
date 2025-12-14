@@ -1,0 +1,22 @@
+Bax: 14139877-533955
+28/08/2020 23:58
+Valuta: NOK
+Sesjon.: 476
+
+Avstemming
+
+VISA                   1
+Beløp=             82,75
+
+MASTERCARD             1
+Beløp=            457,51
+
+------------------------
+Innsamlet              2
+Total=            540,26
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+06/12/2017 23:58
+Valuta: NOK
+Sesjon.: 602
+
+Avstemming
+
+VISA                   2
+Beløp=            956,40
+
+------------------------
+Innsamlet              2
+Total=            956,40
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

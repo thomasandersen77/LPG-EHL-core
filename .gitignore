@@ -24,6 +24,10 @@ buildNumber.properties
 *.rar
 hs_err_pid*
 
+# Legacy VB6 executables
+*.exe
+*.exeold
+
 # IntelliJ IDEA
 .idea/
 *.iws

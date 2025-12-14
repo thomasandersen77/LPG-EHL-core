@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+15/08/2021 23:58
+Valuta: NOK
+Sesjon.: 655
+
+Avstemming
+
+VISA                  10
+Beløp=           3200,25
+
+------------------------
+Innsamlet             10
+Total=           3200,25
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+
