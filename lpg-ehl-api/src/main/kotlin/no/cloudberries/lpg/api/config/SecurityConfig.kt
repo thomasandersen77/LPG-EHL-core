@@ -36,6 +36,8 @@ class SecurityConfig(
                     // Public endpoints
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                    // Demo dispenser endpoints (no auth for testing)
+                    .requestMatchers("/api/v1/dispenser/**").permitAll()
                     // Protected API endpoints
                     .requestMatchers("/api/**").authenticated()
                     .requestMatchers("/actuator/**").authenticated()
@@ -86,7 +88,7 @@ class TokenAuthenticationFilter(private val validToken: String) : AbstractPreAut
     }
 
     override fun afterPropertiesSet() {
-        super.afterPropertiesSet()
+        // Set AuthenticationManager BEFORE calling super.afterPropertiesSet()
         setAuthenticationManager { authentication ->
             if (authentication.principal != null) {
                 authentication.isAuthenticated = true
@@ -95,6 +97,7 @@ class TokenAuthenticationFilter(private val validToken: String) : AbstractPreAut
                 null
             }
         }
+        super.afterPropertiesSet()
     }
 
     override fun unsuccessfulAuthentication(

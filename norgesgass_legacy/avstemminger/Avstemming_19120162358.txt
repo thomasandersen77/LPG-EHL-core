@@ -1,0 +1,16 @@
+Bax: 14139877-533955
+19/01/2016 23:58
+Valuta: NOK
+Overf.: 925
+
+Avstemming
+
+------------------------
+Innsamlet              0
+Total=              0,00
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

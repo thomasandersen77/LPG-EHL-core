@@ -1,0 +1,36 @@
+# Dockerfile for LPG-EHL Emulator
+FROM eclipse-temurin:21-jdk-alpine AS build
+
+WORKDIR /build
+
+# Copy Maven wrapper and pom files
+COPY .mvn .mvn/
+COPY mvnw pom.xml ./
+COPY mvnw.cmd ./
+COPY lpg-ehl-core/pom.xml lpg-ehl-core/
+COPY lpg-ehl-emulator/pom.xml lpg-ehl-emulator/
+COPY lpg-ehl-api/pom.xml lpg-ehl-api/
+
+# Download dependencies
+RUN ./mvnw dependency:go-offline -pl lpg-ehl-emulator -am
+
+# Copy source code
+COPY lpg-ehl-core/src lpg-ehl-core/src
+COPY lpg-ehl-emulator/src lpg-ehl-emulator/src
+
+# Build the emulator module
+RUN ./mvnw clean package -pl lpg-ehl-emulator -am -DskipTests
+
+# Runtime stage
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# Copy built JAR
+COPY --from=build /build/lpg-ehl-emulator/target/lpg-ehl-emulator-*.jar app.jar
+
+# Expose emulator port
+EXPOSE 9000
+
+# Run emulator
+ENTRYPOINT ["java", "-jar", "app.jar"]

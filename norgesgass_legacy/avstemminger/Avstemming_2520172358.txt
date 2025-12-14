@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+02/05/2017 23:58
+Valuta: NOK
+Sesjon.: 390
+
+Avstemming
+
+VISA                   2
+Beløp=            838,17
+
+------------------------
+Innsamlet              2
+Total=            838,17
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

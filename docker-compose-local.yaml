@@ -1,168 +1,160 @@
 version: '3.8'
 
 # Local Development Docker Compose for LPG-EHL
-# Use this for development on Mac or Linux VM (Parallels, etc.)
-# Includes emulator instead of real serial port
+# Complete stack: Emulator + Database + Azurite + API + Frontend
+# Run: docker-compose -f docker-compose-local.yaml up
 
 services:
-  # PostgreSQL database - Same as production
+  # PostgreSQL database
   postgres:
     image: postgres:16-alpine
-    container_name: lpg-ehl-postgres-local
+    container_name: lpg-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: lpg_ehl
       POSTGRES_USER: lpg_user
       POSTGRES_PASSWORD: lpg_dev_password
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - ./local-data/postgres:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     ports:
-      - "5432:5432"  # Exposed for local tools (pgAdmin, DBeaver, etc.)
+      - "5432:5432"
+    volumes:
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lpg_user"]
+      test: ["CMD-SHELL", "pg_isready -U lpg_user -d lpg_ehl"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
     networks:
-      - lpg-ehl-local
+      - lpg-network
 
-  # LPG-EHL Application with Emulator
-  lpg-ehl-app:
+  # Azurite - Azure Storage Emulator
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: lpg-azurite
+    restart: unless-stopped
+    command: "azurite-queue --queueHost 0.0.0.0 --queuePort 10001 --loose"
+    ports:
+      - "10001:10001"
+    networks:
+      - lpg-network
+
+  # LPG-EHL Emulator (standalone for testing)
+  emulator:
     build:
       context: .
-      dockerfile: Dockerfile
-      args:
-        BUILD_ENV: development
-    container_name: lpg-ehl-app-local
+      dockerfile: Dockerfile.emulator
+    container_name: lpg-emulator
+    restart: unless-stopped
+    environment:
+      EMULATOR_ADDRESS: 1
+      EMULATOR_PRICE_PER_LITRE_CENTS: 1590
+      EMULATOR_LITRES_PER_SECOND: 0.5
+      EMULATOR_PORT: 9000
+    ports:
+      - "9000:9000"
+    networks:
+      - lpg-network
+
+  # LPG-EHL API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: lpg-api
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       azurite:
         condition: service_started
+      emulator:
+        condition: service_started
     environment:
-      # Database connection
+      SPRING_PROFILES_ACTIVE: local
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: lpg_ehl
       DB_USER: lpg_user
       DB_PASSWORD: lpg_dev_password
-      
-      # Emulator mode (no real serial port)
-      EMULATOR_ENABLED: true
-      EMULATOR_ADDRESS: 1
-      EMULATOR_PRICE_PER_LITRE_CENTS: 1590  # 15.90 kr/L
-      EMULATOR_LITRES_PER_SECOND: 0.5
-      
-      # Azure sync (enabled with Azurite for local testing)
       AZURE_ENABLED: true
       AZURE_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;QueueEndpoint=http://azurite:10001/devstoreaccount1;"
-      AZURE_QUEUE_NAME: "lpg-transactions"
+      AZURE_QUEUE_NAME: lpg-transactions
       AZURE_SYNC_INTERVAL: 30
       AZURE_SYNC_BATCH_SIZE: 10
       AZURE_SYNC_MAX_RETRIES: 3
-      
-      # API configuration
-      API_ENABLED: true
-      API_PORT: 8080
       API_AUTH_TOKEN: dev-token-12345
-      
-      # Logging (more verbose for development)
-      LOG_LEVEL: DEBUG
-    volumes:
-      - ./local-data/logs:/app/logs
-      - ./local-data/config:/app/config
-      - .:/app/src:ro  # Mount source for live reload (optional)
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000
+      EMULATOR_HOST: emulator
+      EMULATOR_PORT: 9000
     ports:
-      - "8080:8080"   # REST API
-      - "5005:5005"   # JVM Debug port
+      - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     networks:
-      - lpg-ehl-local
+      - lpg-network
 
-  # pgAdmin for database management (development only)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: lpg-ehl-pgadmin
+  # Frontend - React Web UI
+  frontend:
+    build:
+      context: ./lpg-web
+      dockerfile: Dockerfile
+    container_name: lpg-frontend
     restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@lpg-ehl.local
-      PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    volumes:
-      - ./local-data/pgadmin:/var/lib/pgadmin
-    ports:
-      - "5050:80"
     depends_on:
-      - postgres
-    networks:
-      - lpg-ehl-local
-
-  # Optional: Azure Storage Emulator (Azurite)
-  # Use this to test Azure integration without real Azure account
-  azurite:
-    image: mcr.microsoft.com/azure-storage/azurite
-    container_name: lpg-ehl-azurite
-    restart: unless-stopped
-    command: "azurite-queue --queueHost 0.0.0.0 --queuePort 10001 --loose"
+      api:
+        condition: service_healthy
+    environment:
+      VITE_API_URL: http://localhost:8080/api/v1
     ports:
-      - "10001:10001"  # Queue service
-    volumes:
-      - ./local-data/azurite:/data
+      - "5173:5173"
     networks:
-      - lpg-ehl-local
+      - lpg-network
 
   # WireMock - Mock external APIs for testing
   wiremock:
     image: wiremock/wiremock:3.3.1
-    container_name: lpg-ehl-wiremock
+    container_name: lpg-wiremock
     restart: unless-stopped
     command:
       - --global-response-templating
       - --verbose
     ports:
-      - "8081:8080"  # WireMock admin/mock API
+      - "8081:8080"
     volumes:
       - ./wiremock/mappings:/home/wiremock/mappings
       - ./wiremock/__files:/home/wiremock/__files
     networks:
-      - lpg-ehl-local
-
-  # Test client - Simulate external system calling API
-  test-client:
-    image: alpine:latest
-    container_name: lpg-ehl-test-client
-    depends_on:
-      - lpg-ehl-app
-    command: |
-      sh -c '
-      apk add --no-cache curl jq
-      echo "Waiting for API to be ready..."
-      sleep 10
-      echo "Testing API health endpoint..."
-      curl -f http://lpg-ehl-app:8080/health || exit 1
-      echo "API is healthy!"
-      tail -f /dev/null
-      '
-    networks:
-      - lpg-ehl-local
+      - lpg-network
 
 networks:
-  lpg-ehl-local:
+  lpg-network:
     driver: bridge
 
-# Local development notes:
-# 1. Start: docker-compose -f docker-compose-local.yaml up
-# 2. Stop:  docker-compose -f docker-compose-local.yaml down
-# 3. Logs:  docker-compose -f docker-compose-local.yaml logs -f lpg-ehl-app
-# 4. Access pgAdmin: http://localhost:5050
-# 5. Access API: http://localhost:8080
-# 6. Connect to DB: localhost:5432, user: lpg_user, password: lpg_dev_password
+# Local development stack
+# 
+# Start all services:
+#   docker-compose -f docker-compose-local.yaml up
+#
+# Start in background:
+#   docker-compose -f docker-compose-local.yaml up -d
+#
+# View logs:
+#   docker-compose -f docker-compose-local.yaml logs -f
+#   docker-compose -f docker-compose-local.yaml logs -f api
+#
+# Stop all:
+#   docker-compose -f docker-compose-local.yaml down
+#
+# Rebuild and start:
+#   docker-compose -f docker-compose-local.yaml up --build
+#
+# Access points:
+#   - Frontend:  http://localhost:5173
+#   - API:       http://localhost:8080
+#   - Emulator:  localhost:9000
+#   - Database:  localhost:5432 (user: lpg_user, password: lpg_dev_password)
+#   - Azurite:   localhost:10001
+#   - WireMock:  http://localhost:8081

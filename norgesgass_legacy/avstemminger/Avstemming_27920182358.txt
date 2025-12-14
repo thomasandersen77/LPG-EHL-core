@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+27/09/2018 23:58
+Valuta: NOK
+Sesjon.: 864
+
+Avstemming
+
+MASTERCARD             3
+Beløp=           1262,93
+
+------------------------
+Innsamlet              3
+Total=           1262,93
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

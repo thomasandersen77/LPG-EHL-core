@@ -1,0 +1,22 @@
+Bax: 14139877-533955
+24/06/2015 23:58
+Valuta: NOK
+Overf.: 720
+
+Avstemming
+
+VISA                   4
+Beløp=           2001,31
+
+MASTERCARD             1
+Beløp=            163,80
+
+------------------------
+Innsamlet              5
+Total=           2165,11
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

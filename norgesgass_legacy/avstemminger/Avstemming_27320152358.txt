@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+27/03/2015 23:58
+Valuta: NOK
+Overf.: 633
+
+Avstemming
+
+VISA                   2
+Beløp=            858,64
+
+------------------------
+Innsamlet              2
+Total=            858,64
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

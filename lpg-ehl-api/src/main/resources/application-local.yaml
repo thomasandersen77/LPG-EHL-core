@@ -1,11 +1,10 @@
 # Local Development Profile
+# Note: datasource config is inherited from application.yaml which uses environment variables
+# This allows the same profile to work both locally and in Docker
 spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/lpg_ehl
-    username: lpg_user
-    password: lpg_password
-  
   jpa:
+    hibernate:
+      ddl-auto: update  # Auto-create/update schema for local development
     show-sql: true
     properties:
       hibernate:

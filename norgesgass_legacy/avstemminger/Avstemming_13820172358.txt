@@ -1,0 +1,22 @@
+Bax: 14139877-533955
+13/08/2017 23:58
+Valuta: NOK
+Sesjon.: 488
+
+Avstemming
+
+VISA                   4
+Beløp=           1577,02
+
+MASTERCARD             4
+Beløp=           1208,08
+
+------------------------
+Innsamlet              8
+Total=           2785,10
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

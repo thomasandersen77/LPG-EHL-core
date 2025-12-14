@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+19/01/2020 23:58
+Valuta: NOK
+Sesjon.: 319
+
+Avstemming
+
+VISA                   1
+Beløp=            286,22
+
+------------------------
+Innsamlet              1
+Total=            286,22
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

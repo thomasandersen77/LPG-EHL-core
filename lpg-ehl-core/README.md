@@ -15,7 +15,7 @@ Re-engineering av gammel VBS-kode.
 
 ## 📖 About
 
-LPG-EHL Core is a clean, modern reimplementation of the EHL protocol used for controlling LPG (Liquefied Petroleum Gas) dispensers via RS-485 communication. This project ports legacy Visual Basic 6 code to Kotlin, providing:
+LPG-EHL Core is a clean, modern reimplementation of the EHL protocol used for controlling LPG (Liquefied Petroleum Gas) dispensers via RS-485 communication. This project re-implements the original Visual Basic 6 Pumpestyring application (found in `../norgesgass_legacy/`) into Kotlin, providing:
 
 - 🔒 **Type-safe** protocol implementation
 - 🧪 **Fully tested** with 29 unit tests

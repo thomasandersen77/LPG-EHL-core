@@ -1,0 +1,16 @@
+Bax: 14139877-533955
+31/03/2019 22:58
+Valuta: NOK
+Sesjon.: 048
+
+Avstemming
+
+------------------------
+Innsamlet              0
+Total=              0,00
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+13/03/2017 23:58
+Valuta: NOK
+Sesjon.: 340
+
+Avstemming
+
+MASTERCARD             1
+Beløp=            113,51
+
+------------------------
+Innsamlet              1
+Total=            113,51
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

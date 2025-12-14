@@ -1,0 +1,20 @@
+Bax: 14139877-533955
+19/12/2020 23:58
+Valuta: NOK
+Sesjon.: 530
+
+DATASET STATUS
+
+03 VISA      
+04 MASTERCARD
+06 DINERS    
+11 JCB       
+68 UnionPay  
+91 Visa Prepaid No
+
+DATASET - OK
+
+PRODUKT
+Ubetjent terminal Norge
+
+

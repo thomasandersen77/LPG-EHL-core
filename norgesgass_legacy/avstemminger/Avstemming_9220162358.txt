@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+09/02/2016 23:58
+Valuta: NOK
+Sesjon.: 946
+
+Avstemming
+
+MASTERCARD             1
+Beløp=            585,75
+
+------------------------
+Innsamlet              1
+Total=            585,75
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

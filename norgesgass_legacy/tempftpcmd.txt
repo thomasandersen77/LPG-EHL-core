@@ -1,0 +1,5 @@
+open ftp.domeneshop.no 
+lpgstasjon
+QDog7ggc
+put C:\Pumpestyring\stasjonskreditttank25112011.txt /synch/ebgass/test2.txt 
+quit 

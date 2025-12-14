@@ -1,0 +1,17 @@
+Bax: 14139877-533955
+30/12/2019 23:58
+Valuta: NOK
+Sesjon.: 300
+
+DATASET STATUS
+
+03 VISA      
+04 MASTERCARD
+91 Visa Prepaid No
+
+DATASET - OK
+
+PRODUKT
+Ubetjent terminal Norge
+
+

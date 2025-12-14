@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+25/02/2019 23:58
+Valuta: NOK
+Sesjon.: 014
+
+Avstemming
+
+MASTERCARD             1
+Beløp=            459,41
+
+------------------------
+Innsamlet              1
+Total=            459,41
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

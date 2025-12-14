@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+18/01/2020 23:58
+Valuta: NOK
+Sesjon.: 318
+
+Avstemming
+
+MASTERCARD             1
+Beløp=            527,93
+
+------------------------
+Innsamlet              1
+Total=            527,93
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

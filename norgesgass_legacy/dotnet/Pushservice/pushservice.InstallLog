@@ -1,0 +1,42 @@
+﻿Installerer samlingen C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.exe.
+Påvirkede parametere:
+   logtoconsole = 
+   assemblypath = C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.exe
+   logfile = C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.InstallLog
+Installerer tjenesten Pushservice...
+Oppretter EventLog-kilden Pushservice i loggen Application...
+Tilbakefører samlingen C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.exe.
+Påvirkede parametere:
+   logtoconsole = 
+   assemblypath = C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.exe
+   logfile = C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.InstallLog
+Gjenoppretter hendelsesloggen til forrige status for kilden Pushservice.
+Det oppstod et unntak i Rollback-fasen for installasjonsprogrammet System.Diagnostics.EventLogInstaller.
+System.Security.SecurityException: Finner ikke kilden, men kunne ikke søke i noen eller alle hendelsesloggene. Logger uten tilgang: Security.
+Det oppstod et unntak under installasjonens Rollback-fase. Dette unntaket ignoreres og tilbakeføringen fortsetter. Det kan imidlertid hende maskinen ikke går fullstendig tilbake til opprinnelig status etter tilbakeføringen.
+Installerer samlingen C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.exe.
+Påvirkede parametere:
+   logtoconsole = 
+   assemblypath = C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.exe
+   logfile = C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.InstallLog
+Installerer tjenesten Pushservice...
+Tjenesten Pushservice ble installert.
+Oppretter EventLog-kilden Pushservice i loggen Application...
+Lagrer samlingen C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.exe.
+Påvirkede parametere:
+   logtoconsole = 
+   assemblypath = C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.exe
+   logfile = C:\Users\Svein Arne Brokke\Dropbox (LPG Norge AS)\Svein Arne\Prosjekter\pushservice\Pushservice\Pushservice\bin\Debug\pushservice.InstallLog
+Installerer samlingen c:\pumpestyring\dotnet\pushservice\pushservice.exe.
+Påvirkede parametere:
+   logtoconsole = 
+   assemblypath = c:\pumpestyring\dotnet\pushservice\pushservice.exe
+   logfile = c:\pumpestyring\dotnet\pushservice\pushservice.InstallLog
+Installerer tjenesten Pushservice...
+Tjenesten Pushservice ble installert.
+Oppretter EventLog-kilden Pushservice i loggen Application...
+Lagrer samlingen c:\pumpestyring\dotnet\pushservice\pushservice.exe.
+Påvirkede parametere:
+   logtoconsole = 
+   assemblypath = c:\pumpestyring\dotnet\pushservice\pushservice.exe
+   logfile = c:\pumpestyring\dotnet\pushservice\pushservice.InstallLog

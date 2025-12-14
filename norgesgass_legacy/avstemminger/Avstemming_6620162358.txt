@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+06/06/2016 23:58
+Valuta: NOK
+Sesjon.: 062
+
+Avstemming
+
+MASTERCARD             3
+Beløp=            899,18
+
+------------------------
+Innsamlet              3
+Total=            899,18
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

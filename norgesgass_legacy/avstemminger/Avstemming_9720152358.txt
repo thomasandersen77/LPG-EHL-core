@@ -1,0 +1,19 @@
+Bax: 14139877-533955
+09/07/2015 23:58
+Valuta: NOK
+Overf.: 734
+
+Avstemming
+
+VISA                  11
+Beløp=           3738,41
+
+------------------------
+Innsamlet             11
+Total=           3738,41
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+
