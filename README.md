@@ -17,8 +17,18 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 - **lpg-ehl-core**: Core protocol implementation with real serial port communication
 - **lpg-ehl-emulator**: Emulator for testing without physical hardware
 - **lpg-ehl-api**: Spring Boot REST API with Azure sync and full observability
+- **lpg-web**: React frontend with modern UI and real-time updates
 - **Docker + PostgreSQL**: Production-ready containerized deployment with local database
 - **Azure Sync**: Automatic cloud backup and reporting integration with retry logic
+
+## 📚 Documentation
+
+- **[Executive Summary](docs/EXECUTIVE_SUMMARY.md)** - Quick overview for decision makers (cost, timeline, comparison)
+- **[Architecture Analysis](docs/ARCHITECTURE_ANALYSIS.md)** - Detailed technical comparison: Cloudberries vs WordPress/Node/MQTT
+- **[WARP.md](WARP.md)** - Complete technical documentation for development
+- **[Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)** - Feature roadmap and current status
+- **[API Documentation](lpg-ehl-api/README.md)** - REST API endpoints and configuration
+- **[Frontend Documentation](lpg-web/README.md)** - React frontend setup and usage
 
 ## 🏗️ Project Structure
 
