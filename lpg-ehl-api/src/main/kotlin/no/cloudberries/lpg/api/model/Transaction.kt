@@ -11,8 +11,9 @@ import java.util.*
 @Table(name = "transactions")
 class Transaction(
     @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "transaction_id")
-    var transactionId: UUID = UUID.randomUUID(),
+    var transactionId: UUID? = null,
 
     @Column(name = "dispenser_address", nullable = false)
     var dispenserAddress: Int,
@@ -31,6 +32,18 @@ class Transaction(
 
     @Column(name = "price_per_liter")
     var pricePerLiter: BigDecimal? = null,
+
+    @Column(name = "payment_type")
+    var paymentType: String? = "CASH", // CASH, CARD, CREDIT
+
+    @Column(name = "customer_id")
+    var customerId: UUID? = null,
+
+    @Column(name = "customer_name")
+    var customerName: String? = null,
+
+    @Column(name = "includes_road_tax")
+    var includesRoadTax: Boolean = true,
 
     @Column(name = "timestamp", nullable = false)
     var timestamp: LocalDateTime = LocalDateTime.now(),

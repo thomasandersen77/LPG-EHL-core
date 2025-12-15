@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="001-create-transactions-table" author="system">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="transactions"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="transactions">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="transaction_number" type="BIGSERIAL">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="dispenser_address" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="finished_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="volume_litres" type="DECIMAL(10,3)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount_cents" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price_per_litre_cents" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(50)" defaultValue="STARTED">
+                <constraints nullable="false"/>
+            </column>
+            <column name="synced_to_azure" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="synced_at" type="TIMESTAMP"/>
+            <column name="azure_sync_attempts" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_sync_error" type="TEXT"/>
+        </createTable>
+
+        <createIndex tableName="transactions" indexName="idx_transactions_started_at">
+            <column name="started_at" descending="true"/>
+        </createIndex>
+        <createIndex tableName="transactions" indexName="idx_transactions_state">
+            <column name="state"/>
+        </createIndex>
+        <createIndex tableName="transactions" indexName="idx_transactions_synced">
+            <column name="synced_to_azure"/>
+            <column name="synced_at"/>
+        </createIndex>
+        <createIndex tableName="transactions" indexName="idx_transactions_dispenser">
+            <column name="dispenser_address"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="001-add-transactions-constraints" author="system">
+        <sql>
+            ALTER TABLE transactions ADD CONSTRAINT positive_volume CHECK (volume_litres &gt;= 0);
+            ALTER TABLE transactions ADD CONSTRAINT positive_amount CHECK (amount_cents &gt;= 0);
+            ALTER TABLE transactions ADD CONSTRAINT positive_price CHECK (price_per_litre_cents &gt; 0);
+            ALTER TABLE transactions ADD CONSTRAINT valid_dispenser CHECK (dispenser_address BETWEEN 1 AND 255);
+        </sql>
+    </changeSet>
+
+    <changeSet id="001-create-protocol-events-table" author="system">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="protocol_events"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="protocol_events">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="transaction_id" type="UUID">
+                <constraints foreignKeyName="fk_protocol_events_transaction"
+                            references="transactions(id)" deleteCascade="true"/>
+            </column>
+            <column name="timestamp" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="direction" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dispenser_address" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="command_code" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="command_name" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="raw_bytes" type="BYTEA"/>
+            <column name="data_payload" type="BYTEA"/>
+            <column name="checksum_valid" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decoded_data" type="JSONB"/>
+            <column name="dispenser_state" type="VARCHAR(50)"/>
+        </createTable>
+
+        <createIndex tableName="protocol_events" indexName="idx_protocol_events_transaction">
+            <column name="transaction_id"/>
+            <column name="timestamp"/>
+        </createIndex>
+        <createIndex tableName="protocol_events" indexName="idx_protocol_events_timestamp">
+            <column name="timestamp" descending="true"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="001-add-protocol-events-constraints" author="system">
+        <sql>
+            ALTER TABLE protocol_events ADD CONSTRAINT valid_direction CHECK (direction IN ('SEND', 'RECEIVE'));
+        </sql>
+    </changeSet>
+
+    <changeSet id="001-create-azure-sync-queue-table" author="system">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="azure_sync_queue"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="azure_sync_queue">
+            <column name="queue_id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="entity_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="retry_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_error" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="synced_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex tableName="azure_sync_queue" indexName="idx_sync_queue_status">
+            <column name="status"/>
+            <column name="created_at"/>
+        </createIndex>
+        <createIndex tableName="azure_sync_queue" indexName="idx_sync_queue_entity">
+            <column name="entity_type"/>
+            <column name="entity_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="001-add-azure-sync-queue-constraints" author="system">
+        <sql>
+            ALTER TABLE azure_sync_queue ADD CONSTRAINT valid_status CHECK (status IN ('PENDING', 'IN_PROGRESS', 'SYNCED', 'FAILED'));
+            ALTER TABLE azure_sync_queue ADD CONSTRAINT max_retries CHECK (retry_count &lt;= 100);
+        </sql>
+    </changeSet>
+
+    <changeSet id="001-create-system-events-table" author="system">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="system_events"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="system_events">
+            <column name="event_id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="timestamp" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="level" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="component" type="VARCHAR(100)"/>
+            <column name="metadata" type="JSONB"/>
+            <column name="user_id" type="VARCHAR(100)"/>
+        </createTable>
+
+        <createIndex tableName="system_events" indexName="idx_system_events_timestamp">
+            <column name="timestamp" descending="true"/>
+        </createIndex>
+        <createIndex tableName="system_events" indexName="idx_system_events_level">
+            <column name="level"/>
+        </createIndex>
+        <createIndex tableName="system_events" indexName="idx_system_events_category">
+            <column name="category"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="001-create-dispenser-status-table" author="system">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="dispenser_status"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="dispenser_status">
+            <column name="dispenser_address" type="INT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="current_state" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_seen_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_transactions" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_volume_litres" type="DECIMAL(15,3)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_amount_cents" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="configured_price_per_litre_cents" type="INT"/>
+            <column name="error_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_error" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="dispenser_status" indexName="idx_dispenser_status_state">
+            <column name="current_state"/>
+        </createIndex>
+        <createIndex tableName="dispenser_status" indexName="idx_dispenser_status_last_seen">
+            <column name="last_seen_at" descending="true"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="001-add-dispenser-status-constraints" author="system">
+        <sql>
+            ALTER TABLE dispenser_status ADD CONSTRAINT valid_dispenser_status CHECK (dispenser_address BETWEEN 1 AND 255);
+        </sql>
+    </changeSet>
+
+    <changeSet id="001-create-views" author="system">
+        <createView viewName="daily_summary">
+            SELECT 
+                DATE(started_at) as transaction_date,
+                dispenser_address,
+                COUNT(*) as transaction_count,
+                SUM(volume_litres) as total_volume_litres,
+                SUM(amount_cents) / 100.0 as total_amount_kr,
+                AVG(price_per_litre_cents) / 100.0 as avg_price_per_litre_kr,
+                COUNT(CASE WHEN state = 'FINISHED' THEN 1 END) as completed_transactions,
+                COUNT(CASE WHEN state = 'CANCELLED' THEN 1 END) as cancelled_transactions
+            FROM transactions
+            WHERE started_at IS NOT NULL
+            GROUP BY DATE(started_at), dispenser_address
+            ORDER BY transaction_date DESC, dispenser_address
+        </createView>
+
+        <createView viewName="unsynced_transactions">
+            SELECT 
+                t.id,
+                t.transaction_number,
+                t.dispenser_address,
+                t.started_at,
+                t.finished_at,
+                t.volume_litres,
+                t.amount_cents / 100.0 as amount_kr,
+                t.azure_sync_attempts,
+                t.last_sync_error,
+                EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - t.created_at)) / 3600 as hours_since_creation
+            FROM transactions t
+            WHERE t.synced_to_azure = FALSE
+              AND t.state = 'FINISHED'
+            ORDER BY t.created_at
+        </createView>
+    </changeSet>
+
+    <changeSet id="001-create-functions-and-triggers" author="system" runOnChange="true">
+        <sql splitStatements="false"><![CDATA[
+            -- Function to update dispenser status
+            CREATE OR REPLACE FUNCTION update_dispenser_status()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                INSERT INTO dispenser_status (
+                    dispenser_address,
+                    current_state,
+                    total_transactions,
+                    total_volume_litres,
+                    total_amount_cents,
+                    configured_price_per_litre_cents
+                )
+                VALUES (
+                    NEW.dispenser_address,
+                    NEW.state,
+                    1,
+                    NEW.volume_litres,
+                    NEW.amount_cents,
+                    NEW.price_per_litre_cents
+                )
+                ON CONFLICT (dispenser_address) DO UPDATE SET
+                    current_state = EXCLUDED.current_state,
+                    last_seen_at = CURRENT_TIMESTAMP,
+                    total_transactions = dispenser_status.total_transactions + 1,
+                    total_volume_litres = dispenser_status.total_volume_litres + EXCLUDED.total_volume_litres,
+                    total_amount_cents = dispenser_status.total_amount_cents + EXCLUDED.total_amount_cents,
+                    updated_at = CURRENT_TIMESTAMP;
+                
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            -- Function to add to Azure sync queue
+            CREATE OR REPLACE FUNCTION queue_for_azure_sync()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                IF NEW.state = 'FINISHED' AND NOT NEW.synced_to_azure THEN
+                    INSERT INTO azure_sync_queue (
+                        entity_type,
+                        entity_id,
+                        payload
+                    )
+                    VALUES (
+                        'TRANSACTION',
+                        NEW.id,
+                        jsonb_build_object(
+                            'transaction_id', NEW.id,
+                            'transaction_number', NEW.transaction_number,
+                            'dispenser_address', NEW.dispenser_address,
+                            'started_at', NEW.started_at,
+                            'finished_at', NEW.finished_at,
+                            'volume_litres', NEW.volume_litres,
+                            'amount_cents', NEW.amount_cents,
+                            'price_per_litre_cents', NEW.price_per_litre_cents
+                        )
+                    )
+                    ON CONFLICT (entity_type, entity_id) DO NOTHING;
+                END IF;
+                
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        ]]></sql>
+
+        <sql>
+            -- Drop existing triggers if they exist
+            DROP TRIGGER IF EXISTS trigger_update_dispenser_status ON transactions;
+            DROP TRIGGER IF EXISTS trigger_queue_for_azure_sync ON transactions;
+
+            -- Create triggers
+            CREATE TRIGGER trigger_update_dispenser_status
+            AFTER INSERT OR UPDATE ON transactions
+            FOR EACH ROW
+            EXECUTE FUNCTION update_dispenser_status();
+
+            CREATE TRIGGER trigger_queue_for_azure_sync
+            AFTER INSERT OR UPDATE ON transactions
+            FOR EACH ROW
+            EXECUTE FUNCTION queue_for_azure_sync();
+        </sql>
+    </changeSet>
+
+    <changeSet id="001-add-unique-constraint-azure-sync" author="system">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="azure_sync_queue" indexName="idx_sync_queue_unique_entity"/>
+            </not>
+        </preConditions>
+        
+        <createIndex tableName="azure_sync_queue" indexName="idx_sync_queue_unique_entity" unique="true">
+            <column name="entity_type"/>
+            <column name="entity_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="001-insert-initial-system-event" author="system">
+        <sql>
+            INSERT INTO system_events (event_id, level, category, message, component)
+            VALUES (gen_random_uuid(), 'INFO', 'STARTUP', 'Database initialized successfully with Liquibase', 'liquibase')
+            ON CONFLICT DO NOTHING;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

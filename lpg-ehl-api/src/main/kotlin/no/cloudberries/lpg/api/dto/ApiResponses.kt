@@ -22,7 +22,7 @@ data class TransactionResponse(
 ) {
     companion object {
         fun from(transaction: Transaction) = TransactionResponse(
-            transactionId = transaction.transactionId,
+            transactionId = transaction.transactionId ?: UUID.randomUUID(), // Fallback for new transactions
             dispenserAddress = transaction.dispenserAddress,
             nozzleNumber = transaction.nozzleNumber,
             productCode = transaction.productCode,

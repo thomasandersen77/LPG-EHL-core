@@ -69,4 +69,30 @@ interface TransactionRepository : JpaRepository<Transaction, UUID> {
      * Get latest transaction for a dispenser
      */
     fun findFirstByDispenserAddressOrderByTimestampDesc(dispenserAddress: Int): Transaction?
+
+    /**
+     * Find transactions with flexible filtering
+     */
+    @Query(
+        """
+        SELECT t FROM Transaction t
+        WHERE (:paymentType IS NULL OR t.paymentType = :paymentType)
+        AND (:customerId IS NULL OR t.customerId = :customerId)
+        AND (:from IS NULL OR t.timestamp >= :from)
+        AND (:to IS NULL OR t.timestamp <= :to)
+        ORDER BY t.timestamp DESC
+        """
+    )
+    fun findWithFilters(
+        @Param("paymentType") paymentType: String?,
+        @Param("customerId") customerId: UUID?,
+        @Param("from") from: LocalDateTime?,
+        @Param("to") to: LocalDateTime?,
+        pageable: Pageable
+    ): Page<Transaction>
+
+    /**
+     * Find transactions by customer ID, ordered by timestamp descending
+     */
+    fun findByCustomerIdOrderByTimestampDesc(customerId: UUID): List<Transaction>
 }
