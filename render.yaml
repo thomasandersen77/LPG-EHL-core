@@ -61,7 +61,7 @@ services:
 
 databases:
   - name: lpg-db
-    plan: starter
+    plan: standard
     region: frankfurt
     databaseName: lpg_db
     user: lpg_user
