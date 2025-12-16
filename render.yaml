@@ -51,17 +51,15 @@ services:
   # --- 3. FRONTEND (React Static Site) ---
   - type: web
     name: lpg-web
+    runtime: static
     plan: starter
     region: frankfurt
-    buildCommand: npm ci && npm run build
-    staticPublishPath: ./lpg-web/dist
+    buildCommand: cd lpg-web && npm ci && npm run build
+    staticPublishPath: lpg-web/dist
     envVars:
       # Frontend will call API via public URL
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: lpg-api
-          property: url
+        value: https://lpg-api.onrender.com
 
 databases:
   - name: lpg-db
