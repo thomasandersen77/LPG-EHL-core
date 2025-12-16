@@ -1,4 +1,6 @@
 # Production Profile for Render Deployment
+# Note: server.port is set via JAVA_TOOL_OPTIONS in render.yaml
+
 spring:
   jpa:
     hibernate:
