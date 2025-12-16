@@ -52,8 +52,6 @@ services:
   - type: web
     name: lpg-web
     runtime: static
-    plan: starter
-    region: frankfurt
     buildCommand: cd lpg-web && npm ci && npm run build
     staticPublishPath: lpg-web/dist
     envVars:
