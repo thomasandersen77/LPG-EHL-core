@@ -1,0 +1,71 @@
+version: "1"
+
+services:
+  # --- 1. EMULATOR SERVICE (Backend) ---
+  - type: web
+    name: lpg-emulator
+    runtime: docker
+    dockerfilePath: ./Dockerfile.emulator
+    plan: standard
+    region: frankfurt
+    envVars:
+      # Spring Boot will bind to Render's dynamic PORT
+      - key: JAVA_TOOL_OPTIONS
+        value: "-Dserver.port=$PORT"
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+
+  # --- 2. API SERVICE ---
+  - type: web
+    name: lpg-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: standard
+    region: frankfurt
+    envVars:
+      # Spring Boot will bind to Render's dynamic PORT
+      - key: JAVA_TOOL_OPTIONS
+        value: "-Dserver.port=$PORT"
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      # Internal connection to Emulator (Render private networking)
+      - key: EMULATOR_BASE_URL
+        value: http://lpg-emulator:10000
+      # Database connection
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: lpg-db
+          property: connectionString
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: lpg-db
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: lpg-db
+          property: password
+      # Azure Queue (set to empty for now, configure if needed)
+      - key: AZURE_STORAGE_CONNECTION_STRING
+        value: ""
+
+  # --- 3. FRONTEND (React Static Site) ---
+  - type: static
+    name: lpg-web
+    rootDir: lpg-web
+    buildCommand: npm ci && npm run build
+    publishDir: dist
+    region: frankfurt
+    envVars:
+      # Frontend will call API via public URL
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: lpg-api
+          property: url
+
+databases:
+  - name: lpg-db
+    plan: starter
+    region: frankfurt
+    databaseName: lpg_db
+    user: lpg_user

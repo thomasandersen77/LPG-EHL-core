@@ -29,6 +29,8 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 - **[Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)** - Feature roadmap and current status
 - **[API Documentation](lpg-ehl-api/README.md)** - REST API endpoints and configuration
 - **[Frontend Documentation](lpg-web/README.md)** - React frontend setup and usage
+- **[Cloud Deployment Quick Start](DEPLOYMENT_QUICKSTART.md)** - ⚡ Fast track to Render.com deployment
+- **[Render Deployment Guide](RENDER_DEPLOY.md)** - 📖 Comprehensive Render.com deployment guide
 
 ## 🏗️ Project Structure
 

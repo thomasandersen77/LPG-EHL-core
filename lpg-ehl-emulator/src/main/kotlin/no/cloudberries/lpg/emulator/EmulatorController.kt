@@ -7,7 +7,8 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/emulator")
 class EmulatorController(
     private val emulatorService: EmulatorService,
-    private val scenarioService: EmulatorScenarioService
+    private val scenarioService: EmulatorScenarioService,
+    private val logBuffer: LogBuffer
 ) {
 
     @GetMapping("/status")
@@ -41,4 +42,20 @@ class EmulatorController(
     @GetMapping("/status/{address}")
     fun getScenarioStatus(@PathVariable("address") dispenserAddress: Int) =
         ResponseEntity.ok(scenarioService.status(dispenserAddress))
+    
+    @GetMapping("/internal/logs")
+    fun getLogs(@RequestParam(defaultValue = "500") limit: Int): ResponseEntity<Map<String, Any>> {
+        val logs = logBuffer.getRecentLogs(limit)
+        return ResponseEntity.ok(mapOf(
+            "count" to logs.size,
+            "maxSize" to 1000,
+            "logs" to logs
+        ))
+    }
+    
+    @DeleteMapping("/internal/logs")
+    fun clearLogs(): ResponseEntity<Map<String, String>> {
+        logBuffer.clear()
+        return ResponseEntity.ok(mapOf("status" to "cleared"))
+    }
 }

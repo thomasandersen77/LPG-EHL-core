@@ -29,8 +29,9 @@ WORKDIR /app
 # Copy built JAR
 COPY --from=build /build/lpg-ehl-emulator/target/lpg-ehl-emulator-*.jar app.jar
 
-# Expose emulator port
-EXPOSE 9000
+# Render provides PORT env var dynamically
+# JAVA_TOOL_OPTIONS in render.yaml sets -Dserver.port=$PORT
+EXPOSE 10000
 
 # Run emulator
 ENTRYPOINT ["java", "-jar", "app.jar"]

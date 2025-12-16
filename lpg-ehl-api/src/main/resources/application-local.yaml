@@ -14,6 +14,12 @@ spring:
     enabled: true
     drop-first: true # Clean database on startup as requested
 
+# Emulator connection (local development)
+emulator:
+  base-url: ${EMULATOR_BASE_URL:http://localhost:9000}
+  connect-timeout-ms: 3000
+  read-timeout-ms: 5000
+
 # Azure - Use Azurite for local development
 azure:
   enabled: ${AZURE_ENABLED:true}
