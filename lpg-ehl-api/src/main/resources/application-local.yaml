@@ -4,11 +4,15 @@
 spring:
   jpa:
     hibernate:
-      ddl-auto: update  # Auto-create/update schema for local development
+      ddl-auto: validate  # Validate schema against entities, use Liquibase for changes
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+
+  liquibase:
+    enabled: true
+    drop-first: true # Clean database on startup as requested
 
 # Azure - Use Azurite for local development
 azure:

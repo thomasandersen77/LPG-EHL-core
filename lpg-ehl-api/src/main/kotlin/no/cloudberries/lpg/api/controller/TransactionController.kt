@@ -21,7 +21,7 @@ import java.util.*
 @RestController
 @RequestMapping("/api/v1/transactions")
 @Tag(name = "Transactions", description = "Transaction management endpoints")
-@SecurityRequirement(name = "bearer-token")
+// @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 class TransactionController(
     private val transactionService: TransactionService
 ) {
@@ -56,6 +56,14 @@ class TransactionController(
         @RequestParam(required = false)
         dispenserAddress: Int?,
 
+        @Parameter(description = "Filter by payment type (CASH, CARD, CREDIT)")
+        @RequestParam(required = false)
+        paymentType: String?,
+
+        @Parameter(description = "Filter by customer ID")
+        @RequestParam(required = false)
+        customerId: UUID?,
+
         @Parameter(description = "Page number (0-indexed)")
         @RequestParam(defaultValue = "0")
         page: Int,
@@ -65,7 +73,7 @@ class TransactionController(
         size: Int
     ): ResponseEntity<PageResponse<TransactionResponse>> {
         val pageSize = size.coerceAtMost(100)
-        val transactions = transactionService.getTransactions(from, to, dispenserAddress, page, pageSize)
+        val transactions = transactionService.getTransactions(from, to, dispenserAddress, paymentType, customerId, page, pageSize)
         return ResponseEntity.ok(transactions)
     }
 

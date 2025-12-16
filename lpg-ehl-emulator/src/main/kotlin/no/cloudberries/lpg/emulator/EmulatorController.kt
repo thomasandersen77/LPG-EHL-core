@@ -39,6 +39,6 @@ class EmulatorController(
     }
 
     @GetMapping("/status/{address}")
-    fun getScenarioStatus(@PathVariable("address") dispenserAddress: Int): ResponseEntity<EmulatorStatus> =
+    fun getScenarioStatus(@PathVariable("address") dispenserAddress: Int) =
         ResponseEntity.ok(scenarioService.status(dispenserAddress))
 }

@@ -2,6 +2,7 @@ package no.cloudberries.lpg.api.payment
 
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
+import org.springframework.security.core.parameters.P
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.time.Instant
@@ -34,6 +35,16 @@ class SimulatedPaymentGateway : PaymentGateway {
                 )
             }
             PaymentMethod.CARD, PaymentMethod.CREDIT -> {
+                Payment(
+                    amountCents = request.amountCents,
+                    method = request.method,
+                    status = PaymentStatus.PENDING,
+                    reference = request.reference,
+                    metadata = request.metadata
+                )
+            }
+
+            PaymentMethod.VIPPS -> {
                 Payment(
                     amountCents = request.amountCents,
                     method = request.method,

@@ -17,18 +17,26 @@ data class TransactionResponse(
     val volumeLiters: BigDecimal,
     val amountKr: BigDecimal,
     val pricePerLiter: BigDecimal?,
+    val paymentType: String?,
+    val customerId: UUID?,
+    val customerName: String?,
+    val includesRoadTax: Boolean,
     val timestamp: LocalDateTime,
     val decodedData: Map<String, Any>?
 ) {
     companion object {
         fun from(transaction: Transaction) = TransactionResponse(
-            transactionId = transaction.transactionId,
+            transactionId = transaction.transactionId ?: UUID.randomUUID(), // Fallback for new transactions
             dispenserAddress = transaction.dispenserAddress,
             nozzleNumber = transaction.nozzleNumber,
             productCode = transaction.productCode,
             volumeLiters = transaction.volumeLiters,
             amountKr = transaction.amountKr,
             pricePerLiter = transaction.pricePerLiter,
+            paymentType = transaction.paymentType,
+            customerId = transaction.customerId,
+            customerName = transaction.customerName,
+            includesRoadTax = transaction.includesRoadTax,
             timestamp = transaction.timestamp,
             decodedData = transaction.decodedData
         )
@@ -53,20 +61,18 @@ data class PageResponse<T>(
  */
 data class DispenserStatusResponse(
     val dispenserAddress: Int,
+    val state: String,
     val lastTransactionId: UUID?,
-    val totalTransactions: Int,
-    val totalVolumeLiters: BigDecimal,
-    val totalAmountKr: BigDecimal,
+    val errorCode: Int?,
     val lastSeen: LocalDateTime
 ) {
     companion object {
         fun from(status: DispenserStatus) = DispenserStatusResponse(
-            dispenserAddress = status.dispenserAddress,
-            lastTransactionId = status.lastTransactionId,
-            totalTransactions = status.totalTransactions,
-            totalVolumeLiters = status.totalVolumeLiters,
-            totalAmountKr = status.totalAmountKr,
-            lastSeen = status.lastSeen
+            dispenserAddress = status.address,
+            state = status.state,
+            lastTransactionId = status.currentTransactionId,
+            errorCode = status.errorCode,
+            lastSeen = status.lastActive
         )
     }
 }

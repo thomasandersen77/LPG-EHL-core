@@ -17,7 +17,7 @@ import java.time.LocalDate
 @RestController
 @RequestMapping("/api/v1/reports")
 @Tag(name = "Reports", description = "Reporting and analytics endpoints")
-@SecurityRequirement(name = "bearer-token")
+// @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 class ReportsController(
     private val reportService: ReportService
 ) {

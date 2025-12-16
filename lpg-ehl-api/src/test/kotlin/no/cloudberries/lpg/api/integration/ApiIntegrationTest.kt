@@ -170,11 +170,9 @@ class ApiIntegrationTest : BaseIntegrationTest() {
         // Create test dispenser status
         dispenserStatusRepository.save(
             DispenserStatus(
-                dispenserAddress = 1,
-                totalTransactions = 10,
-                totalVolumeDeciliters = 5000,
-                totalAmountOre = 79500,
-                lastSeen = LocalDateTime.now()
+                address = 1,
+                state = "IDLE",
+                lastActive = LocalDateTime.now()
             )
         )
 
@@ -186,18 +184,16 @@ class ApiIntegrationTest : BaseIntegrationTest() {
             .statusCode(200)
             .body("$", hasSize<Any>(1))
             .body("[0].dispenserAddress", equalTo(1))
-            .body("[0].totalTransactions", equalTo(10))
+            .body("[0].state", equalTo("IDLE"))
     }
 
     @Test
     fun `should get dispenser by address`() {
         dispenserStatusRepository.save(
             DispenserStatus(
-                dispenserAddress = 5,
-                totalTransactions = 20,
-                totalVolumeDeciliters = 10000,
-                totalAmountOre = 159000,
-                lastSeen = LocalDateTime.now()
+                address = 5,
+                state = "DELIVERING",
+                lastActive = LocalDateTime.now()
             )
         )
 
@@ -208,9 +204,7 @@ class ApiIntegrationTest : BaseIntegrationTest() {
             .then()
             .statusCode(200)
             .body("dispenserAddress", equalTo(5))
-            .body("totalTransactions", equalTo(20))
-            .body("totalVolumeLiters", equalTo(1000.0f))
-            .body("totalAmountKr", equalTo(1590.0f))
+            .body("state", equalTo("DELIVERING"))
     }
 
     @Test

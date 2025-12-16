@@ -1,0 +1,233 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-transactions-table
+      author: warp-agent
+      changes:
+        - createTable:
+            tableName: transactions
+            columns:
+              - column:
+                  name: transaction_id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: dispenser_address
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: nozzle_number
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: product_code
+                  type: varchar(50)
+              - column:
+                  name: volume_deciliters
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount_ore
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: price_per_liter
+                  type: decimal(10, 2)
+              - column:
+                  name: payment_type
+                  type: varchar(50)
+                  defaultValue: "CASH"
+              - column:
+                  name: customer_id
+                  type: uuid
+              - column:
+                  name: customer_name
+                  type: varchar(255)
+              - column:
+                  name: includes_road_tax
+                  type: boolean
+                  defaultValue: true
+              - column:
+                  name: timestamp
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: decoded_data
+                  type: jsonb
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+                    
+  - changeSet:
+      id: 001-create-dispenser-status-table
+      author: warp-agent
+      changes:
+        - createTable:
+            tableName: dispenser_status
+            columns:
+              - column:
+                  name: address
+                  type: int
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: state
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_active
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: current_transaction_id
+                  type: uuid
+              - column:
+                  name: error_code
+                  type: int
+
+  - changeSet:
+      id: 001-create-azure-sync-queue-table
+      author: warp-agent
+      changes:
+        - createTable:
+            tableName: azure_sync_queue
+            columns:
+              - column:
+                  name: queue_id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: entity_type
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: entity_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: retry_count
+                  type: int
+                  defaultValue: 0
+              - column:
+                  name: last_error
+                  type: text
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: synced_at
+                  type: timestamp
+              - column:
+                  name: payload
+                  type: jsonb
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 001-create-customers-table
+      author: warp-agent
+      changes:
+        - createTable:
+            tableName: customers
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: customer_number
+                  type: varchar(50)
+                  constraints:
+                    unique: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 001-create-credit-accounts-table
+      author: warp-agent
+      changes:
+        - createTable:
+            tableName: credit_accounts
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: customer_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_credit_customer
+                    references: customers(id)
+              - column:
+                  name: balance_nok
+                  type: decimal(10, 2)
+                  defaultValue: 0.00
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_activity_at
+                  type: timestamp
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: credit_accounts
+            indexName: idx_credit_customer
+            columns:
+              - column:
+                  name: customer_id
+
+  - changeSet:
+      id: 001-create-daily-summary-view
+      author: warp-agent
+      changes:
+        - createView:
+            viewName: daily_summary
+            replaceIfExists: true
+            selectQuery: |
+              SELECT 
+                DATE(timestamp) as date,
+                SUM(volume_deciliters) as total_volume_deciliters,
+                SUM(amount_ore) as total_amount_ore,
+                COUNT(*) as transaction_count
+              FROM transactions
+              GROUP BY DATE(timestamp)

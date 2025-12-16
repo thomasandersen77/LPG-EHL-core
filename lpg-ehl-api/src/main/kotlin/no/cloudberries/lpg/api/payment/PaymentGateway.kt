@@ -6,7 +6,8 @@ import java.util.UUID
 enum class PaymentMethod {
     CASH,
     CARD,
-    CREDIT
+    CREDIT,
+    VIPPS
 }
 
 enum class PaymentStatus {

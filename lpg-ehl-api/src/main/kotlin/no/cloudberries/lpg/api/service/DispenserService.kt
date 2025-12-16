@@ -30,6 +30,6 @@ class DispenserService(
     }
 
     fun dispenserExists(address: Int): Boolean {
-        return dispenserStatusRepository.existsByDispenserAddress(address)
+        return dispenserStatusRepository.existsByAddress(address)
     }
 }

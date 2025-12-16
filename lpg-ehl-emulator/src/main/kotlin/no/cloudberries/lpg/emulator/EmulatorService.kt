@@ -44,7 +44,7 @@ class EmulatorService(
                 acceptConnections()
             }.apply {
                 name = "EmulatorAcceptThread"
-                isDaemon = true
+                isDaemon = false  // Non-daemon thread keeps JVM alive
                 start()
             }
         } catch (e: Exception) {
