@@ -49,12 +49,12 @@ services:
         value: ""
 
   # --- 3. FRONTEND (React Static Site) ---
-  - type: static
+  - type: web
     name: lpg-web
-    rootDir: lpg-web
-    buildCommand: npm ci && npm run build
-    publishDir: dist
+    plan: starter
     region: frankfurt
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./lpg-web/dist
     envVars:
       # Frontend will call API via public URL
       - key: VITE_API_URL
