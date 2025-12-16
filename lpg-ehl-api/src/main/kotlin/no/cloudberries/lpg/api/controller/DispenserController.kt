@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/api/v1/dispensers")
 @Tag(name = "Dispensers", description = "Dispenser status endpoints")
-@SecurityRequirement(name = "bearer-token")
+// @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 class DispenserController(
     private val dispenserService: DispenserService
 ) {

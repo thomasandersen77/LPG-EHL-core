@@ -12,7 +12,7 @@ interface DispenserStatusRepository : JpaRepository<DispenserStatus, Int> {
     /**
      * Find dispensers seen after a specific time
      */
-    fun findByLastSeenAfter(since: LocalDateTime): List<DispenserStatus>
+    fun findByLastActiveAfter(since: LocalDateTime): List<DispenserStatus>
 
     /**
      * Find active dispensers (seen in last N minutes)
@@ -20,8 +20,8 @@ interface DispenserStatusRepository : JpaRepository<DispenserStatus, Int> {
     @Query(
         """
         SELECT ds FROM DispenserStatus ds 
-        WHERE ds.lastSeen > :cutoffTime
-        ORDER BY ds.lastSeen DESC
+        WHERE ds.lastActive > :cutoffTime
+        ORDER BY ds.lastActive DESC
         """
     )
     fun findActiveDispensers(cutoffTime: LocalDateTime): List<DispenserStatus>
@@ -29,5 +29,5 @@ interface DispenserStatusRepository : JpaRepository<DispenserStatus, Int> {
     /**
      * Check if dispenser exists
      */
-    fun existsByDispenserAddress(dispenserAddress: Int): Boolean
+    fun existsByAddress(address: Int): Boolean
 }

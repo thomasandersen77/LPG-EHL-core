@@ -77,9 +77,9 @@ interface TransactionRepository : JpaRepository<Transaction, UUID> {
         """
         SELECT t FROM Transaction t
         WHERE (:paymentType IS NULL OR t.paymentType = :paymentType)
-        AND (:customerId IS NULL OR t.customerId = :customerId)
-        AND (:from IS NULL OR t.timestamp >= :from)
-        AND (:to IS NULL OR t.timestamp <= :to)
+        AND (CAST(:customerId AS string) IS NULL OR t.customerId = :customerId)
+        AND (CAST(:from AS timestamp) IS NULL OR t.timestamp >= :from)
+        AND (CAST(:to AS timestamp) IS NULL OR t.timestamp <= :to)
         ORDER BY t.timestamp DESC
         """
     )

@@ -21,7 +21,7 @@ import java.util.*
 @RestController
 @RequestMapping("/api/v1/transactions")
 @Tag(name = "Transactions", description = "Transaction management endpoints")
-@SecurityRequirement(name = "bearer-token")
+// @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 class TransactionController(
     private val transactionService: TransactionService
 ) {

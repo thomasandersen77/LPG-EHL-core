@@ -5,18 +5,19 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 export type PaymentType = 'CASH' | 'CARD' | 'CREDIT' | 'UNKNOWN';
 
 export interface TransactionDto {
-  id: string;
+  transactionId: string;
   dispenserAddress: number;
-  startedAt: string;
-  finishedAt: string | null;
-  litres: number;
-  amountNok: number;
-  pricePerLitreNok: number;
+  nozzleNumber: number;
+  productCode?: string;
+  volumeLiters: number;
+  amountKr: number;
+  pricePerLiter: number;
   paymentType: PaymentType;
   customerName?: string;
   customerId?: string;
   includesRoadTax: boolean;
-  state: string;
+  timestamp: string;
+  decodedData?: any;
 }
 
 export interface TransactionFilter {
@@ -32,8 +33,10 @@ export interface TransactionsPage {
   content: TransactionDto[];
   totalElements: number;
   totalPages: number;
-  number: number;
-  size: number;
+  currentPage: number;
+  pageSize: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
 }
 
 export async function fetchTransactions(filter: TransactionFilter): Promise<TransactionsPage> {

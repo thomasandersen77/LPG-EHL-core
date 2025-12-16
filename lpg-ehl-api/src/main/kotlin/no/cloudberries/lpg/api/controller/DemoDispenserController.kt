@@ -27,6 +27,7 @@ class DemoDispenserController(
     private var amountToPay: Double = 0.0
     private val pricePerLitre: Double = 15.90
     private var lastUnblockTime: Long = 0
+    private var currentPaymentType: String = "CASH"
     
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -57,12 +58,15 @@ class DemoDispenserController(
 
     @PostMapping("/unblock")
     @Operation(summary = "Start fuel delivery", description = "Unblock the dispenser and start delivery")
-    fun unblock(): ResponseEntity<DispenserStateDto> {
+    fun unblock(
+        @RequestParam(defaultValue = "CASH") paymentType: String
+    ): ResponseEntity<DispenserStateDto> {
         if (state == DispenserState.IDLE || state == DispenserState.FINISHED) {
             state = DispenserState.DELIVERING
             lastUnblockTime = System.currentTimeMillis()
             litres = 0.0
             amountToPay = 0.0
+            currentPaymentType = paymentType
         }
         return getState()
     }
@@ -93,7 +97,7 @@ class DemoDispenserController(
                         volumeDeciliters = (litres * 10).toInt(), // Convert liters to deciliters
                         amountOre = (amountToPay * 100).toInt(), // Convert kr to øre
                         pricePerLiter = BigDecimal.valueOf(pricePerLitre),
-                        paymentType = "CASH",
+                        paymentType = currentPaymentType,
                         includesRoadTax = true,
                         timestamp = LocalDateTime.now(),
                         productCode = "LPG"

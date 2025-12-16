@@ -1,41 +1,37 @@
 import axios from 'axios';
-import type { PaymentType } from './transactions';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
-export interface PaymentTypeSummary {
-  litres: number;
-  amountNok: number;
-  count: number;
-}
-
-export interface DailyReport {
-  date: string;
-  totalLitres: number;
-  totalAmountNok: number;
+export interface DailySummaryResponse {
+  summaryDate: string;
+  dispenserAddress: number;
   transactionCount: number;
-  byPaymentType: Record<PaymentType, PaymentTypeSummary>;
+  totalVolumeLiters: number;
+  totalAmountKr: number;
+  averagePricePerLiter: number;
 }
 
-export interface RangeReport {
-  from: string;
-  to: string;
-  totalLitres: number;
-  totalAmountNok: number;
-  transactionCount: number;
-  dailyBreakdown: DailyReport[];
+export interface PeriodSummaryResponse {
+  fromDate: string;
+  toDate: string;
+  dispenserAddress?: number;
+  totalTransactions: number;
+  totalVolumeLiters: number;
+  totalAmountKr: number;
+  averagePricePerLiter: number;
+  dailySummaries: DailySummaryResponse[];
 }
 
-export async function fetchDailyReport(date: string): Promise<DailyReport> {
-  const res = await axios.get<DailyReport>(`${API_URL}/reports/daily`, {
+export async function fetchDailySummary(date?: string): Promise<DailySummaryResponse[]> {
+  const res = await axios.get<DailySummaryResponse[]>(`${API_URL}/reports/daily`, {
     params: { date }
   });
   return res.data;
 }
 
-export async function fetchRangeReport(from: string, to: string): Promise<RangeReport> {
-  const res = await axios.get<RangeReport>(`${API_URL}/reports/range`, {
-    params: { from, to }
+export async function fetchPeriodSummary(from: string, to: string, dispenserAddress?: number): Promise<PeriodSummaryResponse> {
+  const res = await axios.get<PeriodSummaryResponse>(`${API_URL}/reports/period`, {
+    params: { from, to, dispenserAddress }
   });
   return res.data;
 }

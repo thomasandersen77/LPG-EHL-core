@@ -71,13 +71,24 @@ class TransactionService(
     @Transactional
     fun saveTransaction(transaction: Transaction): Transaction {
         logger.info("Saving transaction: {} liters, {} øre", transaction.volumeDeciliters / 10.0, transaction.amountOre)
-
         
         val saved = transactionRepository.save(transaction)
         
-
         logger.info("Transaction saved successfully with ID: {}", saved.transactionId)
         
         return saved
+    }
+
+    @Transactional
+    fun updatePaymentType(transactionId: UUID, paymentType: String, customerId: UUID? = null): Transaction {
+        val transaction = transactionRepository.findById(transactionId)
+            .orElseThrow { IllegalArgumentException("Transaction not found: $transactionId") }
+
+        transaction.paymentType = paymentType
+        if (customerId != null) {
+            transaction.customerId = customerId
+        }
+
+        return transactionRepository.save(transaction)
     }
 }

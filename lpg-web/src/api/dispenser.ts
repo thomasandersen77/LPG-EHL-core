@@ -25,8 +25,8 @@ export const dispenserApi = {
   /**
    * Start fuel delivery (unblock)
    */
-  unblock: async (): Promise<DispenserStateDto> => {
-    const response = await api.post<DispenserStateDto>('/api/v1/dispenser/unblock');
+  unblock: async (paymentType: string = 'CASH'): Promise<DispenserStateDto> => {
+    const response = await api.post<DispenserStateDto>(`/api/v1/dispenser/unblock?paymentType=${paymentType}`);
     return response.data;
   },
 

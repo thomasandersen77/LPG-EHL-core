@@ -16,7 +16,7 @@ import java.util.*
 @RestController
 @RequestMapping("/api/v1/sync")
 @Tag(name = "Sync", description = "Azure sync management endpoints")
-@SecurityRequirement(name = "bearer-token")
+// @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 @ConditionalOnProperty(name = ["azure.enabled"], havingValue = "true")
 class SyncController(
     private val azureSyncService: AzureSyncService

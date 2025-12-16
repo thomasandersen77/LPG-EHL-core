@@ -17,6 +17,10 @@ data class TransactionResponse(
     val volumeLiters: BigDecimal,
     val amountKr: BigDecimal,
     val pricePerLiter: BigDecimal?,
+    val paymentType: String?,
+    val customerId: UUID?,
+    val customerName: String?,
+    val includesRoadTax: Boolean,
     val timestamp: LocalDateTime,
     val decodedData: Map<String, Any>?
 ) {
@@ -29,6 +33,10 @@ data class TransactionResponse(
             volumeLiters = transaction.volumeLiters,
             amountKr = transaction.amountKr,
             pricePerLiter = transaction.pricePerLiter,
+            paymentType = transaction.paymentType,
+            customerId = transaction.customerId,
+            customerName = transaction.customerName,
+            includesRoadTax = transaction.includesRoadTax,
             timestamp = transaction.timestamp,
             decodedData = transaction.decodedData
         )
@@ -53,20 +61,18 @@ data class PageResponse<T>(
  */
 data class DispenserStatusResponse(
     val dispenserAddress: Int,
+    val state: String,
     val lastTransactionId: UUID?,
-    val totalTransactions: Int,
-    val totalVolumeLiters: BigDecimal,
-    val totalAmountKr: BigDecimal,
+    val errorCode: Int?,
     val lastSeen: LocalDateTime
 ) {
     companion object {
         fun from(status: DispenserStatus) = DispenserStatusResponse(
-            dispenserAddress = status.dispenserAddress,
-            lastTransactionId = status.lastTransactionId,
-            totalTransactions = status.totalTransactions,
-            totalVolumeLiters = status.totalVolumeLiters,
-            totalAmountKr = status.totalAmountKr,
-            lastSeen = status.lastSeen
+            dispenserAddress = status.address,
+            state = status.state,
+            lastTransactionId = status.currentTransactionId,
+            errorCode = status.errorCode,
+            lastSeen = status.lastActive
         )
     }
 }
