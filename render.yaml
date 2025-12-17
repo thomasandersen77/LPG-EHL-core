@@ -9,9 +9,7 @@ services:
     plan: standard
     region: frankfurt
     envVars:
-      # Spring Boot will bind to Render's dynamic PORT
-      - key: JAVA_TOOL_OPTIONS
-        value: "-Dserver.port=$PORT"
+      # Render's PORT will be read by Spring via ${PORT} in application.yaml
       - key: SPRING_PROFILES_ACTIVE
         value: production
 
@@ -23,9 +21,7 @@ services:
     plan: standard
     region: frankfurt
     envVars:
-      # Spring Boot will bind to Render's dynamic PORT
-      - key: JAVA_TOOL_OPTIONS
-        value: "-Dserver.port=$PORT"
+      # Render's PORT will be read by Spring via ${PORT} in application.yaml
       - key: SPRING_PROFILES_ACTIVE
         value: production
       # Internal connection to Emulator (Render private networking)
