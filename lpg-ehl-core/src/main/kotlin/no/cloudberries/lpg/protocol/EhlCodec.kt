@@ -184,7 +184,8 @@ object EhlPacketBuilder {
     }
     
     /**
-     * Create a PROG_PRC (price programming) packet
+     * Create a PROG_PRC (price programming) packet (VB6: 0xA9)
+     * Uses LSB-first encoding to match VB6 disp_setprice()
      * 
      * @param address Dispenser address
      * @param price Price in format "XX.XX" (e.g., "15.90" for 15.90 kr/liter)
@@ -194,16 +195,26 @@ object EhlPacketBuilder {
             "Price must be in format XX.XX" 
         }
         
-        // Convert price string to EHL format (4 ASCII digits)
-        val parts = price.split(".")
-        val data = byteArrayOf(
-            parts[1][1].code.toByte(),  // Last decimal digit
-            parts[1][0].code.toByte(),  // First decimal digit
-            parts[0][1].code.toByte(),  // Last whole digit
-            parts[0][0].code.toByte()   // First whole digit
-        )
+        // VB6 format: 4 ASCII digits LSB-first, øre/kr without decimal
+        // Example: "15.90" → "1590" → bytes ['0','9','5','1']
+        val priceStr = price.replace(".", "")  // "1590"
+        val data = ByteArray(4)
+        for (i in 0..3) {
+            data[i] = priceStr[3 - i].code.toByte()  // LSB-first order
+        }
         
         return EhlPacket(address, EhlCommand.PROG_PRC, data)
+    }
+    
+    /**
+     * Create a PRODUCT_SELECT packet (VB6: 0xC3)
+     * Used for pistol/product selection before pricing operations
+     * 
+     * @param address Dispenser address
+     * @param product Product selector (typically 0x30 for ASCII '0')
+     */
+    fun createProductSelect(address: Int, product: Byte = 0x30): EhlPacket {
+        return EhlPacket(address, EhlCommand.PRODUCT_SELECT, byteArrayOf(product))
     }
     
     /**
@@ -315,14 +326,31 @@ object EhlDataParser {
     }
     
     /**
-     * Parse ERROR response data
+     * Parse ERROR response data (VB6 format)
+     * VB6 returns 2 ASCII bytes: main code + sub code (logdisp_err function)
      * 
      * @param data Raw data bytes from ERROR response
-     * @return Error code
+     * @return Pair of (mainCode, subCode) as ASCII characters
      * @throws IllegalArgumentException if data format is invalid
      */
-    fun parseErrorData(data: ByteArray): Int {
-        require(data.size == 1) { "ERROR data must be exactly 1 byte" }
+    fun parseErrorData(data: ByteArray): Pair<Char, Char> {
+        require(data.size == 2) { "ERROR data must be exactly 2 ASCII bytes (VB6 format)" }
+        
+        val mainCode = (data[0].toInt() and 0xFF).toChar()
+        val subCode = (data[1].toInt() and 0xFF).toChar()
+        
+        return Pair(mainCode, subCode)
+    }
+    
+    /**
+     * Parse ERROR response data (legacy format for compatibility)
+     * 
+     * @param data Raw data bytes from ERROR response  
+     * @return Error code as integer
+     * @throws IllegalArgumentException if data format is invalid
+     */
+    fun parseErrorDataLegacy(data: ByteArray): Int {
+        require(data.size == 1) { "Legacy ERROR data must be exactly 1 byte" }
         return data[0].toInt() and 0xFF
     }
 }

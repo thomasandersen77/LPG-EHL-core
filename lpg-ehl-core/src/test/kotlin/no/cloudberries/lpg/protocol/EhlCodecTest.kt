@@ -217,6 +217,44 @@ class EhlCodecTest {
     }
     
     @Test
+    @DisplayName("Build PRODUCT_SELECT packet - VB6 compatible")
+    fun testBuildProductSelect() {
+        val packet = EhlPacketBuilder.createProductSelect(1, 0x30.toByte())
+        
+        assertEquals(1, packet.address)
+        assertEquals(EhlCommand.PRODUCT_SELECT, packet.command)
+        assertEquals(1, packet.data.size)
+        assertEquals(0x30.toByte(), packet.data[0])  // ASCII '0'
+    }
+    
+    @Test
+    @DisplayName("Build PRODUCT_SELECT packet with default product")
+    fun testBuildProductSelectDefault() {
+        val packet = EhlPacketBuilder.createProductSelect(2)
+        
+        assertEquals(2, packet.address)
+        assertEquals(EhlCommand.PRODUCT_SELECT, packet.command)
+        assertEquals(1, packet.data.size)
+        assertEquals(0x30.toByte(), packet.data[0])  // Default ASCII '0'
+    }
+    
+    @Test
+    @DisplayName("VB6 compatible price programming with LSB-first encoding")
+    fun testVB6PriceProgramming() {
+        val packet = EhlPacketBuilder.createPriceProgram(1, "15.90")
+        
+        assertEquals(1, packet.address)
+        assertEquals(EhlCommand.PROG_PRC, packet.command)
+        assertEquals(4, packet.data.size)
+        
+        // VB6 LSB-first: "1590" → bytes ['0','9','5','1']
+        assertEquals('0'.code.toByte(), packet.data[0])  // Last digit first
+        assertEquals('9'.code.toByte(), packet.data[1])
+        assertEquals('5'.code.toByte(), packet.data[2])
+        assertEquals('1'.code.toByte(), packet.data[3])  // First digit last
+    }
+    
+    @Test
     @DisplayName("Build price program packet with invalid format throws exception")
     fun testBuildPriceProgramInvalidFormat() {
         assertThrows(IllegalArgumentException::class.java) {

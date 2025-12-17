@@ -129,12 +129,14 @@ class EhlDispenserEmulator(
             EhlCommand.PROG_VOLUME  -> handleVolumePreset(packet)
             EhlCommand.ERROR_QUERY  -> {
                 logger.info("🔍 Processing ERROR_QUERY")
-                listOf(EhlPacket(address, EhlCommand.ERROR, byteArrayOf(0x00))) // No error
+                // VB6 format: 2 ASCII bytes (main code + sub code)
+                listOf(EhlPacket(address, EhlCommand.ERROR, byteArrayOf('0'.code.toByte(), '0'.code.toByte()))) // No error: "00"
             }
             EhlCommand.TANK      -> {
                 logger.info("🛢️ Processing TANK query")
                 listOf(buildTankResponse())
             }
+            EhlCommand.PRODUCT_SELECT -> handleProductSelect(packet)
             EhlCommand.LINETEST  -> {
                 logger.info("🔌 Processing LINETEST - communication OK")
                 listOf(EhlPacket(address, EhlCommand.OK))
@@ -310,6 +312,18 @@ class EhlDispenserEmulator(
         return listOf(EhlPacket(address, EhlCommand.OK))
     }
     
+    private fun handleProductSelect(packet: EhlPacket): List<EhlPacket> {
+        // PRODUCT_SELECT (VB6: 0xC3): Product/pistol selection
+        if (packet.data.size == 1) {
+            val product = (packet.data[0].toInt() and 0xFF).toChar()
+            logger.info("🧑‍💼 PRODUCT SELECT: Product '$product' selected - Acknowledged")
+        } else {
+            logger.info("🧑‍💼 PRODUCT SELECT: Invalid data size ${packet.data.size}, expected 1 byte")
+        }
+        // VB6 doesn't explicitly handle response, just acknowledge
+        return listOf(EhlPacket(address, EhlCommand.OK))
+    }
+    
     private fun handleReset(packet: EhlPacket): List<EhlPacket> {
         val previousState = state.name
         reset()
@@ -321,8 +335,9 @@ class EhlDispenserEmulator(
         ))
         logger.info("🔄 DISPENSER RESET: All counters cleared, state → IDLE")
         
+        // VB6 expects RESET response with 1 data-byte = 0x1E (OK)
         return listOf(
-            EhlPacket(address, EhlCommand.OK),
+            EhlPacket(address, EhlCommand.ZER, byteArrayOf(0x1E)),
             buildStateResponse()
         )
     }

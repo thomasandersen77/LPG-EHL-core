@@ -46,8 +46,11 @@ enum class EhlCommand(val code: Int, val description: String) {
     /** Reset the calculator */
     ZER(129, "Reset the calculator"),
     
-    /** Programming of fuel price */
+    /** Programming of fuel price (VB6: &HA9) - 4 ASCII digits LSB-first */
     PROG_PRC(169, "Programming of fuel price"),
+    
+    /** Product/pistol selection (VB6: &HC3) - 1 byte payload (typically 0x30) */
+    PRODUCT_SELECT(195, "Product/pistol selection"),
     
     /** Tank status/control */
     TANK(197, "Tank status/control"),
