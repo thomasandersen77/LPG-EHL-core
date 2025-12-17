@@ -1,6 +1,4 @@
-server:
-  port: ${SERVER_PORT:8090}
-
+# server.port is set via JAVA_TOOL_OPTIONS in production or defaults to 8080
 spring:
   application:
     name: lpg-ehl-emulator
