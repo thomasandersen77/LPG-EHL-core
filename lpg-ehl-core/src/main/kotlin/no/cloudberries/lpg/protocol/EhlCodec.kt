@@ -15,14 +15,15 @@ object EhlCodec {
      * Encode an EHL packet to raw bytes for transmission
      * 
      * @param packet The packet to encode
+     * @param fromController True if packet is from controller to dispenser (uses 0x10)
      * @return ByteArray ready for transmission over RS-485
      */
-    fun encode(packet: EhlPacket): ByteArray {
+    fun encode(packet: EhlPacket, fromController: Boolean = true): ByteArray {
         val result = ByteArray(packet.packetLength)
         var idx = 0
         
-        // STX
-        result[idx++] = EhlProtocol.STX
+        // STX - Choose correct direction
+        result[idx++] = if (fromController) EhlProtocol.STX_CONTROLLER else EhlProtocol.STX_DISPENSER
         
         // Length
         result[idx++] = packet.packetLength.toByte()
@@ -39,7 +40,7 @@ object EhlCodec {
         }
         
         // Checksum
-        result[idx++] = packet.calculateChecksum()
+        result[idx++] = packet.calculateChecksum(fromController)
         
         // ETX
         result[idx] = EhlProtocol.ETX
@@ -63,9 +64,10 @@ object EhlCodec {
             return EhlPacketParseResult.Incomplete
         }
         
-        // Check STX
-        if (data[0] != EhlProtocol.STX) {
-            return EhlPacketParseResult.InvalidFormat("Invalid STX byte: 0x${"%02X".format(data[0])}")
+        // Check STX - Accept both controller (0x10) and dispenser (0x20) STX values
+        val stx = data[0]
+        if (stx != EhlProtocol.STX_CONTROLLER && stx != EhlProtocol.STX_DISPENSER) {
+            return EhlPacketParseResult.InvalidFormat("Invalid STX byte: 0x${"%02X".format(stx)} (expected 0x10 or 0x20)")
         }
         
         // Get length
@@ -97,7 +99,8 @@ object EhlCodec {
         // Extract and verify checksum
         val receivedChecksum = data[length - 2]
         val packet = EhlPacket(address, command, payload)
-        val calculatedChecksum = packet.calculateChecksum()
+        val fromController = stx == EhlProtocol.STX_CONTROLLER
+        val calculatedChecksum = packet.calculateChecksum(fromController)
         
         if (receivedChecksum != calculatedChecksum) {
             logger.warn("Checksum mismatch: expected 0x${"%02X".format(calculatedChecksum)}, got 0x${"%02X".format(receivedChecksum)}")
@@ -160,6 +163,27 @@ object EhlPacketBuilder {
     }
     
     /**
+     * Create an ERROR_QUERY packet (VB6: &H4C)
+     */
+    fun createErrorQuery(address: Int): EhlPacket {
+        return EhlPacket(address, EhlCommand.ERROR_QUERY)
+    }
+    
+    /**
+     * Create a TANK query packet
+     */
+    fun createTankQuery(address: Int): EhlPacket {
+        return EhlPacket(address, EhlCommand.TANK)
+    }
+    
+    /**
+     * Create a VOLUME query packet
+     */
+    fun createVolumeQuery(address: Int): EhlPacket {
+        return EhlPacket(address, EhlCommand.VOLUME)
+    }
+    
+    /**
      * Create a PROG_PRC (price programming) packet
      * 
      * @param address Dispenser address
@@ -183,23 +207,47 @@ object EhlPacketBuilder {
     }
     
     /**
-     * Create a PROG_W (value preset) packet
+     * Create a PROG_AMOUNT (amount preset) packet (VB6: &H75)
+     * Uses LSB-first encoding to match VB6 set_preset_amount()
      * 
      * @param address Dispenser address
-     * @param amount Amount in øre/cents (e.g., 50000 for 500.00 kr)
+     * @param amountString Amount as 5-digit string (e.g., "12345" for 123.45 kr)
      */
-    fun createValuePreset(address: Int, amount: Int): EhlPacket {
-        require(amount >= 0) { "Amount must be non-negative" }
-        require(amount <= 99999999) { "Amount exceeds maximum (99999999 øre)" }
-        
-        // Convert amount to 4-byte BCD format
-        val amountStr = "%08d".format(amount)
-        val data = ByteArray(4)
-        for (i in 0..3) {
-            data[i] = amountStr[i * 2].code.toByte()
+    fun createAmountPreset(address: Int, amountString: String): EhlPacket {
+        require(amountString.matches(Regex("\\d{5}"))) { 
+            "Amount must be exactly 5 digits (e.g., '12345' for 123.45 kr)" 
         }
         
-        return EhlPacket(address, EhlCommand.PROG_W, data)
+        // VB6 format: LSB-first (reverse order) ASCII encoding
+        // amountString "12345" -> bytes ['5', '4', '3', '2', '1']
+        val data = ByteArray(5)
+        for (i in 0..4) {
+            data[i] = amountString[4 - i].code.toByte()  // Reverse order
+        }
+        
+        return EhlPacket(address, EhlCommand.PROG_AMOUNT, data)
+    }
+    
+    /**
+     * Create a PROG_VOLUME (volume preset) packet (VB6: &H70)
+     * Uses LSB-first encoding to match VB6 set_preset_volume()
+     * 
+     * @param address Dispenser address
+     * @param volumeString Volume as 6-digit string (e.g., "123456" for 1234.56 liters)
+     */
+    fun createVolumePreset(address: Int, volumeString: String): EhlPacket {
+        require(volumeString.matches(Regex("\\d{6}"))) { 
+            "Volume must be exactly 6 digits (e.g., '123456' for 1234.56 L)" 
+        }
+        
+        // VB6 format: LSB-first (reverse order) ASCII encoding
+        // volumeString "123456" -> bytes ['6', '5', '4', '3', '2', '1']
+        val data = ByteArray(6)
+        for (i in 0..5) {
+            data[i] = volumeString[5 - i].code.toByte()  // Reverse order
+        }
+        
+        return EhlPacket(address, EhlCommand.PROG_VOLUME, data)
     }
 }
 

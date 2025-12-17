@@ -136,8 +136,8 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                 return null
             }
 
-            // Look for STX byte to synchronize
-            val stxIndex = receiveBuffer.indexOfFirst { it == EhlProtocol.STX }
+            // Look for STX byte to synchronize (accept both controller and dispenser STX)
+            val stxIndex = receiveBuffer.indexOfFirst { it == EhlProtocol.STX_CONTROLLER || it == EhlProtocol.STX_DISPENSER }
             if (stxIndex == -1) {
                 // No STX in buffer - clear garbage data
                 if (receiveBuffer.size > 10) {
@@ -209,7 +209,7 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                         )
                     ))
                     // Try to find next STX to recover
-                    val nextStx = receiveBuffer.drop(1).indexOfFirst { it == EhlProtocol.STX }
+                    val nextStx = receiveBuffer.drop(1).indexOfFirst { it == EhlProtocol.STX_CONTROLLER || it == EhlProtocol.STX_DISPENSER }
                     if (nextStx >= 0) {
                         if (logger.isDebugEnabled) {
                             logger.debug("🔧 Recovery: Found next STX at offset ${nextStx + 1}, skipping corrupt packet")
@@ -228,7 +228,7 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                         result.reason
                     ))
                     // Try to find next STX to recover
-                    val nextStx = receiveBuffer.drop(1).indexOfFirst { it == EhlProtocol.STX }
+                    val nextStx = receiveBuffer.drop(1).indexOfFirst { it == EhlProtocol.STX_CONTROLLER || it == EhlProtocol.STX_DISPENSER }
                     if (nextStx >= 0) {
                         if (logger.isDebugEnabled) {
                             logger.debug("🔧 Recovery: Found next STX at offset ${nextStx + 1}, skipping invalid packet")

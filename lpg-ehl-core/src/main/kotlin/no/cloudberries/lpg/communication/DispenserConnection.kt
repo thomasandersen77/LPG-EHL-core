@@ -177,7 +177,7 @@ class DispenserConnection(
      * Program value preset (amount in øre)
      */
     suspend fun programValue(valueData: ByteArray, timeoutMs: Long = 2000): EhlPacket {
-        return sendCommand(EhlCommand.PROG_W, data = valueData, timeoutMs = timeoutMs)
+        return sendCommand(EhlCommand.PROG_AMOUNT, data = valueData, timeoutMs = timeoutMs)
     }
 
     /**

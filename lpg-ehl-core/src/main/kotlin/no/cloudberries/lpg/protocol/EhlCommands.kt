@@ -10,8 +10,11 @@ enum class EhlCommand(val code: Int, val description: String) {
     /** Command acknowledgement - dispenser confirms command received */
     OK(30, "Command acknowledgement"),
     
-    /** Error code data - dispenser reports error */
+    /** Error code data - dispenser reports error (VB6: &H25) */
     ERROR(37, "Error code data"),
+    
+    /** Error query - VB6 uses &H4C (76) to request error status */
+    ERROR_QUERY(76, "Error query"),
     
     /** Stop the dispenser */
     STOP(47, "Stop the dispenser"),
@@ -31,11 +34,11 @@ enum class EhlCommand(val code: Int, val description: String) {
     /** Transmission channel test */
     LINETEST(106, "Transmission channel test"),
     
-    /** Programming fuel amount to delivery (volume preset) */
-    PROG_I(112, "Programming fuel amount to delivery"),
+    /** Programming fuel volume to delivery (VB6: &H70) - 6 ASCII bytes */
+    PROG_VOLUME(112, "Programming fuel volume to delivery"),
     
-    /** Programming fuel value to delivery (money preset) */
-    PROG_W(117, "Programming fuel value to delivery"),
+    /** Programming fuel amount to delivery (VB6: &H75) - 5 ASCII bytes */
+    PROG_AMOUNT(117, "Programming fuel amount to delivery"),
     
     /** Start delivery mode - unblock dispenser */
     UNBLOCK(119, "Start delivery mode"),
@@ -66,8 +69,11 @@ enum class EhlCommand(val code: Int, val description: String) {
  * EHL Protocol Constants
  */
 object EhlProtocol {
-    /** Start of transmission byte */
-    const val STX: Byte = 0x20
+    /** Start of transmission byte - Controller to Dispenser (VB6: &H10) */
+    const val STX_CONTROLLER: Byte = 0x10
+    
+    /** Start of transmission byte - Dispenser to Controller (VB6: responses) */
+    const val STX_DISPENSER: Byte = 0x20
     
     /** End of transmission byte */
     const val ETX: Byte = 0x36

@@ -41,8 +41,8 @@ object EhlPacketFormatter {
             EhlCommand.PRICE -> formatPriceData(packet.data)
             EhlCommand.PROG_PRC -> formatPriceData(packet.data)
             EhlCommand.ERROR -> formatErrorData(packet.data)
-            EhlCommand.PROG_W -> formatValuePresetData(packet.data)
-            EhlCommand.PROG_I -> formatVolumePresetData(packet.data)
+            EhlCommand.PROG_AMOUNT -> formatValuePresetData(packet.data)
+            EhlCommand.PROG_VOLUME -> formatVolumePresetData(packet.data)
             else -> "Data: [${packet.data.joinToString(" ") { "%02X".format(it) }}]"
         }
         

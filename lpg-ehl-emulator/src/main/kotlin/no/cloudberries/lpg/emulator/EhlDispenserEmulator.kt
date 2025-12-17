@@ -78,7 +78,7 @@ class EhlDispenserEmulator(
                 }
                 logger.info("=".repeat(80))
                 
-                responses.map { EhlCodec.encode(it) }
+                responses.map { EhlCodec.encode(it, fromController = false) }
             }
             is EhlPacketParseResult.Incomplete -> {
                 logger.warn("⚠️ EMULATOR: Received incomplete packet (${bytes.size} bytes)")
@@ -89,14 +89,14 @@ class EhlDispenserEmulator(
                     "EMULATOR Checksum Error",
                     "Expected 0x%02X, got 0x%02X".format(parsed.expected, parsed.actual)
                 ))
-                listOf(EhlCodec.encode(buildErrorPacket(0x01)))
+                listOf(EhlCodec.encode(buildErrorPacket(0x01), fromController = false))
             }
             is EhlPacketParseResult.InvalidFormat -> {
                 logger.warn(EhlPacketFormatter.formatError(
                     "EMULATOR Invalid Format",
                     parsed.reason
                 ))
-                listOf(EhlCodec.encode(buildErrorPacket(0x02)))
+                listOf(EhlCodec.encode(buildErrorPacket(0x02), fromController = false))
             }
         }
     }
@@ -124,9 +124,17 @@ class EhlDispenserEmulator(
                 logger.info("📊 Processing PRICE query")
                 listOf(buildPriceResponse())
             }
-            EhlCommand.PROG_PRC  -> handlePriceProgram(packet)
-            EhlCommand.PROG_W    -> handleValuePreset(packet)
-            EhlCommand.PROG_I    -> handleVolumePreset(packet)
+            EhlCommand.PROG_PRC     -> handlePriceProgram(packet)
+            EhlCommand.PROG_AMOUNT  -> handleAmountPreset(packet)
+            EhlCommand.PROG_VOLUME  -> handleVolumePreset(packet)
+            EhlCommand.ERROR_QUERY  -> {
+                logger.info("🔍 Processing ERROR_QUERY")
+                listOf(EhlPacket(address, EhlCommand.ERROR, byteArrayOf(0x00))) // No error
+            }
+            EhlCommand.TANK      -> {
+                logger.info("🛢️ Processing TANK query")
+                listOf(buildTankResponse())
+            }
             EhlCommand.LINETEST  -> {
                 logger.info("🔌 Processing LINETEST - communication OK")
                 listOf(EhlPacket(address, EhlCommand.OK))
@@ -276,17 +284,29 @@ class EhlDispenserEmulator(
         }
     }
     
-    private fun handleValuePreset(packet: EhlPacket): List<EhlPacket> {
-        // PROG_W: Program value (amount) preset
-        val hex = packet.data.joinToString("") { "%02X".format(it) }
-        logger.info("💳 VALUE PRESET: Amount=$hex (BCD) - Acknowledged but not enforced in emulator")
+    private fun handleAmountPreset(packet: EhlPacket): List<EhlPacket> {
+        // PROG_AMOUNT (VB6: &H75): Program amount preset (5 ASCII bytes, LSB-first)
+        if (packet.data.size == 5) {
+            // Decode VB6-style LSB-first ASCII digits
+            val digits = packet.data.map { (it.toInt() and 0xFF).toChar() }.reversed().joinToString("")
+            logger.info("💳 AMOUNT PRESET (VB6): $digits øre - Acknowledged but not enforced in emulator")
+        } else {
+            val hex = packet.data.joinToString("") { "%02X".format(it) }
+            logger.info("💳 AMOUNT PRESET: $hex - Acknowledged but not enforced in emulator")
+        }
         return listOf(EhlPacket(address, EhlCommand.OK))
     }
     
     private fun handleVolumePreset(packet: EhlPacket): List<EhlPacket> {
-        // PROG_I: Program volume preset
-        val hex = packet.data.joinToString(" ") { "%02X".format(it) }
-        logger.info("⛽ VOLUME PRESET: Volume=$hex (BCD) - Acknowledged but not enforced in emulator")
+        // PROG_VOLUME (VB6: &H70): Program volume preset (6 ASCII bytes, LSB-first)
+        if (packet.data.size == 6) {
+            // Decode VB6-style LSB-first ASCII digits
+            val digits = packet.data.map { (it.toInt() and 0xFF).toChar() }.reversed().joinToString("")
+            logger.info("⛽ VOLUME PRESET (VB6): $digits (hundredths L) - Acknowledged but not enforced in emulator")
+        } else {
+            val hex = packet.data.joinToString(" ") { "%02X".format(it) }
+            logger.info("⛽ VOLUME PRESET: Volume=$hex - Acknowledged but not enforced in emulator")
+        }
         return listOf(EhlPacket(address, EhlCommand.OK))
     }
     
@@ -360,6 +380,21 @@ class EhlDispenserEmulator(
             parts[0][parts[0].length - 2].code.toByte()   // Tens
         )
         return EhlPacket(address, EhlCommand.PRICE, data)
+    }
+    
+    private fun buildTankResponse(): EhlPacket {
+        // VB6 TANK response format - simplified emulation
+        // Bit 0 (0x01): trans_finished_powerfault
+        // Bit 3 (0x08): trans_unaccounted
+        var tankStatus = 0x00
+        
+        // Set trans_unaccounted bit when delivery is finished but not reset
+        if (state == DispenserState.FINISHED && volumeLitres > 0) {
+            tankStatus = tankStatus or 0x08
+        }
+        
+        val data = byteArrayOf(tankStatus.toByte())
+        return EhlPacket(address, EhlCommand.TANK, data)
     }
     
     private fun buildErrorPacket(code: Int): EhlPacket {
