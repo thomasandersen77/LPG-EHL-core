@@ -1,5 +1,8 @@
 # Production Profile for Render Deployment
-# Note: server.port is set via JAVA_TOOL_OPTIONS in render.yaml
+# Render provides PORT environment variable
+
+server:
+  port: ${PORT:8080}
 
 spring:
   jpa:
