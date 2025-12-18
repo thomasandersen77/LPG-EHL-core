@@ -10,7 +10,7 @@ import java.io.IOException
  * 
  * Implements SerialPortIO interface for production use with real serial ports.
  */
-class SerialPortManager(private val config: SerialPortConfig) : SerialPortIO {
+open class SerialPortManager(private val config: SerialPortConfig) : SerialPortIO {
     private val logger = LoggerFactory.getLogger(SerialPortManager::class.java)
     private var serialPort: SerialPort? = null
     private val lock = Any()
