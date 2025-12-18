@@ -116,8 +116,11 @@ class DispenserService(
                 handleStateTransition(address, currentState, newState)
             }
             
-            // Update state tracking
-            dispenserStates[address] = currentState.copy(state = newState)
+            // Update state tracking - preserve volume data and pending price from latest state
+            val latestState = dispenserStates.getOrDefault(address, currentState)
+            if (dispenserStates[address]?.state != newState) {
+                dispenserStates[address] = latestState.copy(state = newState)
+            }
             
         } catch (e: Exception) {
             logger.error("Failed to parse STATE data from dispenser $address: ${e.message}")
@@ -163,11 +166,13 @@ class DispenserService(
         return when {
             // Status 0: Idle/Ready state
             statusByte == 0 -> {
-                // If we were FILLING and now IDLE, transaction is finished
-                if (currentState.state == DispenserState.FILLING) {
-                    DispenserState.FINISHED
-                } else {
-                    DispenserState.IDLE
+                when (currentState.state) {
+                    // If we were FILLING and now IDLE, transaction is finished
+                    DispenserState.FILLING -> DispenserState.FINISHED
+                    // If we were FINISHED and get another status 0, transition to IDLE
+                    DispenserState.FINISHED -> DispenserState.IDLE
+                    // Otherwise just stay/go to IDLE
+                    else -> DispenserState.IDLE
                 }
             }
             // Status 1-3: Various busy/active states - nozzle lifted or pumping
@@ -190,6 +195,9 @@ class DispenserService(
      * Handle state transitions and trigger appropriate business logic
      */
     private fun handleStateTransition(address: Int, currentState: DispenserStateInfo, newState: DispenserState) {
+        // Always get the latest state from the map for accurate data (volume, pending price, etc.)
+        val latestState = dispenserStates.getOrDefault(address, currentState)
+        
         when (newState) {
             DispenserState.STARTED -> {
                 if (currentState.state == DispenserState.IDLE) {
@@ -200,21 +208,31 @@ class DispenserService(
             DispenserState.FINISHED -> {
                 if (currentState.state == DispenserState.FILLING) {
                     logger.info("Dispenser $address: Transaction finished, saving to database")
-                    finishTransaction(address, currentState)
+                    finishTransaction(address, latestState)
                 }
             }
             DispenserState.IDLE -> {
-                // PRICE UPDATE SAFETY: Check for pending price updates when returning to IDLE
-                if (currentState.pendingPriceUpdate != null) {
+                // Check for pending price from latest state
+                val pendingPrice = latestState.pendingPriceUpdate
+                
+                // Save transaction if coming from FINISHED state
+                if (currentState.state == DispenserState.FINISHED && latestState.lastVolumeDeciliters > 0) {
+                    logger.info("Dispenser $address: FINISHED -> IDLE, saving transaction")
+                    finishTransaction(address, latestState)
+                }
+                
+                // PRICE UPDATE SAFETY: Apply pending price updates when returning to IDLE
+                if (pendingPrice != null) {
                     logger.info(
                         "Dispenser $address returned to IDLE - applying queued price update: " +
-                        "${currentState.pendingPriceUpdate} NOK/L"
+                        "$pendingPrice NOK/L"
                     )
-                    sendPriceToHardware(address, currentState.pendingPriceUpdate)
+                    sendPriceToHardware(address, pendingPrice)
                     
-                    // Update state with new price and clear pending update
-                    dispenserStates[address] = currentState.copy(
-                        pricePerLiterNok = currentState.pendingPriceUpdate,
+                    // Update state with new price and clear pending update - reset to fresh IDLE state
+                    dispenserStates[address] = DispenserStateInfo(
+                        state = DispenserState.IDLE,
+                        pricePerLiterNok = pendingPrice,
                         pendingPriceUpdate = null
                     )
                 }
@@ -273,8 +291,11 @@ class DispenserService(
             }
         }
         
-        // Reset state for next transaction
-        dispenserStates[address] = DispenserStateInfo()
+        // Reset state for next transaction, but PRESERVE pending price update
+        dispenserStates[address] = DispenserStateInfo(
+            pendingPriceUpdate = stateInfo.pendingPriceUpdate,
+            pricePerLiterNok = stateInfo.pricePerLiterNok
+        )
     }
     
     /**

@@ -8,13 +8,14 @@ import no.cloudberries.lpg.protocol.EhlPacket
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.argThat
-import org.mockito.Mockito.atLeastOnce
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.never
-import org.mockito.Mockito.times
-import org.mockito.Mockito.verify
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argThat
+import org.mockito.kotlin.atLeastOnce
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import java.math.BigDecimal
 
 /**
@@ -37,6 +38,11 @@ class DispenserServiceTest {
         dispenserStatusRepository = mock()
         transactionRepository = mock()
         priceUpdateCallback = mock()
+        
+        // Stub transactionRepository.save() to return the saved transaction
+        whenever(transactionRepository.save(any<Transaction>())).thenAnswer { invocation ->
+            invocation.getArgument<Transaction>(0)
+        }
         
         dispenserService = DispenserService(
             dispenserStatusRepository,
@@ -482,7 +488,10 @@ class DispenserServiceTest {
         val volumeLiters = 12.345f
         val pricePerLiter = BigDecimal("17.85")
         val expectedVolumeDeciliters = (volumeLiters * 10).toInt() // 123
-        val expectedAmountOre = (volumeLiters * pricePerLiter.toFloat() * 100).toInt() // 2203
+        // Service calculates amountOre from volumeDeciliters, not original volumeLiters
+        // This matches the precision available in the protocol (deciliters)
+        val volumeLitersFromDeciliters = expectedVolumeDeciliters / 10.0
+        val expectedAmountOre = (BigDecimal(volumeLitersFromDeciliters) * pricePerLiter * BigDecimal(100)).toInt() // 21955
         
         // Set price and complete transaction
         dispenserService.handlePacket(createStatePacket(address, 0))
@@ -550,10 +559,17 @@ class DispenserServiceTest {
     }
 
     private fun createVolumePacket(address: Int, volumeLiters: Float, amountCents: Int): EhlPacket {
-        // EHL VOLUME format: 4 bytes volume + 5 bytes amount
-        val volumeStr = String.format("%04d", (volumeLiters * 100).toInt())
-        val amountStr = String.format("%05d", amountCents)
-        val data = (volumeStr + amountStr).map { it.code.toByte() }.toByteArray()
+        // EHL VOLUME format: 4 bytes total - 2 bytes volume (deciliters) + 2 bytes amount (øre) in big-endian
+        val volumeDeciliters = (volumeLiters * 10).toInt()
+        val data = ByteArray(4)
+        
+        // Volume in deciliters (big-endian)
+        data[0] = ((volumeDeciliters shr 8) and 0xFF).toByte()
+        data[1] = (volumeDeciliters and 0xFF).toByte()
+        
+        // Amount in øre (big-endian)
+        data[2] = ((amountCents shr 8) and 0xFF).toByte()
+        data[3] = (amountCents and 0xFF).toByte()
         
         return EhlPacket(
             address = address,
