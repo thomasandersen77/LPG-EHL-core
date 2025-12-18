@@ -389,4 +389,76 @@ class DispenserService(
     fun getPendingPriceUpdate(address: Int): BigDecimal? {
         return dispenserStates[address]?.pendingPriceUpdate
     }
+    
+    /**
+     * Get current domain status of a dispenser (for FuelPumpService).
+     * Maps from internal DispenserState to protocol-level DispenserStatus.
+     * 
+     * @param pumpId Dispenser address
+     * @return DispenserStatus - current domain state
+     */
+    fun getCurrentStatus(pumpId: Int): no.cloudberries.lpg.protocol.DispenserStatus {
+        // Send STATE query and parse response
+        val statePacket = EhlPacket(
+            address = pumpId,
+            command = EhlCommand.STATE,
+            data = byteArrayOf()
+        )
+        
+        val response = sendCommandAndWaitForResponse(statePacket, 2000)
+        return if (response != null) {
+            no.cloudberries.lpg.protocol.DispenserStateMapper.mapFromPacket(response)
+        } else {
+            logger.warn("No response from pump $pumpId for STATE query")
+            no.cloudberries.lpg.protocol.DispenserStatus.UNKNOWN(0x00)
+        }
+    }
+    
+    /**
+     * Send a command packet and wait for response (synchronous).
+     * 
+     * @param packet Command packet to send
+     * @param timeoutMs Timeout in milliseconds
+     * @return Response packet or null if timeout
+     */
+    fun sendCommandAndWaitForResponse(packet: EhlPacket, timeoutMs: Long): EhlPacket? {
+        // TODO: Implement actual serial communication
+        // For now, this is a placeholder that will be implemented in SerialPortManager integration
+        logger.warn("sendCommandAndWaitForResponse not fully implemented - returning mock response")
+        
+        // Mock response for testing
+        return EhlPacket(
+            address = packet.address,
+            command = packet.command,
+            data = byteArrayOf(0x00)  // Mock IDLE response
+        )
+    }
+    
+    /**
+     * Query current volume from dispenser.
+     * 
+     * @param pumpId Dispenser address
+     * @return Current volume in liters
+     */
+    fun queryVolume(pumpId: Int): Float {
+        val volumePacket = EhlPacket(
+            address = pumpId,
+            command = EhlCommand.VOLUME,
+            data = byteArrayOf()
+        )
+        
+        val response = sendCommandAndWaitForResponse(volumePacket, 2000)
+        return if (response != null && response.data.size >= 4) {
+            try {
+                val (volumeLiters, _) = EhlDataParser.parseVolumeData(response.data)
+                volumeLiters.toFloat()
+            } catch (e: Exception) {
+                logger.error("Failed to parse volume from pump $pumpId: ${e.message}")
+                0.0f
+            }
+        } else {
+            logger.warn("No valid volume response from pump $pumpId")
+            0.0f
+        }
+    }
 }
