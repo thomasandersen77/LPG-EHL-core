@@ -2,6 +2,7 @@ package no.cloudberries.lpg.protocol
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.assertDoesNotThrow
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -155,5 +156,217 @@ class EhlCodecHardenedTest {
 
         val result = EhlCodec.decode(incompletePacket)
         assertTrue(result is EhlPacketParseResult.Incomplete)
+    }
+    
+    // ============================================================
+    // ADDITIONAL MALFORMED PACKET TESTS
+    // ============================================================
+    
+    @Test
+    fun `decode should reject extremely large length claims without memory exhaustion`() {
+        // Create packet claiming to be 255 bytes (maximum byte value)
+        val extremePacket = byteArrayOf(
+            EhlProtocol.STX_CONTROLLER,     // STX
+            255.toByte(),                   // Claims 255 bytes (impossible/dangerous)
+            1,                              // Address
+            EhlCommand.STATE.code.toByte(), // Command
+            0x00,                           // Checksum
+            EhlProtocol.ETX                 // ETX
+        )
+        
+        val result = EhlCodec.decode(extremePacket)
+        assertTrue(result is EhlPacketParseResult.InvalidFormat)
+        if (result is EhlPacketParseResult.InvalidFormat) {
+            assertTrue(result.reason.contains("exceeds maximum"))
+        }
+    }
+    
+    @Test
+    fun `decode should reject zero length packets`() {
+        val zeroLengthPacket = byteArrayOf(
+            EhlProtocol.STX_CONTROLLER,     // STX
+            0,                              // Length = 0 (invalid)
+            1,                              // Address
+            EhlCommand.STATE.code.toByte(), // Command
+            0x00,                           // Checksum
+            EhlProtocol.ETX                 // ETX
+        )
+        
+        val result = EhlCodec.decode(zeroLengthPacket)
+        assertTrue(result is EhlPacketParseResult.InvalidFormat)
+        if (result is EhlPacketParseResult.InvalidFormat) {
+            assertTrue(result.reason.contains("below minimum"))
+        }
+    }
+    
+    @Test
+    fun `decode should reject packets with length = 1 (too small for any valid packet)`() {
+        val tinyPacket = byteArrayOf(
+            EhlProtocol.STX_CONTROLLER,     // STX
+            1,                              // Length = 1 (impossible - minimum is 4)
+            1,                              // Address
+            EhlCommand.STATE.code.toByte(), // Command
+            0x00,                           // Checksum
+            EhlProtocol.ETX                 // ETX
+        )
+        
+        val result = EhlCodec.decode(tinyPacket)
+        assertTrue(result is EhlPacketParseResult.InvalidFormat)
+        if (result is EhlPacketParseResult.InvalidFormat) {
+            assertTrue(result.reason.contains("below minimum"))
+        }
+    }
+    
+    @Test
+    fun `decode should handle various invalid STX values robustly`() {
+        val invalidStxValues = listOf(
+            0x00.toByte(), 0x01.toByte(), 0x0F.toByte(), // Too low
+            0x30.toByte(), 0x40.toByte(), 0xFF.toByte()  // Too high or random
+        )
+        
+        for (invalidStx in invalidStxValues) {
+            val invalidPacket = byteArrayOf(
+                invalidStx,                         // Invalid STX
+                6,                                  // Valid length
+                1,                                  // Address
+                EhlCommand.STATE.code.toByte(),     // Command
+                0x00,                               // Checksum
+                EhlProtocol.ETX                     // ETX
+            )
+            
+            val result = EhlCodec.decode(invalidPacket)
+            assertTrue(result is EhlPacketParseResult.InvalidFormat, 
+                "STX value 0x${String.format("%02X", invalidStx)} should be rejected")
+            if (result is EhlPacketParseResult.InvalidFormat) {
+                assertTrue(result.reason.contains("Invalid STX"))
+            }
+        }
+    }
+    
+    @Test
+    fun `decode should detect when actual packet size doesn't match length claim`() {
+        // Create packet claiming 8 bytes but providing only 6 total bytes
+        val lyingPacket = byteArrayOf(
+            EhlProtocol.STX_CONTROLLER,     // STX     (1 byte)
+            8,                              // Length  (1 byte) - CLAIMS 8 bytes total
+            1,                              // Address (1 byte)
+            EhlCommand.STATE.code.toByte(), // Command (1 byte) 
+            0x00,                           // Checksum(1 byte)
+            EhlProtocol.ETX                 // ETX     (1 byte) = 6 bytes actual
+        )
+        
+        val result = EhlCodec.decode(lyingPacket)
+        assertTrue(result is EhlPacketParseResult.Incomplete, 
+            "Packet claiming 8 bytes but only providing 6 should be incomplete")
+    }
+    
+    @Test
+    fun `decode should handle corrupted ETX bytes`() {
+        // Create valid packet but corrupt the ETX
+        val validPacket = EhlPacket(1, EhlCommand.STATE)
+        val encoded = EhlCodec.encode(validPacket, fromController = true)
+        val corruptedEtx = encoded.clone()
+        corruptedEtx[corruptedEtx.size - 1] = 0x99.toByte() // Wrong ETX
+        
+        val result = EhlCodec.decode(corruptedEtx)
+        // Should be invalid format due to missing proper ETX
+        assertTrue(result is EhlPacketParseResult.InvalidFormat)
+        if (result is EhlPacketParseResult.InvalidFormat) {
+            assertTrue(result.reason.contains("ETX") || result.reason.contains("format"))
+        }
+    }
+    
+    @Test
+    fun `decode should be safe from buffer overruns with crafted packets`() {
+        // Test boundary conditions that could cause buffer overruns
+        val boundaryTests = listOf(
+            // Packet claiming exactly maximum length
+            byteArrayOf(EhlProtocol.STX_CONTROLLER, 64, 1, 0x75.toByte()) + ByteArray(60) + byteArrayOf(0x00, EhlProtocol.ETX),
+            // Empty data array
+            byteArrayOf(),
+            // Single byte
+            byteArrayOf(EhlProtocol.STX_CONTROLLER),
+            // Just STX and length
+            byteArrayOf(EhlProtocol.STX_CONTROLLER, 6)
+        )
+        
+        for ((index, testPacket) in boundaryTests.withIndex()) {
+            assertDoesNotThrow("Boundary test $index should not crash") {
+                val result = EhlCodec.decode(testPacket)
+                // Should return either Incomplete or InvalidFormat, never crash
+                assertTrue(
+                    result is EhlPacketParseResult.Incomplete || 
+                    result is EhlPacketParseResult.InvalidFormat,
+                    "Boundary test $index should return safe error type"
+                )
+            }
+        }
+    }
+    
+    @Test
+    fun `decode should handle mixed controller and dispenser STX in sequence`() {
+        // Test that both STX types are accepted but invalid ones rejected
+        val controllerPacket = EhlPacket(1, EhlCommand.STATE)
+        val dispenserPacket = EhlPacket(2, EhlCommand.STATE)
+        
+        val controllerBytes = EhlCodec.encode(controllerPacket, fromController = true)
+        val dispenserBytes = EhlCodec.encode(dispenserPacket, fromController = false)
+        
+        // Both should decode successfully
+        val controllerResult = EhlCodec.decode(controllerBytes)
+        val dispenserResult = EhlCodec.decode(dispenserBytes)
+        
+        assertTrue(controllerResult is EhlPacketParseResult.Success)
+        assertTrue(dispenserResult is EhlPacketParseResult.Success)
+        
+        // Verify STX bytes are as expected
+        assertEquals(EhlProtocol.STX_CONTROLLER, controllerBytes[0])
+        assertEquals(EhlProtocol.STX_DISPENSER, dispenserBytes[0])
+    }
+    
+    @Test
+    fun `decode should provide meaningful error messages for debugging`() {
+        val testCases = listOf(
+            Pair(byteArrayOf(0xFF.toByte(), 6, 1, 0x75.toByte(), 0x00, EhlProtocol.ETX), "Invalid STX byte"),
+            Pair(byteArrayOf(EhlProtocol.STX_CONTROLLER, 200.toByte(), 1, 0x75.toByte(), 0x00, EhlProtocol.ETX), "exceeds maximum"),
+            Pair(byteArrayOf(EhlProtocol.STX_CONTROLLER, 1, 1, 0x75.toByte(), 0x00, EhlProtocol.ETX), "below minimum")
+        )
+        
+        for ((packet, expectedErrorKeyword) in testCases) {
+            val result = EhlCodec.decode(packet)
+            assertTrue(result is EhlPacketParseResult.InvalidFormat)
+            if (result is EhlPacketParseResult.InvalidFormat) {
+                assertTrue(
+                    result.reason.contains(expectedErrorKeyword, ignoreCase = true),
+                    "Error message '${result.reason}' should contain '$expectedErrorKeyword'"
+                )
+            }
+        }
+    }
+    
+    @Test
+    fun `decode should never throw exceptions for any malformed input`() {
+        // Stress test with completely random data
+        val randomInputs = listOf(
+            ByteArray(0),                           // Empty
+            ByteArray(1) { 0xFF.toByte() },        // Single 0xFF
+            ByteArray(100) { 0xAA.toByte() },      // Lots of 0xAA
+            ByteArray(10) { it.toByte() },         // Sequential bytes
+            ByteArray(50) { (-it).toByte() }       // Negative bytes
+        )
+        
+        for ((index, randomInput) in randomInputs.withIndex()) {
+            assertDoesNotThrow("Random input test $index should not throw") {
+                val result = EhlCodec.decode(randomInput)
+                // Should always return a proper result type, never throw
+                assertTrue(
+                    result is EhlPacketParseResult.Success ||
+                    result is EhlPacketParseResult.InvalidFormat ||
+                    result is EhlPacketParseResult.Incomplete ||
+                    result is EhlPacketParseResult.ChecksumError,
+                    "Random input $index should return valid result type"
+                )
+            }
+        }
     }
 }

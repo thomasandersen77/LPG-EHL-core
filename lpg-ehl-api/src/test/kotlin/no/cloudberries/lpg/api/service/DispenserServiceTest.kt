@@ -312,6 +312,196 @@ class DispenserServiceTest {
         assertFalse(dispenserService.isSafeToUpdatePrice(3), "FILLING should not be safe for price update")
     }
 
+    @Test
+    fun `complex state machine scenario - complete fuel delivery cycle`() {
+        val address = 1
+        val finalVolumeLiters = 25.5f
+        val pricePerLiter = BigDecimal("16.75")
+        
+        // 1. Set initial price when idle
+        val idlePacket = createStatePacket(address, 0)
+        dispenserService.handlePacket(idlePacket)
+        dispenserService.queuePriceUpdate(address, pricePerLiter)
+        
+        // 2. Customer lifts nozzle (IDLE -> STARTED)
+        val startedPacket = createStatePacket(address, 1)
+        dispenserService.handlePacket(startedPacket)
+        assertEquals(DispenserState.STARTED, dispenserService.getDispenserState(address))
+        
+        // 3. First volume pulse (STARTED -> FILLING)
+        val volumePacket1 = createVolumePacket(address, 2.0f, 3350)
+        dispenserService.handlePacket(volumePacket1)
+        assertEquals(DispenserState.FILLING, dispenserService.getDispenserState(address))
+        
+        // 4. Multiple volume updates during filling
+        for (volume in listOf(5.0f, 10.0f, 15.0f, 20.0f, finalVolumeLiters)) {
+            val volumeUpdate = createVolumePacket(address, volume, (volume * pricePerLiter.toFloat() * 100).toInt())
+            dispenserService.handlePacket(volumeUpdate)
+            assertEquals(DispenserState.FILLING, dispenserService.getDispenserState(address))
+        }
+        
+        // 5. Customer hangs up nozzle (FILLING -> FINISHED)
+        val finishedPacket = createStatePacket(address, 0)
+        dispenserService.handlePacket(finishedPacket)
+        assertEquals(DispenserState.FINISHED, dispenserService.getDispenserState(address))
+        
+        // 6. Return to idle triggers transaction save (FINISHED -> IDLE)
+        val finalIdlePacket = createStatePacket(address, 0)
+        dispenserService.handlePacket(finalIdlePacket)
+        assertEquals(DispenserState.IDLE, dispenserService.getDispenserState(address))
+        
+        // Assert: Transaction should be saved exactly once with correct details
+        verify(transactionRepository, times(1)).save(argThat { transaction ->
+            transaction.volumeDeciliters == (finalVolumeLiters * 10).toInt() &&
+            transaction.dispenserAddress == address &&
+            transaction.amountOre == (finalVolumeLiters * pricePerLiter.toFloat() * 100).toInt()
+        })
+    }
+    
+    @Test
+    fun `price update safety - prevent mid-transaction price changes`() {
+        val address = 1
+        
+        // Start with idle dispenser
+        val idlePacket = createStatePacket(address, 0)
+        dispenserService.handlePacket(idlePacket)
+        
+        // Set initial price (should work)
+        val initialPrice = BigDecimal("15.90")
+        assertTrue(dispenserService.queuePriceUpdate(address, initialPrice))
+        verify(priceUpdateCallback, times(1)).invoke(address, initialPrice)
+        
+        // Customer lifts nozzle (IDLE -> STARTED)
+        val startedPacket = createStatePacket(address, 1)
+        dispenserService.handlePacket(startedPacket)
+        
+        // Try to change price during STARTED state (should be queued)
+        val newPrice = BigDecimal("17.50")
+        assertFalse(dispenserService.queuePriceUpdate(address, newPrice))
+        assertEquals(newPrice, dispenserService.getPendingPriceUpdate(address))
+        
+        // Start filling
+        val volumePacket = createVolumePacket(address, 5.0f, 7950)
+        dispenserService.handlePacket(volumePacket)
+        assertEquals(DispenserState.FILLING, dispenserService.getDispenserState(address))
+        
+        // Try to change price during FILLING (should update the queued price)
+        val newerPrice = BigDecimal("18.00")
+        assertFalse(dispenserService.queuePriceUpdate(address, newerPrice))
+        assertEquals(newerPrice, dispenserService.getPendingPriceUpdate(address))
+        
+        // Finish transaction
+        val finishPacket = createStatePacket(address, 0)
+        dispenserService.handlePacket(finishPacket)
+        assertEquals(DispenserState.FINISHED, dispenserService.getDispenserState(address))
+        
+        // Try to change price during FINISHED (should still be queued)
+        val finalPrice = BigDecimal("19.25")
+        assertFalse(dispenserService.queuePriceUpdate(address, finalPrice))
+        assertEquals(finalPrice, dispenserService.getPendingPriceUpdate(address))
+        
+        // Return to IDLE should apply the queued price
+        val idleAgainPacket = createStatePacket(address, 0)
+        dispenserService.handlePacket(idleAgainPacket)
+        assertEquals(DispenserState.IDLE, dispenserService.getDispenserState(address))
+        
+        // Verify the final price was sent to hardware
+        verify(priceUpdateCallback, times(1)).invoke(address, finalPrice)
+        assertNull(dispenserService.getPendingPriceUpdate(address))
+    }
+    
+    @Test
+    fun `multiple dispenser independence - concurrent transactions`() {
+        val dispenser1 = 1
+        val dispenser2 = 2
+        val price1 = BigDecimal("15.90")
+        val price2 = BigDecimal("16.50")
+        
+        // Set up both dispensers as idle with different prices
+        dispenserService.handlePacket(createStatePacket(dispenser1, 0))
+        dispenserService.handlePacket(createStatePacket(dispenser2, 0))
+        dispenserService.queuePriceUpdate(dispenser1, price1)
+        dispenserService.queuePriceUpdate(dispenser2, price2)
+        
+        // Dispenser 1: Start transaction
+        dispenserService.handlePacket(createStatePacket(dispenser1, 1))
+        assertEquals(DispenserState.STARTED, dispenserService.getDispenserState(dispenser1))
+        assertEquals(DispenserState.IDLE, dispenserService.getDispenserState(dispenser2))
+        
+        // Dispenser 2: Should still be safe for price updates
+        assertTrue(dispenserService.isSafeToUpdatePrice(dispenser2))
+        assertFalse(dispenserService.isSafeToUpdatePrice(dispenser1))
+        
+        // Dispenser 1: Start filling
+        dispenserService.handlePacket(createVolumePacket(dispenser1, 5.0f, 7950))
+        assertEquals(DispenserState.FILLING, dispenserService.getDispenserState(dispenser1))
+        
+        // Dispenser 2: Start transaction while 1 is filling
+        dispenserService.handlePacket(createStatePacket(dispenser2, 2))
+        assertEquals(DispenserState.STARTED, dispenserService.getDispenserState(dispenser2))
+        assertEquals(DispenserState.FILLING, dispenserService.getDispenserState(dispenser1))
+        
+        // Both dispensers now unsafe for price updates
+        assertFalse(dispenserService.isSafeToUpdatePrice(dispenser1))
+        assertFalse(dispenserService.isSafeToUpdatePrice(dispenser2))
+        
+        // Finish dispenser 1 transaction
+        dispenserService.handlePacket(createVolumePacket(dispenser1, 10.0f, 15900))
+        dispenserService.handlePacket(createStatePacket(dispenser1, 0))
+        dispenserService.handlePacket(createStatePacket(dispenser1, 0))
+        
+        // Dispenser 1 should be idle, 2 still started
+        assertEquals(DispenserState.IDLE, dispenserService.getDispenserState(dispenser1))
+        assertEquals(DispenserState.STARTED, dispenserService.getDispenserState(dispenser2))
+        
+        // Verify independent transaction saving
+        verify(transactionRepository, times(1)).save(argThat { transaction ->
+            transaction.dispenserAddress == dispenser1 && 
+            transaction.volumeDeciliters == 100
+        })
+    }
+    
+    @Test
+    fun `transaction not saved for zero volume deliveries`() {
+        val address = 1
+        
+        // Complete transaction cycle without any fuel delivery
+        dispenserService.handlePacket(createStatePacket(address, 0)) // IDLE
+        dispenserService.handlePacket(createStatePacket(address, 1)) // STARTED
+        dispenserService.handlePacket(createStatePacket(address, 0)) // Back to IDLE without volume
+        dispenserService.handlePacket(createStatePacket(address, 0)) // Still IDLE
+        
+        // No transaction should be saved
+        verify(transactionRepository, never()).save(any<Transaction>())
+        assertEquals(DispenserState.IDLE, dispenserService.getDispenserState(address))
+    }
+    
+    @Test
+    fun `accurate volume and amount calculation in transactions`() {
+        val address = 1
+        val volumeLiters = 12.345f
+        val pricePerLiter = BigDecimal("17.85")
+        val expectedVolumeDeciliters = (volumeLiters * 10).toInt() // 123
+        val expectedAmountOre = (volumeLiters * pricePerLiter.toFloat() * 100).toInt() // 2203
+        
+        // Set price and complete transaction
+        dispenserService.handlePacket(createStatePacket(address, 0))
+        dispenserService.queuePriceUpdate(address, pricePerLiter)
+        
+        // Full transaction
+        dispenserService.handlePacket(createStatePacket(address, 1))
+        dispenserService.handlePacket(createVolumePacket(address, volumeLiters, expectedAmountOre))
+        dispenserService.handlePacket(createStatePacket(address, 0))
+        dispenserService.handlePacket(createStatePacket(address, 0))
+        
+        // Verify exact amounts
+        verify(transactionRepository, times(1)).save(argThat { transaction ->
+            transaction.volumeDeciliters == expectedVolumeDeciliters &&
+            transaction.amountOre == expectedAmountOre &&
+            transaction.pricePerLiter?.compareTo(pricePerLiter) == 0
+        })
+    }
+
     // ============================================================
     // EDGE CASES AND ERROR HANDLING
     // ============================================================
