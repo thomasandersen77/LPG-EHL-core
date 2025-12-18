@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { dispenserApi } from '../api/dispenser';
 import type { ProtocolResponse, VolumeResponse, TankResponse, PriceResponse, DispenserErrorResponse } from '../types/api';
 
@@ -245,7 +245,7 @@ export function ProtocolTester() {
       {/* Configuration Panel */}
       <div className="bg-gray-700 rounded-xl p-4 mb-6">
         <h3 className="text-lg font-semibold text-white mb-3">Konfigurering</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm text-gray-400 mb-1">Adresse</label>
             <input
@@ -281,6 +281,16 @@ export function ProtocolTester() {
               type="number"
               value={amountInput}
               onChange={(e) => setAmountInput(Number(e.target.value))}
+              className="w-full bg-gray-600 border border-gray-500 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Volum (L)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={volumeInput}
+              onChange={(e) => setVolumeInput(Number(e.target.value))}
               className="w-full bg-gray-600 border border-gray-500 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
             />
           </div>
