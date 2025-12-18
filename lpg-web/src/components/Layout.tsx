@@ -36,6 +36,9 @@ export function Layout() {
               <Link to="/simulator" className={linkClass('/simulator')}>
                 ⛽ Simulator
               </Link>
+              <Link to="/protocol-tester" className={linkClass('/protocol-tester')}>
+                🧪 Protokoll
+              </Link>
               <Link to="/transactions" className={linkClass('/transactions')}>
                 📋 Transaksjoner
               </Link>

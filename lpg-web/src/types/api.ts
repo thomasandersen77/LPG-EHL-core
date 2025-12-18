@@ -50,3 +50,37 @@ export interface ErrorResponse {
   message: string;
   timestamp: string;
 }
+
+// VB6-compatible protocol types
+export interface ProtocolResponse {
+  success: boolean;
+  message: string;
+  responseCode: string; // Hex response code from protocol
+}
+
+export interface VolumeResponse {
+  address: number;
+  currentVolumeLiters: number;
+  deliveryInProgress: boolean;
+}
+
+export interface TankResponse {
+  address: number;
+  tankLevelPercent: number;
+  pumpInfo: string;
+  connected: boolean;
+}
+
+export interface PriceResponse {
+  address: number;
+  priceKrPerLiter: number;
+  includesRoadTax: boolean;
+}
+
+export interface DispenserErrorResponse {
+  address: number;
+  hasError: boolean;
+  mainErrorCode: string; // 2-digit hex code
+  subErrorCode: string;  // 2-digit hex code
+  errorDescription: string;
+}

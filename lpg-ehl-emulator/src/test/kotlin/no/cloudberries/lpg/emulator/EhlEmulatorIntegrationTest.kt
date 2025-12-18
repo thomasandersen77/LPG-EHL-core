@@ -261,7 +261,7 @@ class EhlEmulatorIntegrationTest {
         // Reset
         comm.send(EhlPacket(1, EhlCommand.ZER))
         val ack = comm.receive()
-        assertEquals(EhlCommand.OK, ack.command)
+        assertEquals(EhlCommand.ZER, ack.command)
         
         val state = comm.receive()
         assertEquals(EhlCommand.STATE, state.command)

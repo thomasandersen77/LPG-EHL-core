@@ -130,6 +130,140 @@ class DemoDispenserController(
         return getState()
     }
 
+    @PostMapping("/product-select")
+    @Operation(summary = "Select product/pistol", description = "VB6-compatible product selection before pricing operations")
+    fun selectProduct(
+        @RequestBody request: ProductSelectRequest
+    ): ResponseEntity<ProtocolResponse> {
+        logger.info("Product selection: address={}, product={}", request.address, request.product)
+        return ResponseEntity.ok(
+            ProtocolResponse(
+                success = true,
+                message = "Product selected: ${request.product}",
+                responseCode = "0x1E" // OK response
+            )
+        )
+    }
+
+    @PostMapping("/program-price")
+    @Operation(summary = "Program price per liter", description = "VB6-compatible price programming with LSB-first format")
+    fun programPrice(
+        @RequestBody request: PriceProgramRequest
+    ): ResponseEntity<ProtocolResponse> {
+        logger.info("Price programming: address={}, price={}", request.address, request.priceKrPerLiter)
+        // In real implementation, this would set the price on the dispenser
+        return ResponseEntity.ok(
+            ProtocolResponse(
+                success = true,
+                message = "Price programmed: ${request.priceKrPerLiter} kr/L",
+                responseCode = "0x1E" // OK response
+            )
+        )
+    }
+
+    @PostMapping("/program-amount")
+    @Operation(summary = "Program amount preset", description = "Set amount preset in øre (cents)")
+    fun programAmount(
+        @RequestBody request: AmountPresetRequest
+    ): ResponseEntity<ProtocolResponse> {
+        logger.info("Amount preset: address={}, amount={} øre", request.address, request.amountOre)
+        return ResponseEntity.ok(
+            ProtocolResponse(
+                success = true,
+                message = "Amount preset: ${request.amountOre} øre",
+                responseCode = "0x1E"
+            )
+        )
+    }
+
+    @PostMapping("/program-volume")
+    @Operation(summary = "Program volume preset", description = "Set volume preset in liters")
+    fun programVolume(
+        @RequestBody request: VolumePresetRequest
+    ): ResponseEntity<ProtocolResponse> {
+        logger.info("Volume preset: address={}, volume={} L", request.address, request.volumeLiters)
+        return ResponseEntity.ok(
+            ProtocolResponse(
+                success = true,
+                message = "Volume preset: ${request.volumeLiters} L",
+                responseCode = "0x1E"
+            )
+        )
+    }
+
+    @GetMapping("/volume")
+    @Operation(summary = "Get current volume", description = "Query current delivery volume")
+    fun getCurrentVolume(
+        @RequestParam(defaultValue = "1") address: Int
+    ): ResponseEntity<VolumeResponse> {
+        return ResponseEntity.ok(
+            VolumeResponse(
+                address = address,
+                currentVolumeLiters = litres,
+                deliveryInProgress = state == DispenserState.DELIVERING
+            )
+        )
+    }
+
+    @GetMapping("/tank")
+    @Operation(summary = "Get tank status", description = "Query tank level and pump info")
+    fun getTankStatus(
+        @RequestParam(defaultValue = "1") address: Int
+    ): ResponseEntity<TankResponse> {
+        return ResponseEntity.ok(
+            TankResponse(
+                address = address,
+                tankLevelPercent = 85.5, // Simulated tank level
+                pumpInfo = "ARK-3600 Emulator",
+                connected = true
+            )
+        )
+    }
+
+    @GetMapping("/price")
+    @Operation(summary = "Get current price", description = "Query active price per liter")
+    fun getCurrentPrice(
+        @RequestParam(defaultValue = "1") address: Int
+    ): ResponseEntity<PriceResponse> {
+        return ResponseEntity.ok(
+            PriceResponse(
+                address = address,
+                priceKrPerLiter = pricePerLitre,
+                includesRoadTax = true
+            )
+        )
+    }
+
+    @PostMapping("/linetest")
+    @Operation(summary = "Communication line test", description = "VB6-compatible communication verification")
+    fun lineTest(
+        @RequestParam(defaultValue = "1") address: Int
+    ): ResponseEntity<ProtocolResponse> {
+        return ResponseEntity.ok(
+            ProtocolResponse(
+                success = true,
+                message = "Line test OK for address $address",
+                responseCode = "0x1E"
+            )
+        )
+    }
+
+    @GetMapping("/error")
+    @Operation(summary = "Get error status", description = "Query error codes from dispenser")
+    fun getErrorStatus(
+        @RequestParam(defaultValue = "1") address: Int
+    ): ResponseEntity<ErrorResponse> {
+        return ResponseEntity.ok(
+            ErrorResponse(
+                address = address,
+                hasError = false,
+                mainErrorCode = "00",
+                subErrorCode = "00",
+                errorDescription = "No errors"
+            )
+        )
+    }
+
     enum class DispenserState {
         IDLE, READY, DELIVERING, FINISHED, ERROR
     }
@@ -144,5 +278,59 @@ class DemoDispenserController(
         val dayMode: Boolean,
         val stationCreditActive: Boolean,
         val connected: Boolean
+    )
+
+    // VB6-compatible protocol request/response DTOs
+    data class ProductSelectRequest(
+        val address: Int = 1,
+        val product: String // e.g. "0x30" for pistol selection
+    )
+
+    data class PriceProgramRequest(
+        val address: Int = 1,
+        val priceKrPerLiter: String // e.g. "15.90" - will be encoded LSB-first
+    )
+
+    data class AmountPresetRequest(
+        val address: Int = 1,
+        val amountOre: Int // Amount in øre (cents)
+    )
+
+    data class VolumePresetRequest(
+        val address: Int = 1,
+        val volumeLiters: Double // Volume in liters
+    )
+
+    data class ProtocolResponse(
+        val success: Boolean,
+        val message: String,
+        val responseCode: String // Hex response code from protocol
+    )
+
+    data class VolumeResponse(
+        val address: Int,
+        val currentVolumeLiters: Double,
+        val deliveryInProgress: Boolean
+    )
+
+    data class TankResponse(
+        val address: Int,
+        val tankLevelPercent: Double,
+        val pumpInfo: String,
+        val connected: Boolean
+    )
+
+    data class PriceResponse(
+        val address: Int,
+        val priceKrPerLiter: Double,
+        val includesRoadTax: Boolean
+    )
+
+    data class ErrorResponse(
+        val address: Int,
+        val hasError: Boolean,
+        val mainErrorCode: String, // 2-digit hex code
+        val subErrorCode: String,  // 2-digit hex code
+        val errorDescription: String
     )
 }

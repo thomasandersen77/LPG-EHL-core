@@ -96,6 +96,176 @@ paths:
         '200':
           description: Dispenser reset
   
+  /dispenser/product-select:
+    post:
+      tags: [Dispenser]
+      summary: Select product/pistol (VB6-compatible)
+      description: VB6-compatible product selection before pricing operations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductSelectRequest'
+      responses:
+        '200':
+          description: Product selected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolResponse'
+  
+  /dispenser/program-price:
+    post:
+      tags: [Dispenser]
+      summary: Program price per liter (VB6-compatible)
+      description: VB6-compatible price programming with LSB-first format
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceProgramRequest'
+      responses:
+        '200':
+          description: Price programmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolResponse'
+  
+  /dispenser/program-amount:
+    post:
+      tags: [Dispenser]
+      summary: Program amount preset
+      description: Set amount preset in øre (cents)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmountPresetRequest'
+      responses:
+        '200':
+          description: Amount preset configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolResponse'
+  
+  /dispenser/program-volume:
+    post:
+      tags: [Dispenser]
+      summary: Program volume preset
+      description: Set volume preset in liters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VolumePresetRequest'
+      responses:
+        '200':
+          description: Volume preset configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolResponse'
+  
+  /dispenser/volume:
+    get:
+      tags: [Dispenser]
+      summary: Get current delivery volume
+      parameters:
+        - name: address
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Current volume
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeResponse'
+  
+  /dispenser/tank:
+    get:
+      tags: [Dispenser]
+      summary: Get tank status
+      description: Query tank level and pump info
+      parameters:
+        - name: address
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Tank status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TankResponse'
+  
+  /dispenser/price:
+    get:
+      tags: [Dispenser]
+      summary: Get current price
+      description: Query active price per liter
+      parameters:
+        - name: address
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Current price
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceResponse'
+  
+  /dispenser/linetest:
+    post:
+      tags: [Dispenser]
+      summary: Communication line test
+      description: VB6-compatible communication verification
+      parameters:
+        - name: address
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Line test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolResponse'
+  
+  /dispenser/error:
+    get:
+      tags: [Dispenser]
+      summary: Get error status
+      description: Query error codes from dispenser
+      parameters:
+        - name: address
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Error status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
   /transactions:
     get:
       tags: [Transactions]
@@ -678,3 +848,142 @@ components:
           nullable: true
         connected:
           type: boolean
+    
+    # VB6-compatible protocol schemas
+    ProductSelectRequest:
+      type: object
+      required:
+        - product
+      properties:
+        address:
+          type: integer
+          default: 1
+          description: Dispenser address
+        product:
+          type: string
+          description: Product/pistol selection code (e.g. "0x30")
+          example: "0x30"
+    
+    PriceProgramRequest:
+      type: object
+      required:
+        - priceKrPerLiter
+      properties:
+        address:
+          type: integer
+          default: 1
+          description: Dispenser address
+        priceKrPerLiter:
+          type: string
+          description: Price per liter in kr (LSB-first encoding)
+          example: "15.90"
+    
+    AmountPresetRequest:
+      type: object
+      required:
+        - amountOre
+      properties:
+        address:
+          type: integer
+          default: 1
+          description: Dispenser address
+        amountOre:
+          type: integer
+          description: Amount preset in øre (cents)
+          example: 50000
+    
+    VolumePresetRequest:
+      type: object
+      required:
+        - volumeLiters
+      properties:
+        address:
+          type: integer
+          default: 1
+          description: Dispenser address
+        volumeLiters:
+          type: number
+          format: double
+          description: Volume preset in liters
+          example: 25.0
+    
+    ProtocolResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Operation success status
+        message:
+          type: string
+          description: Human-readable message
+        responseCode:
+          type: string
+          description: Hex response code from protocol
+          example: "0x1E"
+    
+    VolumeResponse:
+      type: object
+      properties:
+        address:
+          type: integer
+          description: Dispenser address
+        currentVolumeLiters:
+          type: number
+          format: double
+          description: Current delivery volume in liters
+        deliveryInProgress:
+          type: boolean
+          description: Whether delivery is currently active
+    
+    TankResponse:
+      type: object
+      properties:
+        address:
+          type: integer
+          description: Dispenser address
+        tankLevelPercent:
+          type: number
+          format: double
+          description: Tank level as percentage
+        pumpInfo:
+          type: string
+          description: Pump model/info
+          example: "ARK-3600"
+        connected:
+          type: boolean
+          description: Connection status
+    
+    PriceResponse:
+      type: object
+      properties:
+        address:
+          type: integer
+          description: Dispenser address
+        priceKrPerLiter:
+          type: number
+          format: double
+          description: Current price per liter in kr
+        includesRoadTax:
+          type: boolean
+          description: Whether price includes road tax
+    
+    ErrorResponse:
+      type: object
+      properties:
+        address:
+          type: integer
+          description: Dispenser address
+        hasError:
+          type: boolean
+          description: Whether dispenser has errors
+        mainErrorCode:
+          type: string
+          description: Main error code (2-digit hex)
+          example: "00"
+        subErrorCode:
+          type: string
+          description: Sub error code (2-digit hex)
+          example: "00"
+        errorDescription:
+          type: string
+          description: Human-readable error description
