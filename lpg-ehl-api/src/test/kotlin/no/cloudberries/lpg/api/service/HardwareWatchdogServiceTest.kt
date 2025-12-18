@@ -1,6 +1,6 @@
 package no.cloudberries.lpg.api.service
 
-import no.cloudberries.lpg.communication.SerialPortManager
+import no.cloudberries.lpg.communication.HardwareWatchdogCapable
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -25,13 +25,13 @@ import org.mockito.kotlin.never
  */
 class HardwareWatchdogServiceTest {
 
-    private lateinit var mockSerialPortManager: SerialPortManager
+    private lateinit var mockWatchdogCapable: HardwareWatchdogCapable
     private lateinit var watchdogService: HardwareWatchdogService
 
     @BeforeEach
     fun setup() {
-        mockSerialPortManager = mock<SerialPortManager>()
-        watchdogService = HardwareWatchdogService(mockSerialPortManager)
+        mockWatchdogCapable = mock<HardwareWatchdogCapable>()
+        watchdogService = HardwareWatchdogService(mockWatchdogCapable)
     }
 
     // ============================================================
@@ -41,8 +41,8 @@ class HardwareWatchdogServiceTest {
     @Test
     fun `healthy connection passes health check`() {
         // Arrange: Mock healthy connection
-        whenever(mockSerialPortManager.checkWatchdog()).thenReturn(true)
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(1000L) // 1 second
+        whenever(mockWatchdogCapable.checkWatchdog()).thenReturn(true)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(1000L) // 1 second
         
         watchdogService.initialize()
         
@@ -50,8 +50,8 @@ class HardwareWatchdogServiceTest {
         watchdogService.performHealthCheck()
         
         // Assert: Should call checkWatchdog and not attempt reconnection
-        verify(mockSerialPortManager, times(1)).checkWatchdog()
-        verify(mockSerialPortManager, never()).reconnect()
+        verify(mockWatchdogCapable, times(1)).checkWatchdog()
+        verify(mockWatchdogCapable, never()).reconnect()
         
         val stats = watchdogService.getStatistics()
         assertEquals(0, stats.consecutiveFailures)
@@ -61,9 +61,9 @@ class HardwareWatchdogServiceTest {
     @Test
     fun `connection loss detected and triggers reconnection`() {
         // Arrange: Mock connection loss
-        whenever(mockSerialPortManager.checkWatchdog()).thenReturn(false)
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(65000L) // 65 seconds
-        whenever(mockSerialPortManager.reconnect()).thenReturn(true)
+        whenever(mockWatchdogCapable.checkWatchdog()).thenReturn(false)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(65000L) // 65 seconds
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(true)
         
         watchdogService.initialize()
         
@@ -71,8 +71,8 @@ class HardwareWatchdogServiceTest {
         watchdogService.performHealthCheck()
         
         // Assert: Should attempt reconnection
-        verify(mockSerialPortManager, times(1)).checkWatchdog()
-        verify(mockSerialPortManager, times(1)).reconnect()
+        verify(mockWatchdogCapable, times(1)).checkWatchdog()
+        verify(mockWatchdogCapable, times(1)).reconnect()
         
         val stats = watchdogService.getStatistics()
         assertEquals(0, stats.consecutiveFailures) // Reset after successful reconnect
@@ -82,9 +82,9 @@ class HardwareWatchdogServiceTest {
     @Test
     fun `multiple consecutive failures increment failure counter`() {
         // Arrange: Mock persistent connection failure
-        whenever(mockSerialPortManager.checkWatchdog()).thenReturn(false)
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(65000L)
-        whenever(mockSerialPortManager.reconnect()).thenReturn(false)
+        whenever(mockWatchdogCapable.checkWatchdog()).thenReturn(false)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(65000L)
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(false)
         
         watchdogService.initialize()
         
@@ -94,8 +94,8 @@ class HardwareWatchdogServiceTest {
         watchdogService.performHealthCheck() // Failure 3
         
         // Assert: Should track consecutive failures
-        verify(mockSerialPortManager, times(3)).checkWatchdog()
-        verify(mockSerialPortManager, times(3)).reconnect()
+        verify(mockWatchdogCapable, times(3)).checkWatchdog()
+        verify(mockWatchdogCapable, times(3)).reconnect()
         
         val stats = watchdogService.getStatistics()
         assertEquals(3, stats.consecutiveFailures)
@@ -105,11 +105,11 @@ class HardwareWatchdogServiceTest {
     @Test
     fun `successful reconnection resets failure counter`() {
         // Arrange: First fail, then succeed
-        whenever(mockSerialPortManager.checkWatchdog())
+        whenever(mockWatchdogCapable.checkWatchdog())
             .thenReturn(false) // First check fails
             .thenReturn(true)  // After reconnect, check succeeds
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(65000L)
-        whenever(mockSerialPortManager.reconnect()).thenReturn(true)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(65000L)
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(true)
         
         watchdogService.initialize()
         
@@ -130,9 +130,9 @@ class HardwareWatchdogServiceTest {
     @Test
     fun `cooldown period prevents excessive reconnection attempts`() {
         // Arrange: Mock persistent failures
-        whenever(mockSerialPortManager.checkWatchdog()).thenReturn(false)
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(65000L)
-        whenever(mockSerialPortManager.reconnect()).thenReturn(false)
+        whenever(mockWatchdogCapable.checkWatchdog()).thenReturn(false)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(65000L)
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(false)
         
         watchdogService.initialize()
         
@@ -144,8 +144,8 @@ class HardwareWatchdogServiceTest {
         watchdogService.performHealthCheck() // Should still be in cooldown
         
         // Assert: Should attempt reconnect only 3 times, then enter cooldown
-        verify(mockSerialPortManager, times(5)).checkWatchdog()
-        verify(mockSerialPortManager, times(3)).reconnect() // Only 3 attempts, then cooldown
+        verify(mockWatchdogCapable, times(5)).checkWatchdog()
+        verify(mockWatchdogCapable, times(3)).reconnect() // Only 3 attempts, then cooldown
         
         val stats = watchdogService.getStatistics()
         assertTrue(stats.consecutiveFailures > 3) // Continues counting failures
@@ -156,9 +156,9 @@ class HardwareWatchdogServiceTest {
     fun `cooldown period eventually expires and allows retry`() {
         // This test would require manipulating time or waiting 5 minutes
         // For unit test purposes, we'll verify the logic structure
-        whenever(mockSerialPortManager.checkWatchdog()).thenReturn(false)
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(65000L)
-        whenever(mockSerialPortManager.reconnect()).thenReturn(false)
+        whenever(mockWatchdogCapable.checkWatchdog()).thenReturn(false)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(65000L)
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(false)
         
         watchdogService.initialize()
         
@@ -177,10 +177,10 @@ class HardwareWatchdogServiceTest {
     @Test
     fun `manual reconnect bypasses cooldown and resets counters`() {
         // Arrange: Put service in cooldown state
-        whenever(mockSerialPortManager.checkWatchdog()).thenReturn(false)
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(65000L)
+        whenever(mockWatchdogCapable.checkWatchdog()).thenReturn(false)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(65000L)
         // First 3 calls (auto-reconnect attempts) fail, 4th call (manual) succeeds
-        whenever(mockSerialPortManager.reconnect()).thenReturn(false, false, false, true)
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(false, false, false, true)
         
         watchdogService.initialize()
         
@@ -192,7 +192,7 @@ class HardwareWatchdogServiceTest {
         
         // Assert: Manual reconnect should work and reset counters
         assertTrue(manualResult)
-        verify(mockSerialPortManager, times(4)).reconnect() // 3 auto + 1 manual
+        verify(mockWatchdogCapable, times(4)).reconnect() // 3 auto + 1 manual
         
         val stats = watchdogService.getStatistics()
         assertEquals(0, stats.consecutiveFailures) // Reset by manual action
@@ -201,14 +201,14 @@ class HardwareWatchdogServiceTest {
     @Test
     fun `manual reconnect handles failure gracefully`() {
         // Arrange: Manual reconnect fails
-        whenever(mockSerialPortManager.reconnect()).thenReturn(false)
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(false)
         
         // Act: Manual reconnect
         val result = watchdogService.forceReconnect()
         
         // Assert: Should return false but not crash
         assertFalse(result)
-        verify(mockSerialPortManager, times(1)).reconnect()
+        verify(mockWatchdogCapable, times(1)).reconnect()
     }
 
     // ============================================================
@@ -227,7 +227,7 @@ class HardwareWatchdogServiceTest {
         assertEquals(0, disabledStats.timeSinceLastData)
         
         // Test with enabled watchdog
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(1500L)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(1500L)
         
         watchdogService.initialize()
         val enabledStats = watchdogService.getStatistics()
@@ -239,9 +239,9 @@ class HardwareWatchdogServiceTest {
     @Test
     fun `statistics update correctly after operations`() {
         // Arrange: Connection failure scenario
-        whenever(mockSerialPortManager.checkWatchdog()).thenReturn(false)
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(75000L)
-        whenever(mockSerialPortManager.reconnect()).thenReturn(false, true)
+        whenever(mockWatchdogCapable.checkWatchdog()).thenReturn(false)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(75000L)
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(false, true)
         
         watchdogService.initialize()
         
@@ -252,7 +252,7 @@ class HardwareWatchdogServiceTest {
         assertEquals(1, stats.reconnectAttempts)
         
         // Successful reconnect on second try
-        whenever(mockSerialPortManager.reconnect()).thenReturn(true)
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(true)
         watchdogService.performHealthCheck()
         stats = watchdogService.getStatistics()
         assertEquals(2, stats.reconnectAttempts) // Incremented
@@ -281,9 +281,9 @@ class HardwareWatchdogServiceTest {
     @Test
     fun `exception in checkWatchdog is handled gracefully`() {
         // Arrange: Mock throws exception
-        whenever(mockSerialPortManager.checkWatchdog()).thenThrow(RuntimeException("Serial port error"))
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(30000L)
-        whenever(mockSerialPortManager.reconnect()).thenReturn(true)
+        whenever(mockWatchdogCapable.checkWatchdog()).thenThrow(RuntimeException("Serial port error"))
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(30000L)
+        whenever(mockWatchdogCapable.reconnect()).thenReturn(true)
         
         watchdogService.initialize()
         
@@ -293,15 +293,15 @@ class HardwareWatchdogServiceTest {
         }
         
         // Assert: Should treat exception as failure and attempt reconnect
-        verify(mockSerialPortManager, times(1)).reconnect()
+        verify(mockWatchdogCapable, times(1)).reconnect()
     }
 
     @Test
     fun `exception in reconnect is handled gracefully`() {
         // Arrange: Reconnect throws exception
-        whenever(mockSerialPortManager.checkWatchdog()).thenReturn(false)
-        whenever(mockSerialPortManager.getTimeSinceLastData()).thenReturn(70000L)
-        whenever(mockSerialPortManager.reconnect()).thenThrow(RuntimeException("Hardware unavailable"))
+        whenever(mockWatchdogCapable.checkWatchdog()).thenReturn(false)
+        whenever(mockWatchdogCapable.getTimeSinceLastData()).thenReturn(70000L)
+        whenever(mockWatchdogCapable.reconnect()).thenThrow(RuntimeException("Hardware unavailable"))
         
         watchdogService.initialize()
         
@@ -325,14 +325,14 @@ class HardwareWatchdogServiceTest {
             watchdogService.initialize()
         }
         
-        verify(mockSerialPortManager, times(3)).enableWatchdog()
+        verify(mockWatchdogCapable, times(3)).enableWatchdog()
     }
 
     @Test
     fun `concurrent health checks are thread-safe`() {
         // This test verifies thread safety - in a real scenario you might use CountDownLatch
         // For unit testing, we'll just verify the service handles multiple quick calls
-        whenever(mockSerialPortManager.checkWatchdog()).thenReturn(true)
+        whenever(mockWatchdogCapable.checkWatchdog()).thenReturn(true)
         
         watchdogService.initialize()
         
@@ -342,6 +342,6 @@ class HardwareWatchdogServiceTest {
             }
         }
         
-        verify(mockSerialPortManager, times(10)).checkWatchdog()
+        verify(mockWatchdogCapable, times(10)).checkWatchdog()
     }
 }

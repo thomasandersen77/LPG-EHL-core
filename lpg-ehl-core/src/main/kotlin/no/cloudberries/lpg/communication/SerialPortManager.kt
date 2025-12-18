@@ -9,8 +9,9 @@ import java.io.IOException
  * Handles opening, closing, and configuration of serial ports.
  * 
  * Implements SerialPortIO interface for production use with real serial ports.
+ * Implements HardwareWatchdogCapable interface for watchdog functionality.
  */
-open class SerialPortManager(private val config: SerialPortConfig) : SerialPortIO {
+open class SerialPortManager(private val config: SerialPortConfig) : SerialPortIO, HardwareWatchdogCapable {
     private val logger = LoggerFactory.getLogger(SerialPortManager::class.java)
     private var serialPort: SerialPort? = null
     private val lock = Any()
@@ -176,7 +177,7 @@ open class SerialPortManager(private val config: SerialPortConfig) : SerialPortI
      * Starts a background watchdog that checks if data is being received.
      * If no data is received for `watchdogTimeoutMs`, triggers auto-reconnect.
      */
-    fun enableWatchdog() {
+    override fun enableWatchdog() {
         synchronized(lock) {
             if (watchdogEnabled) {
                 logger.warn("Watchdog already enabled for ${config.portName}")
@@ -192,7 +193,7 @@ open class SerialPortManager(private val config: SerialPortConfig) : SerialPortI
     /**
      * Disable the hardware watchdog.
      */
-    fun disableWatchdog() {
+    override fun disableWatchdog() {
         synchronized(lock) {
             watchdogEnabled = false
             logger.info("Hardware watchdog disabled for ${config.portName}")
@@ -205,7 +206,7 @@ open class SerialPortManager(private val config: SerialPortConfig) : SerialPortI
      * 
      * @return true if connection is healthy, false if watchdog timeout exceeded
      */
-    open fun checkWatchdog(): Boolean {
+    override fun checkWatchdog(): Boolean {
         synchronized(lock) {
             if (!watchdogEnabled || !isConnected) {
                 return true  // Watchdog disabled or not connected - no check needed
@@ -237,7 +238,7 @@ open class SerialPortManager(private val config: SerialPortConfig) : SerialPortI
      * 
      * @return true if reconnect successful, false otherwise
      */
-    open fun reconnect(): Boolean {
+    override fun reconnect(): Boolean {
         logger.warn("🔄 Attempting reconnect to ${config.portName}...")
         
         try {
@@ -270,7 +271,7 @@ open class SerialPortManager(private val config: SerialPortConfig) : SerialPortI
     /**
      * Get time since last data was received (for monitoring).
      */
-    open fun getTimeSinceLastData(): Long {
+    override fun getTimeSinceLastData(): Long {
         return System.currentTimeMillis() - lastDataReceivedTime
     }
 

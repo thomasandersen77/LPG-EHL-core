@@ -1,6 +1,6 @@
 package no.cloudberries.lpg.api.service
 
-import no.cloudberries.lpg.communication.SerialPortManager
+import no.cloudberries.lpg.communication.HardwareWatchdogCapable
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 @Service
 class HardwareWatchdogService(
-    private val serialPortManager: SerialPortManager? = null  // Optional - for production use
+    private val watchdogCapable: HardwareWatchdogCapable? = null  // Optional - for production use
 ) {
     private val logger = LoggerFactory.getLogger(HardwareWatchdogService::class.java)
     
@@ -43,7 +43,7 @@ class HardwareWatchdogService(
      * Call this after serial port is successfully opened.
      */
     fun initialize() {
-        serialPortManager?.enableWatchdog()
+        watchdogCapable?.enableWatchdog()
         logger.info("🐕 Hardware watchdog initialized")
     }
     
@@ -53,13 +53,13 @@ class HardwareWatchdogService(
      */
     @Scheduled(fixedDelay = 30_000, initialDelay = 60_000)  // Check every 30s, start after 1 min
     fun performHealthCheck() {
-        if (serialPortManager == null) {
-            // No serial port manager configured (local dev mode)
+        if (watchdogCapable == null) {
+            // No watchdog capable component configured (local dev mode)
             return
         }
         
         try {
-            val isHealthy = serialPortManager.checkWatchdog()
+            val isHealthy = watchdogCapable.checkWatchdog()
             
             if (isHealthy) {
                 // Connection is healthy
@@ -85,7 +85,7 @@ class HardwareWatchdogService(
      */
     private fun handleConnectionFailure() {
         val failures = consecutiveFailures.incrementAndGet()
-        val timeSinceLastData = serialPortManager?.getTimeSinceLastData() ?: 0
+        val timeSinceLastData = watchdogCapable?.getTimeSinceLastData() ?: 0
         
         logger.error(
             "❌ Watchdog health check failed (consecutive failures: $failures). " +
@@ -116,7 +116,7 @@ class HardwareWatchdogService(
      * Attempt to reconnect to the serial port.
      */
     private fun attemptReconnection() {
-        if (serialPortManager == null) {
+        if (watchdogCapable == null) {
             return
         }
         
@@ -126,7 +126,7 @@ class HardwareWatchdogService(
         logger.warn("🔧 Attempting automatic reconnection (attempt #$attempt)...")
         
         try {
-            val success = serialPortManager.reconnect()
+            val success = watchdogCapable.reconnect()
             
             if (success) {
                 logger.info("🎉 Automatic reconnection successful (attempt #$attempt)")
@@ -146,11 +146,11 @@ class HardwareWatchdogService(
      */
     fun getStatistics(): WatchdogStatistics {
         return WatchdogStatistics(
-            isEnabled = serialPortManager != null,
+            isEnabled = watchdogCapable != null,
             consecutiveFailures = consecutiveFailures.get(),
             reconnectAttempts = reconnectAttempts.get(),
             lastSuccessfulCheckTime = lastSuccessfulCheck.get(),
-            timeSinceLastData = serialPortManager?.getTimeSinceLastData() ?: 0
+            timeSinceLastData = watchdogCapable?.getTimeSinceLastData() ?: 0
         )
     }
     
@@ -160,7 +160,7 @@ class HardwareWatchdogService(
     fun forceReconnect(): Boolean {
         logger.info("🔨 Manual reconnect triggered")
         consecutiveFailures.set(0)  // Reset counter for manual action
-        return serialPortManager?.reconnect() ?: false
+        return watchdogCapable?.reconnect() ?: false
     }
 }
 
