@@ -1,0 +1,163 @@
+name: 'Anthropic Code Review'
+description: 'Performs automated code review using Anthropic Claude API with security best practices'
+inputs:
+  review_type:
+    description: 'Type of review (e.g., architecture, security, readability)'
+    required: false
+    default: 'review'
+  prompt_file:
+    description: 'Path to the prompt file (relative to workspace root)'
+    required: true
+  output_file:
+    description: 'Path for the output review file (relative to current working directory)'
+    required: true
+  anthropic_api_key:
+    description: 'API key for Anthropic'
+    required: true
+  model:
+    description: 'Claude model to use'
+    required: false
+    default: 'claude-sonnet-4-20250514'
+  max_tokens:
+    description: 'Maximum tokens for response'
+    required: false
+    default: '4096'
+runs:
+  using: 'composite'
+  steps:
+    - name: Perform Anthropic Review
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+      run: |
+        set -euo pipefail
+        
+        # Constants - Magic numbers eliminated
+        readonly MAX_DIFF_SIZE_BYTES=50000
+        readonly MAX_API_RETRY_ATTEMPTS=3
+        readonly RETRY_DELAY_SECONDS=5
+        readonly ANTHROPIC_API_VERSION="2023-06-01"
+        readonly CLAUDE_MODEL="${{ inputs.model }}"
+        readonly MAX_RESPONSE_TOKENS=${{ inputs.max_tokens }}
+        readonly SHA_REGEX="^[a-f0-9]{40}$"
+        
+        echo "::group::Configuration"
+        echo "Review type: '${{ inputs.review_type }}'"
+        echo "Model: ${CLAUDE_MODEL}"
+        echo "::endgroup::"
+        
+        # Security: Validate SHA format
+        validate_sha() {
+          local sha="$1"
+          if [[ ! "$sha" =~ $SHA_REGEX ]]; then
+            echo "::error::Invalid SHA format: $sha"
+            return 1
+          fi
+          return 0
+        }
+        
+        # Security: Path traversal protection
+        validate_prompt_file() {
+          local prompt_file="$1"
+          local full_path="$GITHUB_WORKSPACE/$prompt_file"
+          local canonical_workspace canonical_prompt
+          
+          canonical_workspace=$(realpath "$GITHUB_WORKSPACE")
+          canonical_prompt=$(realpath "$full_path" 2>/dev/null || echo "")
+          
+          if [[ -z "$canonical_prompt" ]] || [[ "$canonical_prompt" != "$canonical_workspace"* ]]; then
+            echo "::error::Prompt file outside workspace: $prompt_file"
+            return 1
+          fi
+          
+          if [[ ! -f "$canonical_prompt" ]]; then
+            echo "::error::Prompt file not found: $prompt_file"
+            return 1
+          fi
+          
+          echo "$canonical_prompt"
+        }
+        
+        # Validate prompt file
+        echo "::group::Validating input"
+        VALIDATED_PROMPT_FILE=$(validate_prompt_file "${{ inputs.prompt_file }}")
+        [[ $? -eq 0 ]] || exit 1
+        PROMPT=$(cat "$VALIDATED_PROMPT_FILE")
+        echo "✅ Prompt validated"
+        echo "::endgroup::"
+        
+        # Extract diff with SHA validation
+        echo "::group::Extracting diff"
+        BASE_SHA="${{ github.event.pull_request.base.sha }}"
+        HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+        
+        if [[ -n "${BASE_SHA}" ]] && [[ -n "${HEAD_SHA}" ]]; then
+          validate_sha "$BASE_SHA" || exit 1
+          validate_sha "$HEAD_SHA" || exit 1
+          CODE_DIFF=$(git diff "$BASE_SHA" "$HEAD_SHA")
+        else
+          CODE_DIFF=$(git diff origin/main...HEAD)
+        fi
+        
+        if [[ -z "$CODE_DIFF" ]]; then
+          echo "::warning::No diff found"
+          echo "No changes to review." > "${{ inputs.output_file }}"
+          exit 0
+        fi
+        
+        DIFF_SIZE=${#CODE_DIFF}
+        if [[ "$DIFF_SIZE" -gt "$MAX_DIFF_SIZE_BYTES" ]]; then
+          echo "::warning::Diff truncated: $DIFF_SIZE → $MAX_DIFF_SIZE_BYTES bytes"
+          CODE_DIFF="${CODE_DIFF:0:$MAX_DIFF_SIZE_BYTES}"
+        fi
+        echo "::endgroup::"
+        
+        # Prepare payload
+        TEMP_CONTENT=$(mktemp)
+        trap 'rm -f "$TEMP_CONTENT"' EXIT ERR
+        printf '%s\n\n%s' "$PROMPT" "$CODE_DIFF" > "$TEMP_CONTENT"
+        
+        ANTHROPIC_PAYLOAD=$(jq -n \
+          --arg model "$CLAUDE_MODEL" \
+          --argjson max_tokens "$MAX_RESPONSE_TOKENS" \
+          --arg system "You are an expert code reviewer. Analyze the following code changes and provide constructive feedback." \
+          --rawfile user_content "$TEMP_CONTENT" \
+          '{model: $model, max_tokens: $max_tokens, system: $system, messages: [{role: "user", content: $user_content}]}')
+        
+        # Call API with retry
+        echo "::group::Calling Anthropic API"
+        for ((i=1; i<=MAX_API_RETRY_ATTEMPTS; i++)); do
+          HTTP_RESPONSE=$(curl -s -w "%{http_code}" -X POST \
+            "https://api.anthropic.com/v1/messages" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+            -H "anthropic-version: ${ANTHROPIC_API_VERSION}" \
+            -d "$ANTHROPIC_PAYLOAD")
+          
+          HTTP_STATUS_CODE=${HTTP_RESPONSE: -3}
+          ANTHROPIC_RESPONSE=${HTTP_RESPONSE:0:${#HTTP_RESPONSE}-3}
+          
+          if [[ "$HTTP_STATUS_CODE" -eq 200 ]]; then
+            echo "✅ Success"
+            break
+          fi
+          
+          echo "::warning::Status $HTTP_STATUS_CODE"
+          if [[ "$i" -lt "$MAX_API_RETRY_ATTEMPTS" ]]; then
+            sleep $((i * RETRY_DELAY_SECONDS))
+          else
+            echo "::error::Failed after $MAX_API_RETRY_ATTEMPTS attempts"
+            exit 1
+          fi
+        done
+        echo "::endgroup::"
+        
+        # Process response
+        if echo "$ANTHROPIC_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+          echo "::error::API error:"
+          echo "$ANTHROPIC_RESPONSE" | jq '.error'
+          exit 1
+        fi
+        
+        echo "$ANTHROPIC_RESPONSE" | jq -r '.content[0].text // empty' > "${{ inputs.output_file }}"
+        echo "✅ Review saved"
