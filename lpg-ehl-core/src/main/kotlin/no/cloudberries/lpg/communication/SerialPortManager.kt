@@ -205,7 +205,7 @@ open class SerialPortManager(private val config: SerialPortConfig) : SerialPortI
      * 
      * @return true if connection is healthy, false if watchdog timeout exceeded
      */
-    fun checkWatchdog(): Boolean {
+    open fun checkWatchdog(): Boolean {
         synchronized(lock) {
             if (!watchdogEnabled || !isConnected) {
                 return true  // Watchdog disabled or not connected - no check needed
@@ -237,7 +237,7 @@ open class SerialPortManager(private val config: SerialPortConfig) : SerialPortI
      * 
      * @return true if reconnect successful, false otherwise
      */
-    fun reconnect(): Boolean {
+    open fun reconnect(): Boolean {
         logger.warn("🔄 Attempting reconnect to ${config.portName}...")
         
         try {
@@ -270,7 +270,7 @@ open class SerialPortManager(private val config: SerialPortConfig) : SerialPortI
     /**
      * Get time since last data was received (for monitoring).
      */
-    fun getTimeSinceLastData(): Long {
+    open fun getTimeSinceLastData(): Long {
         return System.currentTimeMillis() - lastDataReceivedTime
     }
 
