@@ -1,0 +1,34 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    database-platform: org.hibernate.dialect.H2Dialect
+  liquibase:
+    enabled: false
+    
+server:
+  port: 8080
+
+# Emulator connection
+emulator:
+  host: localhost
+  port: 9000
+
+# Disable Azure for demo
+azure:
+  enabled: false
+  
+# Demo mode - simplified configuration  
+demo:
+  mode: true
+  
+logging:
+  level:
+    no.cloudberries.lpg: DEBUG
+    org.hibernate.SQL: INFO

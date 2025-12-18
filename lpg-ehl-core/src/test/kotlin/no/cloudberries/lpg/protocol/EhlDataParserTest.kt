@@ -105,23 +105,36 @@ class EhlDataParserTest {
     }
     
     @Test
-    @DisplayName("Parse ERROR data correctly")
+    @DisplayName("Parse ERROR data correctly - VB6 format")
     fun testParseErrorData() {
-        val data = byteArrayOf(0x10)
+        // VB6 format: 2 ASCII bytes (main code + sub code)
+        val data = byteArrayOf('1'.code.toByte(), '5'.code.toByte())
         
-        val errorCode = EhlDataParser.parseErrorData(data)
+        val (mainCode, subCode) = EhlDataParser.parseErrorData(data)
         
-        assertEquals(0x10, errorCode)
+        assertEquals('1', mainCode)
+        assertEquals('5', subCode)
     }
     
     @Test
     @DisplayName("Parse ERROR data throws on invalid size")
     fun testParseErrorDataInvalidSize() {
-        val data = byteArrayOf(0x10, 0x20)
+        // VB6 format requires exactly 2 bytes, test with 1 byte
+        val data = byteArrayOf(0x10)
         
         assertThrows(IllegalArgumentException::class.java) {
             EhlDataParser.parseErrorData(data)
         }
+    }
+    
+    @Test
+    @DisplayName("Parse ERROR data legacy format")
+    fun testParseErrorDataLegacy() {
+        val data = byteArrayOf(0x10)
+        
+        val errorCode = EhlDataParser.parseErrorDataLegacy(data)
+        
+        assertEquals(0x10, errorCode)
     }
     
     @Test

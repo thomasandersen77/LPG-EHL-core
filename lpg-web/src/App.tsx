@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { HomePage } from './pages/HomePage';
 import { DispenserSimulator } from './components/DispenserSimulator';
+import { ProtocolTester } from './components/ProtocolTester';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { CreditAccountsPage } from './pages/CreditAccountsPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -25,6 +26,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="simulator" element={<DispenserSimulator />} />
+            <Route path="protocol-tester" element={<ProtocolTester />} />
             <Route path="transactions" element={<TransactionsPage />} />
             <Route path="credit" element={<CreditAccountsPage />} />
             <Route path="reports" element={<ReportsPage />} />
