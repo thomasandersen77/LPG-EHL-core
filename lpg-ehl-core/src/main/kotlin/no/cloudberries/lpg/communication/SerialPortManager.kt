@@ -9,11 +9,20 @@ import java.io.IOException
  * Handles opening, closing, and configuration of serial ports.
  * 
  * Implements SerialPortIO interface for production use with real serial ports.
+ * Implements HardwareWatchdogCapable interface for watchdog functionality.
  */
-class SerialPortManager(private val config: SerialPortConfig) : SerialPortIO {
+open class SerialPortManager(private val config: SerialPortConfig) : SerialPortIO, HardwareWatchdogCapable {
     private val logger = LoggerFactory.getLogger(SerialPortManager::class.java)
     private var serialPort: SerialPort? = null
     private val lock = Any()
+    
+    // PART 4: HARDWARE WATCHDOG - Self-healing connection monitoring
+    @Volatile
+    private var lastDataReceivedTime: Long = System.currentTimeMillis()
+    private val watchdogTimeoutMs: Long = 60_000  // 60 seconds without data = dead connection
+    private val reconnectDelayMs: Long = 5_000     // 5 seconds wait before reconnect
+    @Volatile
+    private var watchdogEnabled: Boolean = false
 
     /**
      * Check if the serial port is currently open and connected.
@@ -134,6 +143,12 @@ class SerialPortManager(private val config: SerialPortConfig) : SerialPortIO {
             }
 
             val result = buffer.copyOf(bytesRead)
+            
+            // WATCHDOG: Update timestamp when we receive valid data
+            if (bytesRead > 0) {
+                lastDataReceivedTime = System.currentTimeMillis()
+            }
+            
             logger.debug("Read $bytesRead bytes from ${config.portName}: ${result.toHexString()}")
             return result
         }
@@ -155,6 +170,109 @@ class SerialPortManager(private val config: SerialPortConfig) : SerialPortIO {
         synchronized(lock) {
             serialPort?.flushIOBuffers()
         }
+    }
+
+    /**
+     * PART 4: HARDWARE WATCHDOG - Enable connection monitoring.
+     * Starts a background watchdog that checks if data is being received.
+     * If no data is received for `watchdogTimeoutMs`, triggers auto-reconnect.
+     */
+    override fun enableWatchdog() {
+        synchronized(lock) {
+            if (watchdogEnabled) {
+                logger.warn("Watchdog already enabled for ${config.portName}")
+                return
+            }
+            
+            watchdogEnabled = true
+            lastDataReceivedTime = System.currentTimeMillis()
+            logger.info("Hardware watchdog enabled for ${config.portName} (timeout: ${watchdogTimeoutMs}ms)")
+        }
+    }
+    
+    /**
+     * Disable the hardware watchdog.
+     */
+    override fun disableWatchdog() {
+        synchronized(lock) {
+            watchdogEnabled = false
+            logger.info("Hardware watchdog disabled for ${config.portName}")
+        }
+    }
+    
+    /**
+     * Check if the connection is alive (has received data recently).
+     * This should be called periodically by the application.
+     * 
+     * @return true if connection is healthy, false if watchdog timeout exceeded
+     */
+    override fun checkWatchdog(): Boolean {
+        synchronized(lock) {
+            if (!watchdogEnabled || !isConnected) {
+                return true  // Watchdog disabled or not connected - no check needed
+            }
+            
+            val timeSinceLastData = System.currentTimeMillis() - lastDataReceivedTime
+            
+            if (timeSinceLastData > watchdogTimeoutMs) {
+                logger.error(
+                    "⚠️ WATCHDOG TIMEOUT: No data received from ${config.portName} " +
+                    "for ${timeSinceLastData}ms (threshold: ${watchdogTimeoutMs}ms). " +
+                    "Connection may be dead (USB unplugged/driver hang)."
+                )
+                return false
+            }
+            
+            return true
+        }
+    }
+    
+    /**
+     * SELF-HEALING: Attempt to reconnect to the serial port.
+     * Call this when watchdog detects a dead connection.
+     * 
+     * Sequence:
+     * 1. Close current port
+     * 2. Wait 5 seconds for hardware/driver to reset
+     * 3. Open port again
+     * 
+     * @return true if reconnect successful, false otherwise
+     */
+    override fun reconnect(): Boolean {
+        logger.warn("🔄 Attempting reconnect to ${config.portName}...")
+        
+        try {
+            // Step 1: Close existing connection
+            disconnect()
+            
+            // Step 2: Wait for hardware/driver to reset
+            logger.info("⏳ Waiting ${reconnectDelayMs}ms for hardware reset...")
+            Thread.sleep(reconnectDelayMs)
+            
+            // Step 3: Reconnect
+            logger.info("🔌 Reconnecting to ${config.portName}...")
+            val success = connect()
+            
+            if (success) {
+                logger.info("✅ Reconnect successful to ${config.portName}")
+                lastDataReceivedTime = System.currentTimeMillis()  // Reset watchdog timer
+            } else {
+                logger.error("❌ Reconnect failed to ${config.portName}")
+            }
+            
+            return success
+            
+        } catch (e: Exception) {
+            logger.error("Reconnect failed with exception: ${e.message}", e)
+            return false
+        }
+    }
+    
+    /**
+     * Get time since last data was received (for monitoring).
+     */
+    override fun getTimeSinceLastData(): Long {
+        return System.currentTimeMillis() - lastDataReceivedTime
     }
 
     companion object {

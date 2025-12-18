@@ -1,0 +1,112 @@
+name: 'Anthropic Code Review'
+description: 'Calls Anthropic API with a specific prompt and code diff, then saves the result.'
+inputs:
+  review_type:
+    description: 'Type of review (e.g., architecture, security, readability)'
+    required: false
+    default: 'review'
+  prompt_file:
+    description: 'Path to the prompt file (relative to workspace root)'
+    required: true
+  output_file:
+    description: 'Path for the output review file (relative to current working directory)'
+    required: true
+  anthropic_api_key:
+    description: 'API key for Anthropic'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Perform Anthropic Review
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+      run: |
+        set -euo pipefail
+        echo "Using review type: '${{ inputs.review_type }}'"
+        # Read prompt from workspace-root-relative path
+        PROMPT=$(cat "$GITHUB_WORKSPACE/${{ inputs.prompt_file }}")
+
+        # Determine diff range based on event; fallback to origin/main...HEAD
+        BASE_SHA="${{ github.event.pull_request.base.sha }}"
+        HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+        if [ -n "${BASE_SHA}" ] && [ -n "${HEAD_SHA}" ]; then
+          echo "Detected PR context; diffing ${BASE_SHA}..${HEAD_SHA}"
+          CODE_DIFF=$(git diff "${BASE_SHA}" "${HEAD_SHA}")
+        else
+          echo "No PR context; diffing origin/main...HEAD"
+          CODE_DIFF=$(git diff origin/main...HEAD)
+        fi
+
+        # Validate we have code diff
+        if [ -z "$CODE_DIFF" ]; then
+          echo "::warning::No code diff found. Skipping review."
+          echo "No changes to review." > "${{ inputs.output_file }}"
+          exit 0
+        fi
+
+        # Truncate diff if too large (> 50KB) to avoid API limits
+        MAX_DIFF_SIZE=50000
+        DIFF_SIZE=${#CODE_DIFF}
+        if [ "$DIFF_SIZE" -gt "$MAX_DIFF_SIZE" ]; then
+          echo "::warning::Diff is too large ($DIFF_SIZE bytes). Truncating to ${MAX_DIFF_SIZE} bytes."
+          CODE_DIFF="${CODE_DIFF:0:$MAX_DIFF_SIZE}\n\n[TRUNCATED - diff exceeded ${MAX_DIFF_SIZE} bytes]"
+        fi
+
+        # Retry logic
+        MAX_ATTEMPTS=3
+        RETRY_DELAY=5
+        
+        # Write content to temp files to avoid argument length limits
+        TEMP_CONTENT=$(mktemp)
+        printf '%s\n\n%s' "$PROMPT" "$CODE_DIFF" > "$TEMP_CONTENT"
+        
+        # Build Anthropic API payload using file input
+        ANTHROPIC_PAYLOAD=$(jq -n \
+          --arg model "claude-sonnet-4-20250514" \
+          --argjson max_tokens 4096 \
+          --arg system "You are an expert code reviewer. Analyze the following code changes and provide constructive feedback." \
+          --rawfile user_content "$TEMP_CONTENT" \
+          '{
+            model: $model,
+            max_tokens: $max_tokens,
+            system: $system,
+            messages: [{
+              role: "user",
+              content: $user_content
+            }]
+          }')
+        rm -f "$TEMP_CONTENT"
+
+        for ((i=1; i<=MAX_ATTEMPTS; i++)); do
+          echo "::notice::Attempt $i/$MAX_ATTEMPTS to call Anthropic API for ${{ inputs.review_type }}..."
+          HTTP_RESPONSE=$(curl -s -w "%{http_code}" -X POST \
+            "https://api.anthropic.com/v1/messages" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$ANTHROPIC_PAYLOAD")
+          HTTP_STATUS_CODE=${HTTP_RESPONSE: -3}
+          ANTHROPIC_RESPONSE=${HTTP_RESPONSE:0:${#HTTP_RESPONSE}-3}
+
+          if [ "$HTTP_STATUS_CODE" -eq 200 ]; then
+            echo "::notice::Anthropic API call succeeded."
+            break
+          fi
+
+          echo "::warning::Status $HTTP_STATUS_CODE from Anthropic."
+          if [ "$i" -lt "$MAX_ATTEMPTS" ]; then
+            echo "Retrying in ${RETRY_DELAY}s..."; sleep "$RETRY_DELAY"
+          else
+            echo "::error::Failed after ${MAX_ATTEMPTS} attempts. Response:"; echo "$ANTHROPIC_RESPONSE"; exit 1
+          fi
+        done
+
+        # Validate response is not an error JSON
+        if echo "$ANTHROPIC_RESPONSE" | jq -e '.error' > /dev/null; then
+          echo "::error::Anthropic API returned an error payload:"; echo "$ANTHROPIC_RESPONSE"; exit 1
+        fi
+
+        # Extract and save text to the requested file path (relative to current working dir)
+        echo "$ANTHROPIC_RESPONSE" | jq -r '.content[0].text' > "${{ inputs.output_file }}"
+        echo "Saved review to '${{ inputs.output_file }}'"
