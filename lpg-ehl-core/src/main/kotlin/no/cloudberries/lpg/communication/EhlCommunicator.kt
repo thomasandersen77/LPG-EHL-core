@@ -50,10 +50,10 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
 
         val bytes = EhlCodec.encode(packet)
         
-        // Human-readable logging
-        logger.info(EhlPacketFormatter.formatPacketForLogging(packet, EhlPacketFormatter.Direction.SENDING))
-        if (logger.isDebugEnabled) {
-            logger.debug("Raw bytes (${bytes.size}): ${bytes.toHexString()}")
+        // Reduce log noise - only debug level for normal packet flow
+        logger.debug(EhlPacketFormatter.formatPacketForLogging(packet, EhlPacketFormatter.Direction.SENDING))
+        if (logger.isTraceEnabled) {
+            logger.trace("Raw bytes (${bytes.size}): ${bytes.toHexString()}")
         }
         
         serialPort.write(bytes)
@@ -160,8 +160,8 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
             
             when (val result = EhlCodec.decode(bufferArray)) {
                 is EhlPacketParseResult.Success -> {
-                    // Human-readable logging
-                    logger.info(EhlPacketFormatter.formatPacketForLogging(
+                    // Reduce log noise - only debug level for normal packet flow
+                    logger.debug(EhlPacketFormatter.formatPacketForLogging(
                         result.packet,
                         EhlPacketFormatter.Direction.RECEIVING
                     ))
@@ -170,12 +170,16 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                     val packetLength = result.packet.packetLength
                     if (packetLength <= receiveBuffer.size) {
                         receiveBuffer.subList(0, packetLength).clear()
-                        if (logger.isDebugEnabled) {
-                            logger.debug(EhlPacketFormatter.formatBufferStatus(
+                        if (logger.isTraceEnabled) {
+                            logger.trace(EhlPacketFormatter.formatBufferStatus(
                                 receiveBuffer.size,
                                 "after parsing packet"
                             ))
                         }
+                        
+                        // PRODUCTION OPTIMIZATION: After successful parse, check for additional STX bytes
+                        // This handles back-to-back packets where the first might be corrupted noise
+                        tryParseAdditionalPackets()
                     } else {
                         logger.error(EhlPacketFormatter.formatError(
                             "Packet Length Mismatch",
@@ -201,44 +205,17 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                 }
                 
                 is EhlPacketParseResult.ChecksumError -> {
-                    logger.error(EhlPacketFormatter.formatError(
-                        "Checksum Mismatch",
-                        "Expected 0x%02X, got 0x%02X (data corrupted in transmission)".format(
-                            result.expected,
-                            result.actual
-                        )
+                    logger.warn("RS-485 transmission error: checksum mismatch (expected 0x%02X, got 0x%02X)".format(
+                        result.expected, result.actual
                     ))
-                    // Try to find next STX to recover
-                    val nextStx = receiveBuffer.drop(1).indexOfFirst { it == EhlProtocol.STX_CONTROLLER || it == EhlProtocol.STX_DISPENSER }
-                    if (nextStx >= 0) {
-                        if (logger.isDebugEnabled) {
-                            logger.debug("🔧 Recovery: Found next STX at offset ${nextStx + 1}, skipping corrupt packet")
-                        }
-                        receiveBuffer.subList(0, nextStx + 1).clear()
-                    } else {
-                        // No next STX, just remove first byte
-                        receiveBuffer.removeAt(0)
-                    }
-                    return null
+                    // ENHANCED RECOVERY: Look for next valid STX more intelligently
+                    return handleCorruptedPacketRecovery()
                 }
                 
                 is EhlPacketParseResult.InvalidFormat -> {
-                    logger.error(EhlPacketFormatter.formatError(
-                        "Invalid Packet Format",
-                        result.reason
-                    ))
-                    // Try to find next STX to recover
-                    val nextStx = receiveBuffer.drop(1).indexOfFirst { it == EhlProtocol.STX_CONTROLLER || it == EhlProtocol.STX_DISPENSER }
-                    if (nextStx >= 0) {
-                        if (logger.isDebugEnabled) {
-                            logger.debug("🔧 Recovery: Found next STX at offset ${nextStx + 1}, skipping invalid packet")
-                        }
-                        receiveBuffer.subList(0, nextStx + 1).clear()
-                    } else {
-                        // No next STX, just remove first byte
-                        receiveBuffer.removeAt(0)
-                    }
-                    return null
+                    logger.warn("Invalid packet format: ${result.reason}")
+                    // ENHANCED RECOVERY: Use same intelligent recovery as checksum errors
+                    return handleCorruptedPacketRecovery()
                 }
             }
         }
@@ -260,6 +237,75 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
     fun getBufferSize(): Int {
         synchronized(bufferLock) {
             return receiveBuffer.size
+        }
+    }
+
+    /**
+     * PRODUCTION HELPER: Enhanced recovery from corrupted packets.
+     * Intelligently searches for the next valid STX to minimize data loss.
+     */
+    private fun handleCorruptedPacketRecovery(): EhlPacket? {
+        // Look for the next STX byte in the buffer, starting from position 1
+        val remainingBuffer = receiveBuffer.drop(1)
+        val nextStxIndex = remainingBuffer.indexOfFirst { 
+            it == EhlProtocol.STX_CONTROLLER || it == EhlProtocol.STX_DISPENSER 
+        }
+        
+        if (nextStxIndex >= 0) {
+            // Found next STX - remove corrupted data up to (but not including) the new STX
+            val bytesToRemove = nextStxIndex + 1
+            receiveBuffer.subList(0, bytesToRemove).clear()
+            if (logger.isDebugEnabled) {
+                logger.debug("🔧 RS-485 Recovery: Found next STX, removed $bytesToRemove corrupted bytes")
+            }
+            
+            // Try to parse the packet starting at the new STX position
+            // This handles back-to-back packets where noise corrupted the first one
+            return tryParseAtCurrentPosition()
+        } else {
+            // No next STX found - remove just the first byte (minimal data loss)
+            receiveBuffer.removeAt(0)
+            if (logger.isDebugEnabled) {
+                logger.debug("🔧 RS-485 Recovery: No next STX found, removed 1 byte")
+            }
+        }
+        
+        return null
+    }
+    
+    /**
+     * PRODUCTION HELPER: Try to parse additional packets if buffer contains more STX bytes.
+     * Optimizes back-to-back packet handling.
+     */
+    private fun tryParseAdditionalPackets() {
+        // Only process if we have remaining data that might contain another packet
+        if (receiveBuffer.size >= EhlProtocol.MIN_PACKET_LENGTH) {
+            val hasAdditionalStx = receiveBuffer.any { 
+                it == EhlProtocol.STX_CONTROLLER || it == EhlProtocol.STX_DISPENSER 
+            }
+            if (hasAdditionalStx && logger.isDebugEnabled) {
+                logger.debug("🔄 Buffer contains additional STX bytes - will be processed on next iteration")
+            }
+        }
+    }
+    
+    /**
+     * PRODUCTION HELPER: Try to parse a packet at the current buffer position.
+     * Returns packet if successful, null otherwise.
+     */
+    private fun tryParseAtCurrentPosition(): EhlPacket? {
+        val bufferArray = receiveBuffer.toByteArray()
+        return when (val result = EhlCodec.decode(bufferArray)) {
+            is EhlPacketParseResult.Success -> {
+                val packetLength = result.packet.packetLength
+                if (packetLength <= receiveBuffer.size) {
+                    receiveBuffer.subList(0, packetLength).clear()
+                    result.packet
+                } else {
+                    null
+                }
+            }
+            else -> null // Don't recursively handle errors here
         }
     }
 

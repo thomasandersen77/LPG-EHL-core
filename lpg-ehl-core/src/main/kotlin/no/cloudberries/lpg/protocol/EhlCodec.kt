@@ -11,6 +11,9 @@ import org.slf4j.LoggerFactory
 object EhlCodec {
     private val logger = LoggerFactory.getLogger(EhlCodec::class.java)
     
+    // SAFETY LIMITS: Typical EHL packets are small; this prevents buffer abuse in noisy environments
+    private const val MAX_PACKET_LENGTH = 64
+    
     /**
      * Encode an EHL packet to raw bytes for transmission
      * 
@@ -70,8 +73,17 @@ object EhlCodec {
             return EhlPacketParseResult.InvalidFormat("Invalid STX byte: 0x${"%02X".format(stx)} (expected 0x10 or 0x20)")
         }
         
-        // Get length
+        // SAFETY CHECK: Get length and validate bounds before proceeding
+        // This prevents waiting for data that will never arrive in noisy RS-485 environments
         val length = data[1].toInt() and 0xFF
+        if (length > MAX_PACKET_LENGTH) {
+            logger.warn("Packet length $length exceeds maximum $MAX_PACKET_LENGTH, discarding")
+            return EhlPacketParseResult.InvalidFormat("Packet length $length exceeds maximum $MAX_PACKET_LENGTH")
+        }
+        if (length < EhlProtocol.MIN_PACKET_LENGTH) {
+            logger.warn("Packet length $length below minimum ${EhlProtocol.MIN_PACKET_LENGTH}, discarding")
+            return EhlPacketParseResult.InvalidFormat("Packet length $length below minimum ${EhlProtocol.MIN_PACKET_LENGTH}")
+        }
         
         // Check if we have enough data
         if (data.size < length) {
@@ -102,8 +114,15 @@ object EhlCodec {
         val fromController = stx == EhlProtocol.STX_CONTROLLER
         val calculatedChecksum = packet.calculateChecksum(fromController)
         
+        // ROBUST CHECKSUM VALIDATION: Standard EHL checksum is XOR of all bytes after STX up to checksum
         if (receivedChecksum != calculatedChecksum) {
-            logger.warn("Checksum mismatch: expected 0x${"%02X".format(calculatedChecksum)}, got 0x${"%02X".format(receivedChecksum)}")
+            // Log detailed checksum failure information for production debugging
+            logger.warn("CHECKSUM FAILURE - Packet corrupted in RS-485 transmission:")
+            logger.warn("  Expected: 0x${"%02X".format(calculatedChecksum)}, Received: 0x${"%02X".format(receivedChecksum)}")
+            logger.warn("  Address: $address, Command: ${command.name}(${command.code}), Length: $length")
+            if (logger.isDebugEnabled) {
+                logger.debug("  Raw packet: ${data.take(length).toByteArray().joinToString(" ") { "%02X".format(it) }}")
+            }
             return EhlPacketParseResult.ChecksumError(calculatedChecksum, receivedChecksum)
         }
         
