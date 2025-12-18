@@ -1,6 +1,6 @@
 # .github/workflows/maven.yml
 
-name: Java CI with Maven and Gemini PR Review
+name: Java CI with Maven and Anthropic PR Review
 
 on:
   workflow_dispatch:
@@ -16,9 +16,7 @@ jobs:
     strategy:
       matrix:
         java: [21, 25]
-    defaults:
-      run:
-        working-directory: candidate-match
+    # No working-directory needed - Maven multi-module build from root
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,28 +34,26 @@ jobs:
         run: mvn -B verify
 
   review:
-    name: Perform Gemini Code Reviews
+    name: Perform Anthropic Code Reviews
     runs-on: ubuntu-latest
     needs: build
     permissions:
       contents: read
       pull-requests: write
-    defaults:
-      run:
-        working-directory: candidate-match
+    # No working-directory needed - reviews are at repo root level
     strategy:
       matrix:
         review_type: [architecture, security, readability]
         include:
           - review_type: architecture
             prompt_file: .github/prompts/architecture_review_prompt.txt
-            output_file: gemini_review_arch.txt
+            output_file: anthropic_review_arch.txt
           - review_type: security
             prompt_file: .github/prompts/security_review_prompt.txt
-            output_file: gemini_review_sec.txt
+            output_file: anthropic_review_sec.txt
           - review_type: readability
             prompt_file: .github/prompts/readability_review_prompt.txt
-            output_file: gemini_review_readability.txt
+            output_file: anthropic_review_readability.txt
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,7 +66,7 @@ jobs:
           review_type: ${{ matrix.review_type }}
           prompt_file: ${{ matrix.prompt_file }}
           output_file: ${{ matrix.output_file }}
-          gemini_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Post ${{ matrix.review_type }} review comment
         if: ${{ success() && github.event_name == 'pull_request' }}
@@ -79,7 +75,7 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            const reviewPath = path.join(process.env.GITHUB_WORKSPACE, 'candidate-match', '${{ matrix.output_file }}');
+            const reviewPath = path.join(process.env.GITHUB_WORKSPACE, '${{ matrix.output_file }}');
             if (!fs.existsSync(reviewPath)) {
               core.info('Review file not found, skipping comment.');
               return;
@@ -89,5 +85,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### 🤖 Gemini ${{ matrix.review_type }} Review\n\n${review}`
+              body: `### 🤖 Anthropic Claude ${{ matrix.review_type }} Review\n\n${review}`
             });
