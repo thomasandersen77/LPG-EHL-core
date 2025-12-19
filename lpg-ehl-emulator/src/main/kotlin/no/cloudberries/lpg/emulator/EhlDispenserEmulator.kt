@@ -8,10 +8,25 @@ import kotlin.math.roundToInt
  * Emulator for an EHL-protocol LPG dispenser.
  * 
  * This emulator simulates a physical dispenser's behavior, including:
- * - State machine (IDLE → READY → DELIVERING → FINISHED)
+ * - State machine (IDLE → AUTHORIZED → PUMPING → STOPPED)
  * - EHL protocol packet handling (STATE, UNBLOCK, STOP, VOLUME)
  * - Simulated fuel delivery with configurable flow rate
  * - Checksum validation and error responses
+ * - VB6-compatible bit-flag responses for STATE command
+ * 
+ * ## State Machine:
+ * ```
+ * IDLE ──(PRODUCT_SELECT)──> AUTHORIZED ──(UNBLOCK + nozzle lift)──> PUMPING
+ *   ↑                                                                    │
+ *   └────────────────────(ZER/RESET)────────────────── STOPPED <────────┘
+ * ```
+ * 
+ * ## Bit-Flags for STATE Response (VB6 Compatible):
+ * - Bit 0 (0x01): Start Switch Active - Ready for fuel
+ * - Bit 1 (0x02): Nozzle Lifted
+ * - Bit 2 (0x04): Delivery in Progress
+ * - Bit 3 (0x08): Transaction Complete
+ * - Bit 7 (0x80): Error Flag
  * 
  * @property address Dispenser address (1-255)
  * @property pricePerLitreCents Price per litre in cents (øre)
@@ -20,26 +35,79 @@ import kotlin.math.roundToInt
 class EhlDispenserEmulator(
     private val address: Int = 1,
     private val pricePerLitreCents: Int = 1126,      // 11.26 kr/l
-    private val litresPerSecond: Double = 0.5        // Simulated flow rate
+    private val litresPerSecond: Double = 0.5,       // Simulated flow rate
+    // Fault injection toggles for testing
+    var disconnectAfterSeconds: Double? = null,      // Simulate disconnect after N seconds
+    var badChecksumRate: Double = 0.0,               // Probability of corrupted response (0.0-1.0)
+    var powerfaultAfterSeconds: Double? = null       // Simulate powerfault after N seconds
 ) {
     private val logger = LoggerFactory.getLogger(EhlDispenserEmulator::class.java)
 
     private var state: DispenserState = DispenserState.IDLE
     private var startedAtMs: Long? = null
+    private var nozzleLifted: Boolean = false        // Track nozzle state separately
+    private var productSelected: Boolean = false     // Track if product was selected
 
     private var volumeLitres: Double = 0.0
     private var amountCents: Int = 0
     private var currentPricePerLitreCents: Int = pricePerLitreCents
+    
+    // Fault injection state
+    private var disconnected: Boolean = false
 
     /**
      * Dispenser state machine states.
+     * Maps to VB6 protocol states and DispenserStateMapper domain states.
      */
-    enum class DispenserState(val code: Int) {
-        IDLE(0),
-        READY(1),
-        DELIVERING(2),
-        FINISHED(3),
-        ERROR(9)
+    enum class DispenserState {
+        /** Pump idle - nozzle holstered, no activity */
+        IDLE,
+        /** Product selected, authorized for fueling - waiting for UNBLOCK + nozzle lift */
+        AUTHORIZED,
+        /** Active fuel delivery - volume incrementing */
+        PUMPING,
+        /** Delivery stopped - transaction data available */
+        STOPPED,
+        /** Error condition */
+        ERROR
+    }
+    
+    /**
+     * Build the status byte using VB6-compatible bit-flags.
+     * This ensures DispenserStateMapper can correctly interpret the response.
+     */
+    private fun buildStatusByte(): Byte {
+        var statusByte = 0
+        
+        when (state) {
+            DispenserState.IDLE -> {
+                // All flags clear = IDLE
+                statusByte = 0x00
+            }
+            DispenserState.AUTHORIZED -> {
+                // Start switch active, nozzle NOT lifted = AUTHORIZED
+                statusByte = 0x01  // START_SWITCH_ACTIVE
+            }
+            DispenserState.PUMPING -> {
+                // Start switch + nozzle lifted + delivery active = PUMPING
+                statusByte = 0x01 or 0x02 or 0x04  // START_SWITCH + NOZZLE_LIFTED + DELIVERY_ACTIVE
+            }
+            DispenserState.STOPPED -> {
+                // Transaction complete flag set = STOPPED
+                statusByte = 0x08  // TRANSACTION_COMPLETE
+            }
+            DispenserState.ERROR -> {
+                // Error flag set
+                statusByte = 0x80  // ERROR_FLAG
+            }
+        }
+        
+        // Override with actual nozzle state if lifted during AUTHORIZED
+        if (nozzleLifted && state == DispenserState.AUTHORIZED) {
+            statusByte = statusByte or 0x02  // Add NOZZLE_LIFTED
+        }
+        
+        return statusByte.toByte()
     }
 
     /**
@@ -48,8 +116,70 @@ class EhlDispenserEmulator(
     fun reset() {
         state = DispenserState.IDLE
         startedAtMs = null
+        nozzleLifted = false
+        productSelected = false
         volumeLitres = 0.0
         amountCents = 0
+        disconnected = false
+    }
+    
+    /**
+     * Simulate nozzle lift/holster.
+     * Used for testing the complete fueling lifecycle.
+     * 
+     * @param lifted true = nozzle lifted from holster, false = nozzle holstered
+     */
+    fun simulateNozzleLift(lifted: Boolean) {
+        val previousNozzle = nozzleLifted
+        nozzleLifted = lifted
+        
+        if (lifted && !previousNozzle) {
+            logger.info("🚰 NOZZLE LIFTED - Ready to pump")
+            // If authorized and nozzle lifted, transition to PUMPING
+            if (state == DispenserState.AUTHORIZED) {
+                state = DispenserState.PUMPING
+                startedAtMs = System.currentTimeMillis()
+                volumeLitres = 0.0
+                amountCents = 0
+                logger.info(EhlPacketFormatter.formatStateTransition(
+                    "AUTHORIZED",
+                    "PUMPING",
+                    "Nozzle lifted while authorized"
+                ))
+            }
+        } else if (!lifted && previousNozzle) {
+            logger.info("🚰 NOZZLE HOLSTERED")
+            // If pumping and nozzle holstered, stop delivery
+            if (state == DispenserState.PUMPING) {
+                updateDelivery()
+                state = DispenserState.STOPPED
+                logger.info(EhlPacketFormatter.formatStateTransition(
+                    "PUMPING",
+                    "STOPPED",
+                    "Nozzle holstered during delivery"
+                ))
+            }
+        }
+    }
+    
+    /**
+     * Check if emulator should simulate disconnect (fault injection).
+     */
+    private fun shouldSimulateDisconnect(): Boolean {
+        val disconnectAt = disconnectAfterSeconds ?: return false
+        val start = startedAtMs ?: return false
+        val elapsed = (System.currentTimeMillis() - start) / 1000.0
+        return elapsed >= disconnectAt
+    }
+    
+    /**
+     * Check if emulator should simulate powerfault (fault injection).
+     */
+    private fun shouldSimulatePowerfault(): Boolean {
+        val powerfaultAt = powerfaultAfterSeconds ?: return false
+        val start = startedAtMs ?: return false
+        val elapsed = (System.currentTimeMillis() - start) / 1000.0
+        return elapsed >= powerfaultAt
     }
 
     /**
@@ -152,24 +282,46 @@ class EhlDispenserEmulator(
     private fun handleUnblock(packet: EhlPacket): List<EhlPacket> {
         val previousState = state.name
         
-        // Start delivery if in IDLE, READY, or FINISHED state
-        if (state == DispenserState.IDLE || state == DispenserState.READY || state == DispenserState.FINISHED) {
-            state = DispenserState.DELIVERING
-            startedAtMs = System.currentTimeMillis()
-            volumeLitres = 0.0
-            amountCents = 0
-            
-            logger.info(EhlPacketFormatter.formatStateTransition(
-                previousState,
-                state.name,
-                "UNBLOCK command received"
-            ))
-            logger.info("🚀 DELIVERY STARTED: Price=%.2f kr/L | Flow rate=%.2f L/s".format(
-                currentPricePerLitreCents / 100.0,
-                litresPerSecond
-            ))
-        } else {
-            logger.warn("⚠️ UNBLOCK ignored - already in $previousState state")
+        // VB6 flow: UNBLOCK enables fuel delivery
+        // If nozzle is already lifted → go directly to PUMPING
+        // If nozzle is NOT lifted → go to AUTHORIZED (wait for lift)
+        when (state) {
+            DispenserState.IDLE, DispenserState.AUTHORIZED, DispenserState.STOPPED -> {
+                if (nozzleLifted) {
+                    // Nozzle already up - start pumping immediately
+                    state = DispenserState.PUMPING
+                    startedAtMs = System.currentTimeMillis()
+                    volumeLitres = 0.0
+                    amountCents = 0
+                    
+                    logger.info(EhlPacketFormatter.formatStateTransition(
+                        previousState,
+                        state.name,
+                        "UNBLOCK + nozzle lifted → PUMPING"
+                    ))
+                    logger.info("🚀 DELIVERY STARTED: Price=%.2f kr/L | Flow rate=%.2f L/s".format(
+                        currentPricePerLitreCents / 100.0,
+                        litresPerSecond
+                    ))
+                } else {
+                    // Nozzle down - wait in AUTHORIZED state
+                    state = DispenserState.AUTHORIZED
+                    productSelected = true
+                    
+                    logger.info(EhlPacketFormatter.formatStateTransition(
+                        previousState,
+                        state.name,
+                        "UNBLOCK received - waiting for nozzle lift"
+                    ))
+                    logger.info("✅ AUTHORIZED: Waiting for customer to lift nozzle")
+                }
+            }
+            DispenserState.PUMPING -> {
+                logger.warn("⚠️ UNBLOCK ignored - already pumping")
+            }
+            DispenserState.ERROR -> {
+                logger.warn("⚠️ UNBLOCK ignored - dispenser in ERROR state")
+            }
         }
         
         // Respond with OK + STATE
@@ -182,9 +334,10 @@ class EhlDispenserEmulator(
     private fun handleStop(packet: EhlPacket): List<EhlPacket> {
         val previousState = state.name
         
-        if (state == DispenserState.DELIVERING) {
+        if (state == DispenserState.PUMPING) {
             updateDelivery() // Calculate final volume/amount
-            state = DispenserState.FINISHED
+            state = DispenserState.STOPPED
+            nozzleLifted = false
             
             logger.info(EhlPacketFormatter.formatStateTransition(
                 previousState,
@@ -201,7 +354,7 @@ class EhlDispenserEmulator(
                 amountCents / 100.0
             ))
         } else {
-            logger.warn("⚠️ STOP received but not delivering (state=$previousState)")
+            logger.warn("⚠️ STOP received but not pumping (state=$previousState)")
         }
         
         return listOf(
@@ -214,27 +367,42 @@ class EhlDispenserEmulator(
     private fun handleBlock(packet: EhlPacket): List<EhlPacket> {
         val previousState = state.name
         
-        // BLOCK is similar to STOP - stops delivery and blocks further operations
-        if (state == DispenserState.DELIVERING) {
-            updateDelivery() // Calculate final volume/amount
-            state = DispenserState.FINISHED
-            
-            logger.info(EhlPacketFormatter.formatStateTransition(
-                previousState,
-                state.name,
-                "BLOCK command during delivery"
-            ))
-            logger.info("🛑 DELIVERY BLOCKED: %.2f L | %.2f kr".format(
-                volumeLitres,
-                amountCents / 100.0
-            ))
-        } else {
-            state = DispenserState.IDLE
-            logger.info(EhlPacketFormatter.formatStateTransition(
-                previousState,
-                state.name,
-                "BLOCK command - dispenser blocked"
-            ))
+        // BLOCK stops delivery and returns to IDLE
+        when (state) {
+            DispenserState.PUMPING -> {
+                updateDelivery() // Calculate final volume/amount
+                state = DispenserState.STOPPED
+                nozzleLifted = false
+                
+                logger.info(EhlPacketFormatter.formatStateTransition(
+                    previousState,
+                    state.name,
+                    "BLOCK command during pumping"
+                ))
+                logger.info("🛑 DELIVERY BLOCKED: %.2f L | %.2f kr".format(
+                    volumeLitres,
+                    amountCents / 100.0
+                ))
+            }
+            DispenserState.AUTHORIZED -> {
+                state = DispenserState.IDLE
+                productSelected = false
+                logger.info(EhlPacketFormatter.formatStateTransition(
+                    previousState,
+                    state.name,
+                    "BLOCK command - authorization cancelled"
+                ))
+            }
+            else -> {
+                state = DispenserState.IDLE
+                productSelected = false
+                nozzleLifted = false
+                logger.info(EhlPacketFormatter.formatStateTransition(
+                    previousState,
+                    state.name,
+                    "BLOCK command - dispenser blocked"
+                ))
+            }
         }
         
         return listOf(
@@ -354,8 +522,8 @@ class EhlDispenserEmulator(
     }
 
     private fun buildStateResponse(): EhlPacket {
-        // Update during delivery for "live" status
-        if (state == DispenserState.DELIVERING) {
+        // Update during pumping for "live" status
+        if (state == DispenserState.PUMPING) {
             updateDelivery()
             if (logger.isDebugEnabled) {
                 logger.debug(EhlPacketFormatter.formatDeliveryProgress(
@@ -365,13 +533,15 @@ class EhlDispenserEmulator(
                 ))
             }
         }
-        val data = byteArrayOf(state.code.toByte())
+        
+        // Use VB6-compatible bit-flags instead of simple state codes
+        val data = byteArrayOf(buildStatusByte())
         return EhlPacket(address, EhlCommand.STATE, data)
     }
 
     private fun buildVolumeResponse(): EhlPacket {
-        // Update during delivery for "live" volume
-        if (state == DispenserState.DELIVERING) {
+        // Update during pumping for "live" volume
+        if (state == DispenserState.PUMPING) {
             updateDelivery()
         }
         // Format: volume in deciliters (2 bytes) + amount in cents (2 bytes)
@@ -398,14 +568,21 @@ class EhlDispenserEmulator(
     }
     
     private fun buildTankResponse(): EhlPacket {
-        // VB6 TANK response format - simplified emulation
+        // VB6 TANK response format
         // Bit 0 (0x01): trans_finished_powerfault
         // Bit 3 (0x08): trans_unaccounted
         var tankStatus = 0x00
         
-        // Set trans_unaccounted bit when delivery is finished but not reset
-        if (state == DispenserState.FINISHED && volumeLitres > 0) {
+        // Set trans_unaccounted bit when delivery is stopped but not reset
+        if (state == DispenserState.STOPPED && volumeLitres > 0) {
             tankStatus = tankStatus or 0x08
+        }
+        
+        // Simulate powerfault if configured
+        if (shouldSimulatePowerfault()) {
+            tankStatus = tankStatus or 0x01  // trans_finished_powerfault
+            tankStatus = tankStatus or 0x08  // trans_unaccounted
+            logger.warn("💥 SIMULATED POWERFAULT - Transaction unaccounted!")
         }
         
         val data = byteArrayOf(tankStatus.toByte())
