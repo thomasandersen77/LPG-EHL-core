@@ -147,7 +147,7 @@ object Rs485Hints {
     /**
      * Default RS-485 troubleshooting hints
      */
-    const val DEFAULT = """
+    val DEFAULT = """
         RS-485 Configuration:
         - Baud Rate: 4800 bps (default for EHL protocol)
         - Data Bits: 8, Parity: None, Stop Bits: 1
