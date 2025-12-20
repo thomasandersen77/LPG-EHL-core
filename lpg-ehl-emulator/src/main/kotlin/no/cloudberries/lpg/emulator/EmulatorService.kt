@@ -216,6 +216,7 @@ class EmulatorService(
 
         private fun simulateFillingLoop() {
             var volume = 0.0
+            var amount = 0.0
             val price = pricePerLitreCents / 100.0
 
             val startTime = System.currentTimeMillis()
@@ -233,9 +234,8 @@ class EmulatorService(
                 Thread.sleep(1000) // Oppdater hvert sekund
 
                 // Beregn ny status
-                val elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000.0
                 volume += litresPerSecond
-                val amount = volume * price
+                amount = volume * price
                 updateCount++
 
                 // Format: <TANK>;<Ignored>;<Beløp>;<Volum>;<Pris>;<BankVises>;<BankTekst>
@@ -249,6 +249,9 @@ class EmulatorService(
                 logger.debug("   📤 Sending: $msg")
                 sendText(msg)
             }
+            
+            // Calculate final elapsed time
+            val elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000.0
             
             logger.info("┌──────────────────────────────────────────────────────────")
             logger.info("│ 🏁 FUEL SIMULATION STOPPED")
