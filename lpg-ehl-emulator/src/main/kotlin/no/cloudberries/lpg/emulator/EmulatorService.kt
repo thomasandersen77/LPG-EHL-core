@@ -111,6 +111,12 @@ class EmulatorService(
 
         private val isFilling = AtomicBoolean(false)
         private val output = socket.getOutputStream()
+        
+        // Track final transaction totals
+        @Volatile
+        private var lastVolumeLitres: Double = 0.0
+        @Volatile
+        private var lastAmountKr: Double = 0.0
 
         override fun run() {
             logger.info("🔌 Client handler started for $clientId")
@@ -224,7 +230,7 @@ class EmulatorService(
                 // Stopp fylling
                 isFilling.set(false)
                 
-                // Save transaction to database
+                // Save transaction to database (use tracked values from simulation)
                 saveCurrentTransaction()
                 
                 val response = "<STATE_TANK>;00000000"
@@ -283,6 +289,10 @@ class EmulatorService(
             // Calculate final elapsed time
             val elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000.0
             
+            // Store final values for transaction save
+            lastVolumeLitres = volume
+            lastAmountKr = amount
+            
             logger.info("┌──────────────────────────────────────────────────────────")
             logger.info("│ 🏁 FUEL SIMULATION STOPPED")
             logger.info("│ Final volume: %.2f L".format(volume))
@@ -319,22 +329,12 @@ class EmulatorService(
             isFilling.set(false)
             try { socket.close() } catch (e: Exception) {}
         }
-    }
-
-    fun getStatus(): Map<String, Any> = mapOf("clients" to clientHandlers.size)
-    fun reset() = emulator.reset()
-    
-    private fun saveCurrentTransaction() {
-        try {
-            // Query current totals from emulator
-            val queryPacket = no.cloudberries.lpg.protocol.EhlPacketBuilder.createQuery(address, 1)
-            val encodedQuery = no.cloudberries.lpg.protocol.EhlCodec.encode(queryPacket)
-            val queryResponse = emulator.onBytesFromHost(encodedQuery)
-            
-            if (queryResponse.isNotEmpty()) {
-                val responsePacket = no.cloudberries.lpg.protocol.EhlCodec.decode(queryResponse.first())
-                val volumeDeciliters = responsePacket.volumeCounter // Already in deciliters
-                val amountOre = responsePacket.totalAmount // Already in øre
+        
+        private fun saveCurrentTransaction() {
+            try {
+                // Use final values from simulation
+                val volumeDeciliters = (lastVolumeLitres * 10).toInt() // Convert L to dl
+                val amountOre = (lastAmountKr * 100).toInt() // Convert kr to øre
                 
                 // Only save if there's actual volume
                 if (volumeDeciliters > 0) {
@@ -344,13 +344,16 @@ class EmulatorService(
                         amountOre = amountOre,
                         pricePerLiter = pricePerLitreCents
                     )
-                    logger.info("💾 Transaction saved: ${volumeDeciliters/10.0}L, ${amountOre/100.0} kr")
+                    logger.info("💾 Transaction saved: ${lastVolumeLitres}L, ${lastAmountKr} kr")
                 } else {
                     logger.debug("No volume dispensed, skipping transaction save")
                 }
+            } catch (e: Exception) {
+                logger.error("Failed to save transaction", e)
             }
-        } catch (e: Exception) {
-            logger.error("Failed to save transaction", e)
         }
     }
+
+    fun getStatus(): Map<String, Any> = mapOf("clients" to clientHandlers.size)
+    fun reset() = emulator.reset()
 }
