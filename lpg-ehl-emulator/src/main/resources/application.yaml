@@ -11,6 +11,9 @@ emulator:
   litres-per-second: ${EMULATOR_LITRES_PER_SECOND:0.5}
   port: ${EMULATOR_PORT:9000}
 
+lpg-api:
+  base-url: ${LPG_API_BASE_URL:http://localhost:8080}
+
 management:
   endpoints:
     web:

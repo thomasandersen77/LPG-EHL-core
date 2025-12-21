@@ -1,5 +1,6 @@
 package no.cloudberries.lpg.emulator
 
+import no.cloudberries.lpg.emulator.service.TransactionPersistenceService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -16,7 +17,8 @@ class EmulatorService(
     @Value("\${emulator.address:1}") private val address: Int,
     @Value("\${emulator.price-per-litre-cents:1590}") private val pricePerLitreCents: Int,
     @Value("\${emulator.litres-per-second:0.5}") private val litresPerSecond: Double,
-    @Value("\${emulator.port:9000}") private val port: Int
+    @Value("\${emulator.port:9000}") private val port: Int,
+    private val transactionPersistenceService: TransactionPersistenceService
 ) {
     private val logger = LoggerFactory.getLogger(EmulatorService::class.java)
     private val emulator = EhlDispenserEmulator(address, pricePerLitreCents, litresPerSecond)
@@ -222,6 +224,9 @@ class EmulatorService(
                 // Stopp fylling
                 isFilling.set(false)
                 
+                // Save transaction to database
+                saveCurrentTransaction()
+                
                 val response = "<STATE_TANK>;00000000"
                 logger.info("📤 RESPONSE (legacy format): $response")
                 sendText(response) // Status idle
@@ -318,4 +323,34 @@ class EmulatorService(
 
     fun getStatus(): Map<String, Any> = mapOf("clients" to clientHandlers.size)
     fun reset() = emulator.reset()
+    
+    private fun saveCurrentTransaction() {
+        try {
+            // Query current totals from emulator
+            val queryPacket = no.cloudberries.lpg.protocol.EhlPacketBuilder.createQuery(address, 1)
+            val encodedQuery = no.cloudberries.lpg.protocol.EhlCodec.encode(queryPacket)
+            val queryResponse = emulator.onBytesFromHost(encodedQuery)
+            
+            if (queryResponse.isNotEmpty()) {
+                val responsePacket = no.cloudberries.lpg.protocol.EhlCodec.decode(queryResponse.first())
+                val volumeDeciliters = responsePacket.volumeCounter // Already in deciliters
+                val amountOre = responsePacket.totalAmount // Already in øre
+                
+                // Only save if there's actual volume
+                if (volumeDeciliters > 0) {
+                    transactionPersistenceService.saveTransaction(
+                        dispenserAddress = address,
+                        volumeDeciliters = volumeDeciliters,
+                        amountOre = amountOre,
+                        pricePerLiter = pricePerLitreCents
+                    )
+                    logger.info("💾 Transaction saved: ${volumeDeciliters/10.0}L, ${amountOre/100.0} kr")
+                } else {
+                    logger.debug("No volume dispensed, skipping transaction save")
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to save transaction", e)
+        }
+    }
 }
