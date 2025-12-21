@@ -252,8 +252,8 @@ Each IntelliJ instance needs separate run configurations with different environm
 
 ### API Logs (Docker or IntelliJ)
 ```
-POST /api/v1/transactions/demo/save
-Saving demo transaction: Dispenser=1, Volume=12.5L, Amount=198.75
+POST /api/v1/transactions
+Creating transaction: Dispenser=1, Volume=12.5L, Amount=198.75
 Transaction saved with ID: 123e4567-e89b-12d3-a456-426614174000
 ```
 

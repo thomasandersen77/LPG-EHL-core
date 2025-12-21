@@ -26,14 +26,18 @@ class LpgApiClient(
             val json = """
                 {
                     "dispenserAddress": ${transaction.dispenserAddress},
+                    "nozzleNumber": ${transaction.nozzleNumber},
                     "volumeDeciliters": ${transaction.volumeDeciliters},
                     "amountOre": ${transaction.amountOre},
-                    "pricePerLiter": ${transaction.pricePerLiter}
+                    "pricePerLiter": ${transaction.pricePerLiter},
+                    "paymentType": "${transaction.paymentType}",
+                    "productCode": "${transaction.productCode}",
+                    "includesRoadTax": ${transaction.includesRoadTax}
                 }
             """.trimIndent()
             
             val request = HttpRequest.newBuilder()
-                .uri(URI.create("$baseUrl/api/v1/transactions/demo/save"))
+                .uri(URI.create("$baseUrl/api/v1/transactions"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .timeout(Duration.ofSeconds(10))
@@ -57,7 +61,11 @@ class LpgApiClient(
 
 data class SaveTransactionRequest(
     val dispenserAddress: Int,
+    val nozzleNumber: Int = 1,
     val volumeDeciliters: Int,
     val amountOre: Int,
-    val pricePerLiter: Int
+    val pricePerLiter: Int,
+    val paymentType: String = "CASH",
+    val productCode: String = "LPG",
+    val includesRoadTax: Boolean = true
 )
