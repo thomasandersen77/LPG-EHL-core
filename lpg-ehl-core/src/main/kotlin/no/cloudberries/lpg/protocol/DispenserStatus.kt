@@ -47,6 +47,15 @@ sealed interface DispenserStatus {
     data object STOPPED : DispenserStatus
     
     /**
+     * Payment pending - transaction complete, totals frozen.
+     * Requires reset/clear before new transaction can begin.
+     * This is the state after STOP/BLOCK when totals are finalized.
+     * 
+     * State code: 8 (0x08)
+     */
+    data object PAYMENT_PENDING : DispenserStatus
+    
+    /**
      * Error or fault state - requires inspection.
      * Check ERROR_QUERY (0x4C) for details.
      * 

@@ -148,6 +148,30 @@ When adding features, maintain test coverage following existing patterns in `Ehl
 - Use descriptive enum names with code and description properties
 - Monetary amounts in øre/cents (Int), volumes in liters (Float)
 
+## Emulator
+
+### EHL Dispenser Emulator
+A complete LPG dispenser simulator for testing without hardware:
+- **Location**: `no.cloudberries.lpg.emulator`
+- **Main class**: `EhlDispenserEmulator.kt`
+- **Test coverage**: `EhlDispenserEmulatorTest.kt` (7 comprehensive tests)
+
+**Key features:**
+- PAYMENT_PENDING state with frozen totals after STOP/BLOCK
+- Atomic stop mechanism (no race conditions)
+- Complete transaction lifecycle (IDLE → AUTHORIZED → DELIVERING → PAYMENT_PENDING → IDLE)
+- Admin API for reset/clear operations (`markTransactionPaid()`, `clearTransaction()`)
+- InMemorySerialPort for communication without physical RS-485
+
+**Usage:**
+```kotlin
+val emulator = EhlDispenserEmulator(address = 1, pricePerLitreCents = 1590)
+val port = InMemorySerialPort(emulator)
+val communicator = EhlCommunicator(port)
+```
+
+See [docs/EMULATOR.md](docs/EMULATOR.md) for complete documentation.
+
 ## Future Extensions
 
 The architecture is designed to support:
