@@ -230,8 +230,7 @@ class EmulatorService(
                 // Stopp fylling
                 isFilling.set(false)
                 
-                // Save transaction to database (use tracked values from simulation)
-                saveCurrentTransaction()
+                // Transaction will be saved by simulation thread after it stops
                 
                 val response = "<STATE_TANK>;00000000"
                 logger.info("📤 RESPONSE (legacy format): $response")
@@ -294,6 +293,10 @@ class EmulatorService(
             lastAmountKr = amount
             
             logger.info("┌──────────────────────────────────────────────────────────")
+            logger.info("│ 💞 Saving transaction to database...")
+            // Save transaction to database (now that values are set)
+            saveCurrentTransaction()
+            
             logger.info("│ 🏁 FUEL SIMULATION STOPPED")
             logger.info("│ Final volume: %.2f L".format(volume))
             logger.info("│ Final amount: %.2f NOK".format(amount))
