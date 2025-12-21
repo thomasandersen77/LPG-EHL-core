@@ -11,7 +11,7 @@ import java.io.IOException
  * Implements SerialPortIO interface for production use with real serial ports.
  * Implements HardwareWatchdogCapable interface for watchdog functionality.
  */
-open class SerialPortManager(private val config: SerialPortConfig) : SerialPortIO, HardwareWatchdogCapable {
+open class  SerialPortManager(private val config: SerialPortConfig) : SerialPortIO, HardwareWatchdogCapable {
     private val logger = LoggerFactory.getLogger(SerialPortManager::class.java)
     private var serialPort: SerialPort? = null
     private val lock = Any()
