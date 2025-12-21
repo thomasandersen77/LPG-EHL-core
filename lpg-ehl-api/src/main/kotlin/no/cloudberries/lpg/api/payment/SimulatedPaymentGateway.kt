@@ -10,7 +10,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 @Service
-@Profile("local", "dev")
+@Profile("local", "dev", "default")
 class SimulatedPaymentGateway : PaymentGateway {
 
     private val log = LoggerFactory.getLogger(javaClass)
