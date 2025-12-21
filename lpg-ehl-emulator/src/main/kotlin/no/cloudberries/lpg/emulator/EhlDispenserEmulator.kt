@@ -193,20 +193,27 @@ class EhlDispenserEmulator(
 
         return when (val parsed = EhlCodec.decode(bytes)) {
             is EhlPacketParseResult.Success -> {
-                logger.info("\n" + "=".repeat(80))
-                logger.info(EhlPacketFormatter.formatPacketForLogging(
+                logger.info("┌" + "─".repeat(78) + "┐")
+                logger.info("│ 📦 CORE: PROCESSING EHL PACKET" + " ".repeat(78 - 31) + "│")
+                logger.info("├" + "─".repeat(78) + "┤")
+                logger.info("│ " + EhlPacketFormatter.formatPacketForLogging(
                     parsed.packet,
                     EhlPacketFormatter.Direction.RECEIVING
-                ))
+                ).padEnd(77) + "│")
                 
                 val responses = handlePacket(parsed.packet)
-                responses.forEach { response ->
-                    logger.info(EhlPacketFormatter.formatPacketForLogging(
-                        response,
-                        EhlPacketFormatter.Direction.SENDING
-                    ))
+                
+                if (responses.isNotEmpty()) {
+                    logger.info("├" + "─".repeat(78) + "┤")
+                    logger.info("│ 📤 CORE: SENDING ${responses.size} RESPONSE(S)" + " ".repeat(78 - (26 + responses.size.toString().length)) + "│")
+                    responses.forEach { response ->
+                        logger.info("│ " + EhlPacketFormatter.formatPacketForLogging(
+                            response,
+                            EhlPacketFormatter.Direction.SENDING
+                        ).padEnd(77) + "│")
+                    }
                 }
-                logger.info("=".repeat(80))
+                logger.info("└" + "─".repeat(78) + "┘")
                 
                 responses.map { EhlCodec.encode(it, fromController = false) }
             }
@@ -233,13 +240,15 @@ class EhlDispenserEmulator(
 
     private fun handlePacket(packet: EhlPacket): List<EhlPacket> {
         if (packet.address != address) {
-            logger.warn("📪 IGNORED: Packet addressed to #${packet.address} (I am #$address)")
+            logger.warn("📪 CORE: IGNORED packet addressed to #${packet.address} (I am #$address)")
             return emptyList()
         }
 
+        logger.info("│ ⚡ CORE: Executing command: ${packet.command.name} (0x%02X)".format(packet.command.code) + " ".repeat(77 - (36 + packet.command.name.length)) + "│")
+        
         return when (packet.command) {
             EhlCommand.STATE     -> {
-                logger.info("📊 Processing STATE query")
+                logger.info("│    └─ STATE query: Current state = $state" + " ".repeat(77 - (40 + state.name.length)) + "│")
                 listOf(buildStateResponse())
             }
             EhlCommand.UNBLOCK   -> handleUnblock(packet)
@@ -247,33 +256,33 @@ class EhlDispenserEmulator(
             EhlCommand.BLOCK     -> handleBlock(packet)
             EhlCommand.VOLUME    -> {
                 updateDelivery() // Update live values
-                logger.info("📊 Processing VOLUME query")
+                logger.info("│    └─ VOLUME query: %.2f L / %.2f kr".format(volumeLitres, amountCents / 100.0) + " ".repeat(77 - String.format("    └─ VOLUME query: %.2f L / %.2f kr", volumeLitres, amountCents / 100.0).length - 2) + "│")
                 listOf(buildVolumeResponse())
             }
             EhlCommand.PRICE     -> {
-                logger.info("📊 Processing PRICE query")
+                logger.info("│    └─ PRICE query: %.2f kr/L".format(currentPricePerLitreCents / 100.0) + " ".repeat(77 - String.format("    └─ PRICE query: %.2f kr/L", currentPricePerLitreCents / 100.0).length - 2) + "│")
                 listOf(buildPriceResponse())
             }
             EhlCommand.PROG_PRC     -> handlePriceProgram(packet)
             EhlCommand.PROG_AMOUNT  -> handleAmountPreset(packet)
             EhlCommand.PROG_VOLUME  -> handleVolumePreset(packet)
             EhlCommand.ERROR_QUERY  -> {
-                logger.info("🔍 Processing ERROR_QUERY")
+                logger.info("│    └─ ERROR_QUERY: No errors (00)" + " ".repeat(77 - 37) + "│")
                 // VB6 format: 2 ASCII bytes (main code + sub code)
                 listOf(EhlPacket(address, EhlCommand.ERROR, byteArrayOf('0'.code.toByte(), '0'.code.toByte()))) // No error: "00"
             }
             EhlCommand.TANK      -> {
-                logger.info("🛢️ Processing TANK query")
+                logger.info("│    └─ TANK query: Fuel data requested" + " ".repeat(77 - 40) + "│")
                 listOf(buildTankResponse())
             }
             EhlCommand.PRODUCT_SELECT -> handleProductSelect(packet)
             EhlCommand.LINETEST  -> {
-                logger.info("🔌 Processing LINETEST - communication OK")
+                logger.info("│    └─ LINETEST: Communication OK" + " ".repeat(77 - 36) + "│")
                 listOf(EhlPacket(address, EhlCommand.OK))
             }
             EhlCommand.ZER       -> handleReset(packet)
             else                 -> {
-                logger.warn("⚠️ Unsupported command: ${packet.command.name} (code=${packet.command.code})")
+                logger.warn("│    └─ UNSUPPORTED: ${packet.command.name}" + " ".repeat(77 - (21 + packet.command.name.length)) + "│")
                 listOf(buildErrorPacket(0x10))
             }
         }
@@ -294,33 +303,33 @@ class EhlDispenserEmulator(
                     volumeLitres = 0.0
                     amountCents = 0
                     
-                    logger.info(EhlPacketFormatter.formatStateTransition(
+                    logger.info("│    └─ " + EhlPacketFormatter.formatStateTransition(
                         previousState,
                         state.name,
-                        "UNBLOCK + nozzle lifted → PUMPING"
-                    ))
-                    logger.info("🚀 DELIVERY STARTED: Price=%.2f kr/L | Flow rate=%.2f L/s".format(
+                        "UNBLOCK + nozzle lifted"
+                    ) + " ".repeat(77 - String.format("    └─ 🔄 STATE CHANGE: %s → %s | Reason: UNBLOCK + nozzle lifted", previousState, state.name).length - 2) + "│")
+                    logger.info("│    🚀 DELIVERY ACTIVE: %.2f kr/L @ %.2f L/s".format(
                         currentPricePerLitreCents / 100.0,
                         litresPerSecond
-                    ))
+                    ) + " ".repeat(77 - String.format("    🚀 DELIVERY ACTIVE: %.2f kr/L @ %.2f L/s", currentPricePerLitreCents / 100.0, litresPerSecond).length - 2) + "│")
                 } else {
                     // Nozzle down - wait in AUTHORIZED state
                     state = DispenserState.AUTHORIZED
                     productSelected = true
                     
-                    logger.info(EhlPacketFormatter.formatStateTransition(
+                    logger.info("│    └─ " + EhlPacketFormatter.formatStateTransition(
                         previousState,
                         state.name,
-                        "UNBLOCK received - waiting for nozzle lift"
-                    ))
-                    logger.info("✅ AUTHORIZED: Waiting for customer to lift nozzle")
+                        "Waiting for nozzle lift"
+                    ) + " ".repeat(77 - String.format("    └─ 🔄 STATE CHANGE: %s → %s | Reason: Waiting for nozzle lift", previousState, state.name).length - 2) + "│")
+                    logger.info("│    ✅ AUTHORIZED: Ready for customer" + " ".repeat(77 - 40) + "│")
                 }
             }
             DispenserState.PUMPING -> {
-                logger.warn("⚠️ UNBLOCK ignored - already pumping")
+                logger.warn("│    ⚠️ UNBLOCK ignored - already in PUMPING state" + " ".repeat(77 - 54) + "│")
             }
             DispenserState.ERROR -> {
-                logger.warn("⚠️ UNBLOCK ignored - dispenser in ERROR state")
+                logger.warn("│    ⚠️ UNBLOCK blocked - dispenser in ERROR state" + " ".repeat(77 - 56) + "│")
             }
         }
         
@@ -365,6 +374,7 @@ class EhlDispenserEmulator(
     }
     
     private fun handleBlock(packet: EhlPacket): List<EhlPacket> {
+        logger.info("│    └─ BLOCK: Stopping dispenser" + " ".repeat(77 - 35) + "│")
         val previousState = state.name
         
         // BLOCK stops delivery and returns to IDLE
