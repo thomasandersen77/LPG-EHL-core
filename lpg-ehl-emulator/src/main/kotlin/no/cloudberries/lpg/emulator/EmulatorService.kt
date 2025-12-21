@@ -158,16 +158,29 @@ class EmulatorService(
             }
         }
 
-        // --- TOLKEN: Oversetter tekstkommandoer til handling ---
+        // --- TOLKEN: Oversetter tekstkommandoer til handling VIA CORE ---
         private fun handleLegacyCommand(cmd: String) {
             logger.info("╔════════════════════════════════════════════════════════════")
-            logger.info("║ 🏛️  LEGACY COMMAND HANDLER")
+            logger.info("║ 🏛️  LEGACY COMMAND HANDLER (via Core)")
             logger.info("╠════════════════════════════════════════════════════════════")
 
             if (cmd.contains("TANK_DISP_UNBLOCK")) {
                 logger.info("║ Command: UNBLOCK (Start Fueling)")
+                logger.info("║ Translation: UNBLOCK (0x77) → Core")
                 
-                // Start fylling (Simulering)
+                // Translate to EHL binary command and send to Core
+                val unblockPacket = no.cloudberries.lpg.protocol.EhlPacketBuilder.createUnblock(address)
+                val encodedPacket = no.cloudberries.lpg.protocol.EhlCodec.encode(unblockPacket)
+                
+                logger.info("║ 📤 Sending to Core: ${encodedPacket.joinToString(" ") { "%02X".format(it) }}")
+                
+                // Process through Core
+                val coreResponses = emulator.onBytesFromHost(encodedPacket)
+                logger.info("║ ✅ Core returned ${coreResponses.size} response(s)")
+                
+                // Simulate nozzle lift to trigger PUMPING
+                emulator.simulateNozzleLift(true)
+                
                 if (!isFilling.get()) {
                     isFilling.set(true)
                     logger.info("║ Status: IDLE → FILLING")
@@ -176,7 +189,7 @@ class EmulatorService(
                     
                     // Send svar at vi er i gang (Status 1 på index 4 = Frigitt)
                     val response = "<STATE_TANK>;00001000"
-                    logger.info("📤 RESPONSE: $response")
+                    logger.info("📤 RESPONSE (legacy format): $response")
                     sendText(response)
 
                     // Start en tråd som teller opp liter og penger
@@ -190,15 +203,27 @@ class EmulatorService(
             }
             else if (cmd.contains("TANK_DISP_STOP")) {
                 logger.info("║ Command: STOP (Stop Fueling)")
-                logger.info("║ Status: FILLING → IDLE")
-                logger.info("║ Action: Stopping simulation...")
+                logger.info("║ Translation: BLOCK (0x69) → Core")
+                
+                // Translate to EHL binary command
+                val blockPacket = no.cloudberries.lpg.protocol.EhlPacketBuilder.createBlock(address)
+                val encodedPacket = no.cloudberries.lpg.protocol.EhlCodec.encode(blockPacket)
+                
+                logger.info("║ 📤 Sending to Core: ${encodedPacket.joinToString(" ") { "%02X".format(it) }}")
+                
+                // Process through Core
+                val coreResponses = emulator.onBytesFromHost(encodedPacket)
+                logger.info("║ ✅ Core returned ${coreResponses.size} response(s)")
                 logger.info("╚════════════════════════════════════════════════════════════")
+                
+                // Simulate nozzle holster
+                emulator.simulateNozzleLift(false)
                 
                 // Stopp fylling
                 isFilling.set(false)
                 
                 val response = "<STATE_TANK>;00000000"
-                logger.info("📤 RESPONSE: $response")
+                logger.info("📤 RESPONSE (legacy format): $response")
                 sendText(response) // Status idle
             }
             else if (cmd.contains("NOTAX")) {
