@@ -26,9 +26,7 @@ class EhlCodecHardenedTest {
 
         val result = EhlCodec.decode(oversizedPacket)
         assertTrue(result is EhlPacketParseResult.InvalidFormat)
-        if (result is EhlPacketParseResult.InvalidFormat) {
-            assertTrue(result.reason.contains("exceeds maximum"))
-        }
+        assertTrue(result.reason.contains("exceeds maximum"))
     }
 
     @Test
@@ -45,9 +43,7 @@ class EhlCodecHardenedTest {
 
         val result = EhlCodec.decode(undersizedPacket)
         assertTrue(result is EhlPacketParseResult.InvalidFormat)
-        if (result is EhlPacketParseResult.InvalidFormat) {
-            assertTrue(result.reason.contains("below minimum"))
-        }
+        assertTrue(result.reason.contains("below minimum"))
     }
 
     @Test
@@ -176,9 +172,7 @@ class EhlCodecHardenedTest {
         
         val result = EhlCodec.decode(extremePacket)
         assertTrue(result is EhlPacketParseResult.InvalidFormat)
-        if (result is EhlPacketParseResult.InvalidFormat) {
-            assertTrue(result.reason.contains("exceeds maximum"))
-        }
+        assertTrue(result.reason.contains("exceeds maximum"))
     }
     
     @Test
@@ -194,9 +188,7 @@ class EhlCodecHardenedTest {
         
         val result = EhlCodec.decode(zeroLengthPacket)
         assertTrue(result is EhlPacketParseResult.InvalidFormat)
-        if (result is EhlPacketParseResult.InvalidFormat) {
-            assertTrue(result.reason.contains("below minimum"))
-        }
+        assertTrue(result.reason.contains("below minimum"))
     }
     
     @Test
@@ -212,9 +204,7 @@ class EhlCodecHardenedTest {
         
         val result = EhlCodec.decode(tinyPacket)
         assertTrue(result is EhlPacketParseResult.InvalidFormat)
-        if (result is EhlPacketParseResult.InvalidFormat) {
-            assertTrue(result.reason.contains("below minimum"))
-        }
+        assertTrue(result.reason.contains("below minimum"))
     }
     
     @Test
@@ -237,9 +227,7 @@ class EhlCodecHardenedTest {
             val result = EhlCodec.decode(invalidPacket)
             assertTrue(result is EhlPacketParseResult.InvalidFormat, 
                 "STX value 0x${String.format("%02X", invalidStx)} should be rejected")
-            if (result is EhlPacketParseResult.InvalidFormat) {
-                assertTrue(result.reason.contains("Invalid STX"))
-            }
+            assertTrue(result.reason.contains("Invalid STX"))
         }
     }
     
@@ -271,9 +259,7 @@ class EhlCodecHardenedTest {
         val result = EhlCodec.decode(corruptedEtx)
         // Should be invalid format due to missing proper ETX
         assertTrue(result is EhlPacketParseResult.InvalidFormat)
-        if (result is EhlPacketParseResult.InvalidFormat) {
-            assertTrue(result.reason.contains("ETX") || result.reason.contains("format"))
-        }
+        assertTrue(result.reason.contains("ETX") || result.reason.contains("format"))
     }
     
     @Test

@@ -58,6 +58,7 @@ object EhlPacketFormatter {
             1 -> "READY (Authorized, waiting for nozzle)"
             2 -> "DELIVERING (Fuel flowing)"
             3 -> "FINISHED (Transaction complete)"
+            8 -> "PAYMENT_PENDING (Awaiting settlement)"
             9 -> "ERROR (Dispenser error)"
             else -> "UNKNOWN"
         }
