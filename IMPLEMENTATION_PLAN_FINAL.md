@@ -187,11 +187,11 @@ fun sendLegacy(message: String) {
 
 **ChatGPT kommentar:** Verifisert at `output` eksisterer som felt (linje 111) ✅
 
-**Status:** ⏳ Må implementeres
+**Status:** ✅ **IMPLEMENTERT** (22. des 2025 kl. 21:50)
 
 ---
 
-### STEG 2.2: Legg til broadcastLegacy() i EmulatorService
+### STEG 2.2: Legg til broadcastLegacy() in EmulatorService
 
 **Fil:** `lpg-ehl-emulator/src/main/kotlin/no/cloudberries/lpg/emulator/EmulatorService.kt`
 
@@ -238,7 +238,7 @@ private fun broadcastLegacy(message: String) {
 
 **ChatGPT kommentar:** Bruk `clientHandlers` (ikke `activeClients`) ✅
 
-**Status:** ⏳ Må implementeres
+**Status:** ✅ **IMPLEMENTERT** (22. des 2025 kl. 21:50)
 
 ---
 
@@ -372,7 +372,7 @@ fun settle(
 3. ✅ Legg til `windowsBroadcastSent: true` i response
 4. ✅ Forbedret KDoc
 
-**Status:** ⏳ Må implementeres
+**Status:** ✅ **IMPLEMENTERT** (22. des 2025 kl. 21:50)
 
 ---
 
@@ -643,8 +643,10 @@ lpg-web/                                    [AVVENTER LOKASJON]
 
 **Dag 1 (22. des - IDAG):**
 - [x] Fase 1: Fix state 8 logging (15 min) ✅ **FULLFØRT kl. 18:10**
-- [ ] Fase 2.1: sendLegacy() (30 min)
-- [ ] Fase 2.2: broadcastLegacy() (30 min)
+- [x] Fase 2.1: sendLegacy() (30 min) ✅ **FULLFØRT kl. 21:50**
+- [x] Fase 2.2: broadcastLegacy() (30 min) ✅ **FULLFØRT kl. 21:50**
+- [x] Fase 2.3: settleAndBroadcast() (1 time) ✅ **FULLFØRT kl. 21:50**
+- [x] Fase 2.4: Oppdater Controller (30 min) ✅ **FULLFØRT kl. 21:50**
 
 **Dag 2 (24. des - Julaften):**
 - [ ] Pause / minimalt arbeid

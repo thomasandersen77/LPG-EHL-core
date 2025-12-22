@@ -61,7 +61,7 @@ class EmulatorController(
     
     /**
      * Settle pending transaction and reset dispenser to IDLE.
-     * This endpoint is called after payment is complete (e.g., card capture or credit settlement).
+     * This endpoint now BROADCASTS reset to Windows Dispenserkontroll.
      * 
      * @param id Dispenser address (currently only 1 is supported)
      * @param method Payment method: "CARD" (default) or "CREDIT"
@@ -72,12 +72,22 @@ class EmulatorController(
         @PathVariable id: Int,
         @RequestParam(defaultValue = "CARD") method: String
     ): ResponseEntity<Map<String, Any>> {
-        val settledTransaction = emulatorService.settle(method)
+        // Validate payment method
+        if (method !in listOf("CARD", "CREDIT")) {
+            return ResponseEntity.badRequest().body(mapOf(
+                "status" to "error",
+                "message" to "Invalid payment method. Use CARD or CREDIT"
+            ))
+        }
+        
+        // Use new broadcast method instead of direct settle
+        val settledTransaction = emulatorService.settleAndBroadcast(method)
         
         return if (settledTransaction != null) {
             ResponseEntity.ok(mapOf(
                 "status" to "settled",
                 "method" to method,
+                "windowsBroadcastSent" to true,  // NEW: Indicate broadcast happened
                 "transaction" to mapOf(
                     "dispenserId" to settledTransaction.dispenserId,
                     "liters" to settledTransaction.liters,

@@ -85,6 +85,38 @@ class EmulatorService(
             }
         }
     }
+    
+    /**
+     * Broadcast a legacy text message to all connected Windows clients.
+     * Used to notify Windows Dispenserkontroll of state changes (e.g., reset after payment).
+     * 
+     * This method is fail-safe: if one client fails, others still receive the message.
+     * 
+     * @param message Text message (without newline)
+     */
+    private fun broadcastLegacy(message: String) {
+        if (clientHandlers.isEmpty()) {
+            logger.debug("📭 No clients connected - skipping broadcast")
+            return
+        }
+        
+        logger.info("📢 Broadcasting to ${clientHandlers.size} client(s): $message")
+        
+        var successCount = 0
+        var failCount = 0
+        
+        clientHandlers.values.forEach { client ->
+            runCatching { 
+                client.sendLegacy(message)
+                successCount++
+            }.onFailure { e -> 
+                logger.warn("⚠️ Failed to broadcast to one client: ${e.message}")
+                failCount++
+            }
+        }
+        
+        logger.info("✅ Broadcast complete: $successCount OK, $failCount failed")
+    }
 
     @PreDestroy
     fun stop() {
@@ -113,6 +145,26 @@ class EmulatorService(
         // Coroutine scope and job for simulation
         private val simulationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private var simulationJob: Job? = null
+        
+        /**
+         * Send a legacy text message to this client.
+         * Thread-safe for concurrent broadcasts.
+         * 
+         * @param message Text message WITHOUT newline (will be added automatically)
+         */
+        @Synchronized
+        fun sendLegacy(message: String) {
+            try {
+                synchronized(output) {
+                    output.write((message + "\n").toByteArray(Charsets.UTF_8))
+                    output.flush()
+                }
+                logger.debug("📤 Sent legacy to $clientId: $message")
+            } catch (e: Exception) {
+                logger.error("❌ Failed to send legacy to $clientId", e)
+                throw e  // Re-throw so broadcast can log failure
+            }
+        }
         
         // Track final transaction totals
         @Volatile
@@ -372,4 +424,52 @@ class EmulatorService(
      * @return The settled transaction, or null if no transaction was pending
      */
     fun settle(method: String = "CARD") = emulator.settleAndReset(method)
+    
+    /**
+     * Settle pending transaction and broadcast reset to all Windows clients.
+     * 
+     * This is the CRITICAL method that solves the "Windows shows old values" problem.
+     * 
+     * Flow:
+     * 1. Settle transaction internally (emulator.settleAndReset())
+     * 2. Broadcast <TANK> with 0.00 / 0.00 to Windows
+     * 3. Broadcast <STATE_TANK> with idle state to Windows
+     * 
+     * @param method Payment method ("CARD" or "CREDIT")
+     * @return Settled transaction, or null if no pending transaction
+     */
+    fun settleAndBroadcast(method: String = "CARD"): no.cloudberries.lpg.emulator.service.CompletedTransaction? {
+        logger.info("┌────────────────────────────────────────────────────────────")
+        logger.info("│ 💳 SETTLE AND BROADCAST")
+        logger.info("│ Method: $method")
+        logger.info("└────────────────────────────────────────────────────────────")
+        
+        // 1. Settle internal state via emulator
+        val settledTransaction = emulator.settleAndReset(method)
+        
+        if (settledTransaction == null) {
+            logger.warn("⚠️ No transaction to settle - broadcast skipped")
+            return null
+        }
+        
+        logger.info("✅ Transaction settled: ${settledTransaction.liters} L @ ${settledTransaction.amountNok} NOK")
+        
+        // 2. Broadcast reset to all Windows clients
+        logger.info("📢 Broadcasting reset to Windows clients...")
+        
+        val price = String.format(java.util.Locale.US, "%.2f", pricePerLitreCents / 100.0)
+        
+        // <TANK> format: <TANK>;<ignored>;<beløp>;<volum>;<pris>;<bank_status>;<bank_text>
+        // Windows parser: parts[2]=amount, parts[3]=volume, parts[4]=price
+        broadcastLegacy("<TANK>;0;0.00;0.00;$price;0;")
+        
+        // <STATE_TANK> format: 8-character string
+        // Index 4 = '0' means idle (not released)
+        broadcastLegacy("<STATE_TANK>;00000000")
+        
+        logger.info("✅ Broadcast complete - Windows should now show 0.00 / 0.00")
+        logger.info("🟢 Dispenser ready for next customer")
+        
+        return settledTransaction
+    }
 }
