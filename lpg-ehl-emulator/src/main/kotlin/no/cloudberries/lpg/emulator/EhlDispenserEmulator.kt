@@ -1,7 +1,9 @@
 package no.cloudberries.lpg.emulator
 
+import no.cloudberries.lpg.emulator.service.CompletedTransaction
 import no.cloudberries.lpg.protocol.*
 import org.slf4j.LoggerFactory
+import java.time.Instant
 import kotlin.math.roundToInt
 
 /**
@@ -52,6 +54,10 @@ class EhlDispenserEmulator(
     private var amountCents: Int = 0
     private var currentPricePerLitreCents: Int = pricePerLitreCents
     
+    // Transaction freeze for payment pending
+    @Volatile
+    private var pendingTransaction: CompletedTransaction? = null
+    
     // Fault injection state
     private var disconnected: Boolean = false
 
@@ -68,6 +74,8 @@ class EhlDispenserEmulator(
         PUMPING,
         /** Delivery stopped - transaction data available */
         STOPPED,
+        /** Payment pending - transaction frozen, waiting for settlement */
+        PAYMENT_PENDING,
         /** Error condition */
         ERROR
     }
@@ -96,6 +104,10 @@ class EhlDispenserEmulator(
                 // Transaction complete flag set = STOPPED
                 statusByte = 0x08  // TRANSACTION_COMPLETE
             }
+            DispenserState.PAYMENT_PENDING -> {
+                // Payment pending - like STOPPED but indicates waiting for settlement
+                statusByte = 0x08  // TRANSACTION_COMPLETE (same as STOPPED for Windows compatibility)
+            }
             DispenserState.ERROR -> {
                 // Error flag set
                 statusByte = 0x80  // ERROR_FLAG
@@ -120,7 +132,67 @@ class EhlDispenserEmulator(
         productSelected = false
         volumeLitres = 0.0
         amountCents = 0
+        pendingTransaction = null
         disconnected = false
+    }
+    
+    /**
+     * Settle pending transaction and reset dispenser to IDLE.
+     * This is called after payment is complete (CARD capture or CREDIT settlement).
+     * 
+     * @param method Payment method used ("CARD" or "CREDIT")
+     * @return The settled transaction, or null if no transaction was pending
+     */
+    fun settleAndReset(method: String = "CARD"): CompletedTransaction? {
+        val tx = pendingTransaction ?: run {
+            logger.warn("⚠️ No pending transaction to settle")
+            return null
+        }
+        
+        logger.info("┌────────────────────────────────────────────────────────────")
+        logger.info("│ 💳 SETTLEMENT: $method")
+        logger.info("│ Transaction: ${tx.idempotencyKey}")
+        logger.info("│ Volume: ${tx.liters} L")
+        logger.info("│ Amount: ${tx.amountNok} NOK")
+        logger.info("│ Unit Price: ${tx.unitPrice} NOK/L")
+        logger.info("└────────────────────────────────────────────────────────────")
+        
+        // Clear pending transaction and reset to IDLE
+        pendingTransaction = null
+        volumeLitres = 0.0
+        amountCents = 0
+        state = DispenserState.IDLE
+        nozzleLifted = false
+        productSelected = false
+        
+        logger.info("✅ Dispenser reset to IDLE - ready for next customer")
+        
+        return tx
+    }
+    
+    /**
+     * Get the current pending transaction, if any.
+     * Used by EmulatorService to enqueue transactions to TransactionSink.
+     */
+    fun getPendingTransaction(): CompletedTransaction? = pendingTransaction
+    
+    /**
+     * Freeze current transaction totals for payment pending state.
+     * Called by STOP/BLOCK handlers to create immutable transaction snapshot.
+     * 
+     * @return The frozen transaction
+     */
+    fun freezeTransaction(): CompletedTransaction {
+        val tx = CompletedTransaction(
+            dispenserId = address,
+            liters = volumeLitres,
+            amountNok = amountCents / 100.0,
+            unitPrice = currentPricePerLitreCents / 100.0,
+            finishedAt = Instant.now()
+        )
+        pendingTransaction = tx
+        logger.info("🧊 Transaction frozen: ${tx.liters} L @ ${tx.unitPrice} NOK/L = ${tx.amountNok} NOK (${tx.idempotencyKey})")
+        return tx
     }
     
     /**
@@ -291,6 +363,18 @@ class EhlDispenserEmulator(
     private fun handleUnblock(packet: EhlPacket): List<EhlPacket> {
         val previousState = state.name
         
+        // Check if payment is pending - reject UNBLOCK until settled
+        if (state == DispenserState.PAYMENT_PENDING || pendingTransaction != null) {
+            logger.warn("│    ⚠️ UNBLOCK REJECTED: Payment pending (${pendingTransaction?.amountNok} NOK)" + " ".repeat(maxOf(0, 77 - String.format("    ⚠️ UNBLOCK REJECTED: Payment pending (%.2f NOK)", pendingTransaction?.amountNok ?: 0.0).length - 2)) + "│")
+            logger.warn("│    💳 Please settle transaction via /api/emulator/$address/settle" + " ".repeat(maxOf(0, 77 - String.format("    💳 Please settle transaction via /api/emulator/%d/settle", address).length - 2)) + "│")
+            
+            // Return OK but keep PAYMENT_PENDING state
+            return listOf(
+                EhlPacket(address, EhlCommand.OK),
+                buildStateResponse() // Will show TRANSACTION_COMPLETE flag (0x08)
+            )
+        }
+        
         // VB6 flow: UNBLOCK enables fuel delivery
         // If nozzle is already lifted → go directly to PUMPING
         // If nozzle is NOT lifted → go to AUTHORIZED (wait for lift)
@@ -328,6 +412,10 @@ class EhlDispenserEmulator(
             DispenserState.PUMPING -> {
                 logger.warn("│    ⚠️ UNBLOCK ignored - already in PUMPING state" + " ".repeat(maxOf(0, 77 - 54)) + "│")
             }
+            DispenserState.PAYMENT_PENDING -> {
+                // Should not reach here - already handled at top of function
+                logger.warn("│    ⚠️ UNBLOCK blocked - payment pending (should be caught earlier)" + " ".repeat(maxOf(0, 77 - 72)) + "│")
+            }
             DispenserState.ERROR -> {
                 logger.warn("│    ⚠️ UNBLOCK blocked - dispenser in ERROR state" + " ".repeat(maxOf(0, 77 - 56)) + "│")
             }
@@ -345,7 +433,16 @@ class EhlDispenserEmulator(
         
         if (state == DispenserState.PUMPING) {
             updateDelivery() // Calculate final volume/amount
-            state = DispenserState.STOPPED
+            
+            // Freeze transaction and enter PAYMENT_PENDING state
+            if (volumeLitres > 0.0) {
+                freezeTransaction()
+                state = DispenserState.PAYMENT_PENDING
+            } else {
+                // No fuel dispensed - go directly to IDLE
+                state = DispenserState.STOPPED
+            }
+            
             nozzleLifted = false
             
             logger.info(EhlPacketFormatter.formatStateTransition(
@@ -362,6 +459,10 @@ class EhlDispenserEmulator(
                 volumeLitres,
                 amountCents / 100.0
             ))
+            
+            if (state == DispenserState.PAYMENT_PENDING) {
+                logger.info("🔒 STATE: PAYMENT_PENDING - Awaiting settlement")
+            }
         } else {
             logger.warn("⚠️ STOP received but not pumping (state=$previousState)")
         }
@@ -377,11 +478,19 @@ class EhlDispenserEmulator(
         logger.info("│    └─ BLOCK: Stopping dispenser" + " ".repeat(maxOf(0, 77 - 35)) + "│")
         val previousState = state.name
         
-        // BLOCK stops delivery and returns to IDLE
+        // BLOCK stops delivery and enters PAYMENT_PENDING (like STOP)
         when (state) {
             DispenserState.PUMPING -> {
                 updateDelivery() // Calculate final volume/amount
-                state = DispenserState.STOPPED
+                
+                // Freeze transaction and enter PAYMENT_PENDING state
+                if (volumeLitres > 0.0) {
+                    freezeTransaction()
+                    state = DispenserState.PAYMENT_PENDING
+                } else {
+                    state = DispenserState.STOPPED
+                }
+                
                 nozzleLifted = false
                 
                 logger.info(EhlPacketFormatter.formatStateTransition(
@@ -393,6 +502,10 @@ class EhlDispenserEmulator(
                     volumeLitres,
                     amountCents / 100.0
                 ))
+                
+                if (state == DispenserState.PAYMENT_PENDING) {
+                    logger.info("🔒 STATE: PAYMENT_PENDING - Awaiting settlement")
+                }
             }
             DispenserState.AUTHORIZED -> {
                 state = DispenserState.IDLE

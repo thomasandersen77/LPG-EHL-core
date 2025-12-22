@@ -58,4 +58,40 @@ class EmulatorController(
         logBuffer.clear()
         return ResponseEntity.ok(mapOf("status" to "cleared"))
     }
+    
+    /**
+     * Settle pending transaction and reset dispenser to IDLE.
+     * This endpoint is called after payment is complete (e.g., card capture or credit settlement).
+     * 
+     * @param id Dispenser address (currently only 1 is supported)
+     * @param method Payment method: "CARD" (default) or "CREDIT"
+     * @return Settled transaction details or error message
+     */
+    @PostMapping("/settle/{id}")
+    fun settle(
+        @PathVariable id: Int,
+        @RequestParam(defaultValue = "CARD") method: String
+    ): ResponseEntity<Map<String, Any>> {
+        val settledTransaction = emulatorService.settle(method)
+        
+        return if (settledTransaction != null) {
+            ResponseEntity.ok(mapOf(
+                "status" to "settled",
+                "method" to method,
+                "transaction" to mapOf(
+                    "dispenserId" to settledTransaction.dispenserId,
+                    "liters" to settledTransaction.liters,
+                    "amountNok" to settledTransaction.amountNok,
+                    "unitPrice" to settledTransaction.unitPrice,
+                    "finishedAt" to settledTransaction.finishedAt.toString(),
+                    "idempotencyKey" to settledTransaction.idempotencyKey
+                )
+            ))
+        } else {
+            ResponseEntity.ok(mapOf(
+                "status" to "no_pending_transaction",
+                "message" to "No pending transaction to settle"
+            ))
+        }
+    }
 }
