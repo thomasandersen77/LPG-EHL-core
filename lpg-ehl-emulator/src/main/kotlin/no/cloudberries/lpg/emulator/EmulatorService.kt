@@ -1,5 +1,6 @@
 package no.cloudberries.lpg.emulator
 
+import no.cloudberries.lpg.emulator.service.TransactionPersistenceService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -16,7 +17,8 @@ class EmulatorService(
     @Value("\${emulator.address:1}") private val address: Int,
     @Value("\${emulator.price-per-litre-cents:1590}") private val pricePerLitreCents: Int,
     @Value("\${emulator.litres-per-second:0.5}") private val litresPerSecond: Double,
-    @Value("\${emulator.port:9000}") private val port: Int
+    @Value("\${emulator.port:9000}") private val port: Int,
+    private val transactionPersistenceService: TransactionPersistenceService
 ) {
     private val logger = LoggerFactory.getLogger(EmulatorService::class.java)
     private val emulator = EhlDispenserEmulator(address, pricePerLitreCents, litresPerSecond)
@@ -109,6 +111,12 @@ class EmulatorService(
 
         private val isFilling = AtomicBoolean(false)
         private val output = socket.getOutputStream()
+        
+        // Track final transaction totals
+        @Volatile
+        private var lastVolumeLitres: Double = 0.0
+        @Volatile
+        private var lastAmountKr: Double = 0.0
 
         override fun run() {
             logger.info("🔌 Client handler started for $clientId")
@@ -222,6 +230,8 @@ class EmulatorService(
                 // Stopp fylling
                 isFilling.set(false)
                 
+                // Transaction will be saved by simulation thread after it stops
+                
                 val response = "<STATE_TANK>;00000000"
                 logger.info("📤 RESPONSE (legacy format): $response")
                 sendText(response) // Status idle
@@ -278,7 +288,15 @@ class EmulatorService(
             // Calculate final elapsed time
             val elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000.0
             
+            // Store final values for transaction save
+            lastVolumeLitres = volume
+            lastAmountKr = amount
+            
             logger.info("┌──────────────────────────────────────────────────────────")
+            logger.info("│ 💞 Saving transaction to database...")
+            // Save transaction to database (now that values are set)
+            saveCurrentTransaction()
+            
             logger.info("│ 🏁 FUEL SIMULATION STOPPED")
             logger.info("│ Final volume: %.2f L".format(volume))
             logger.info("│ Final amount: %.2f NOK".format(amount))
@@ -313,6 +331,29 @@ class EmulatorService(
         fun close() {
             isFilling.set(false)
             try { socket.close() } catch (e: Exception) {}
+        }
+        
+        private fun saveCurrentTransaction() {
+            try {
+                // Use final values from simulation
+                val volumeDeciliters = (lastVolumeLitres * 10).toInt() // Convert L to dl
+                val amountOre = (lastAmountKr * 100).toInt() // Convert kr to øre
+                
+                // Only save if there's actual volume
+                if (volumeDeciliters > 0) {
+                    transactionPersistenceService.saveTransaction(
+                        dispenserAddress = address,
+                        volumeDeciliters = volumeDeciliters,
+                        amountOre = amountOre,
+                        pricePerLiter = pricePerLitreCents
+                    )
+                    logger.info("💾 Transaction saved: ${lastVolumeLitres}L, ${lastAmountKr} kr")
+                } else {
+                    logger.debug("No volume dispensed, skipping transaction save")
+                }
+            } catch (e: Exception) {
+                logger.error("Failed to save transaction", e)
+            }
         }
     }
 

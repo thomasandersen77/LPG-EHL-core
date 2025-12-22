@@ -37,11 +37,11 @@ class DispenserStateMapperTest {
         }
         
         @Test
-        fun `0x08 - Transaction complete should map to STOPPED`() {
+        fun `0x08 - Transaction complete should map to PAYMENT_PENDING`() {
             val payload = byteArrayOf(0x08)  // TRANSACTION_COMPLETE
             val result = DispenserStateMapper.mapToDispenserStatus(payload)
             
-            assertTrue(result is DispenserStatus.STOPPED, "Expected STOPPED, got $result")
+            assertTrue(result is DispenserStatus.PAYMENT_PENDING, "Expected PAYMENT_PENDING, got $result")
         }
         
         @Test
@@ -85,21 +85,21 @@ class DispenserStateMapperTest {
         }
         
         @Test
-        fun `PUMPING to STOPPED is valid transition`() {
+        fun `PUMPING to PAYMENT_PENDING is valid transition`() {
             val valid = DispenserStateMapper.isValidTransition(
                 DispenserStatus.PUMPING,
-                DispenserStatus.STOPPED
+                DispenserStatus.PAYMENT_PENDING
             )
-            assertTrue(valid, "PUMPING → STOPPED should be valid")
+            assertTrue(valid, "PUMPING → PAYMENT_PENDING should be valid")
         }
         
         @Test
-        fun `STOPPED to IDLE is valid transition`() {
+        fun `PAYMENT_PENDING to IDLE is valid transition`() {
             val valid = DispenserStateMapper.isValidTransition(
-                DispenserStatus.STOPPED,
+                DispenserStatus.PAYMENT_PENDING,
                 DispenserStatus.IDLE
             )
-            assertTrue(valid, "STOPPED → IDLE should be valid")
+            assertTrue(valid, "PAYMENT_PENDING → IDLE should be valid")
         }
         
         @Test
@@ -119,12 +119,12 @@ class DispenserStateMapperTest {
         }
         
         @Test
-        fun `PUMPING to IDLE is invalid (must go through STOPPED)`() {
+        fun `PUMPING to IDLE is invalid (must go through PAYMENT_PENDING)`() {
             val valid = DispenserStateMapper.isValidTransition(
                 DispenserStatus.PUMPING,
                 DispenserStatus.IDLE
             )
-            assertFalse(valid, "PUMPING → IDLE should be invalid (missing STOPPED step)")
+            assertFalse(valid, "PUMPING → IDLE should be invalid (missing PAYMENT_PENDING step)")
         }
     }
     
@@ -165,7 +165,7 @@ class DispenserStateMapperTest {
     inner class HappyPathFlowTests {
         
         @Test
-        fun `Complete fueling flow - IDLE to AUTHORIZED to PUMPING to STOPPED to IDLE`() {
+        fun `Complete fueling flow - IDLE to AUTHORIZED to PUMPING to PAYMENT_PENDING to IDLE`() {
             // Step 1: IDLE (0x00)
             val idlePayload = byteArrayOf(0x00)
             val idleState = DispenserStateMapper.mapToDispenserStatus(idlePayload)
@@ -183,17 +183,17 @@ class DispenserStateMapperTest {
             assertTrue(pumpingState is DispenserStatus.PUMPING)
             assertTrue(DispenserStateMapper.isValidTransition(authorizedState, pumpingState))
             
-            // Step 4: STOPPED (0x08 - TRANSACTION_COMPLETE)
-            val stoppedPayload = byteArrayOf(0x08)
-            val stoppedState = DispenserStateMapper.mapToDispenserStatus(stoppedPayload)
-            assertTrue(stoppedState is DispenserStatus.STOPPED)
-            assertTrue(DispenserStateMapper.isValidTransition(pumpingState, stoppedState))
+            // Step 4: PAYMENT_PENDING (0x08 - TRANSACTION_COMPLETE)
+            val paymentPendingPayload = byteArrayOf(0x08)
+            val paymentPendingState = DispenserStateMapper.mapToDispenserStatus(paymentPendingPayload)
+            assertTrue(paymentPendingState is DispenserStatus.PAYMENT_PENDING)
+            assertTrue(DispenserStateMapper.isValidTransition(pumpingState, paymentPendingState))
             
-            // Step 5: Back to IDLE (0x00)
+            // Step 5: Back to IDLE (0x00) after payment/reset
             val finalIdlePayload = byteArrayOf(0x00)
             val finalIdleState = DispenserStateMapper.mapToDispenserStatus(finalIdlePayload)
             assertTrue(finalIdleState is DispenserStatus.IDLE)
-            assertTrue(DispenserStateMapper.isValidTransition(stoppedState, finalIdleState))
+            assertTrue(DispenserStateMapper.isValidTransition(paymentPendingState, finalIdleState))
         }
     }
     

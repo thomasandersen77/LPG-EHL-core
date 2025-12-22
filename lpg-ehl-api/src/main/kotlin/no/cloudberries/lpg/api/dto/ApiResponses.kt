@@ -125,6 +125,20 @@ data class SyncStatusResponse(
 )
 
 /**
+ * Create transaction request (from emulator)
+ */
+data class CreateTransactionRequest(
+    val dispenserAddress: Int,
+    val nozzleNumber: Int = 1,
+    val volumeDeciliters: Int,
+    val amountOre: Int,
+    val pricePerLiter: Int,
+    val paymentType: String = "CASH",
+    val productCode: String? = "LPG",
+    val includesRoadTax: Boolean = true
+)
+
+/**
  * Error response
  */
 data class ErrorResponse(

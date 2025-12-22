@@ -75,9 +75,11 @@ object DispenserStateMapper {
             }
             
             // Priority 2: Transaction complete (stopped state)
+            // Note: This represents the PAYMENT_PENDING state (state code 8)
+            // where totals are frozen and require reset before next transaction
             isTransactionComplete -> {
-                logger.debug("Transaction complete - STOPPED state")
-                DispenserStatus.STOPPED
+                logger.debug("Transaction complete - PAYMENT_PENDING state")
+                DispenserStatus.PAYMENT_PENDING
             }
             
             // Priority 3: Active delivery (pumping)
@@ -135,8 +137,9 @@ object DispenserStateMapper {
         return when (from) {
             is DispenserStatus.IDLE -> to is DispenserStatus.AUTHORIZED || to is DispenserStatus.ERROR
             is DispenserStatus.AUTHORIZED -> to is DispenserStatus.PUMPING || to is DispenserStatus.IDLE || to is DispenserStatus.ERROR
-            is DispenserStatus.PUMPING -> to is DispenserStatus.STOPPED || to is DispenserStatus.ERROR
-            is DispenserStatus.STOPPED -> to is DispenserStatus.IDLE || to is DispenserStatus.ERROR
+            is DispenserStatus.PUMPING -> to is DispenserStatus.STOPPED || to is DispenserStatus.PAYMENT_PENDING || to is DispenserStatus.ERROR
+            is DispenserStatus.STOPPED -> to is DispenserStatus.IDLE || to is DispenserStatus.PAYMENT_PENDING || to is DispenserStatus.ERROR
+            is DispenserStatus.PAYMENT_PENDING -> to is DispenserStatus.IDLE || to is DispenserStatus.ERROR  // Only IDLE after reset
             is DispenserStatus.ERROR -> to is DispenserStatus.IDLE  // Can recover to IDLE
             is DispenserStatus.UNKNOWN -> true  // Allow any transition from UNKNOWN
         }

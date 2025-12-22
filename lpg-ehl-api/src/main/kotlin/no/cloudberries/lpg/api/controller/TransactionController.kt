@@ -8,10 +8,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
+import no.cloudberries.lpg.api.dto.CreateTransactionRequest
 import no.cloudberries.lpg.api.dto.ErrorResponse
 import no.cloudberries.lpg.api.dto.PageResponse
 import no.cloudberries.lpg.api.dto.TransactionResponse
+import no.cloudberries.lpg.api.model.Transaction
 import no.cloudberries.lpg.api.service.TransactionService
+import java.math.BigDecimal
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -130,5 +133,39 @@ class TransactionController(
     ): ResponseEntity<Map<String, Long>> {
         val count = transactionService.getTransactionCount(dispenserAddress)
         return ResponseEntity.ok(mapOf("count" to count))
+    }
+
+    @PostMapping
+    @Operation(
+        summary = "Create transaction",
+        description = "Create a new transaction (typically called from emulator when dispensing stops)"
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "201", description = "Transaction created successfully"),
+            ApiResponse(responseCode = "400", description = "Invalid request data"),
+            ApiResponse(responseCode = "401", description = "Unauthorized")
+        ]
+    )
+    fun createTransaction(
+        @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Transaction data from emulator"
+        )
+        @RequestBody request: CreateTransactionRequest
+    ): ResponseEntity<TransactionResponse> {
+        // Convert request to Transaction entity
+        val transaction = Transaction(
+            dispenserAddress = request.dispenserAddress,
+            nozzleNumber = request.nozzleNumber,
+            volumeDeciliters = request.volumeDeciliters,
+            amountOre = request.amountOre,
+            pricePerLiter = BigDecimal.valueOf(request.pricePerLiter.toLong()).divide(BigDecimal(100)), // Convert øre to kr
+            paymentType = request.paymentType,
+            productCode = request.productCode,
+            includesRoadTax = request.includesRoadTax
+        )
+        
+        val saved = transactionService.saveTransaction(transaction)
+        return ResponseEntity.status(201).body(TransactionResponse.from(saved))
     }
 }

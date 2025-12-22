@@ -335,12 +335,10 @@ class EhlCodecHardenedTest {
         for ((packet, expectedErrorKeyword) in testCases) {
             val result = EhlCodec.decode(packet)
             assertTrue(result is EhlPacketParseResult.InvalidFormat)
-            if (result is EhlPacketParseResult.InvalidFormat) {
-                assertTrue(
-                    result.reason.contains(expectedErrorKeyword, ignoreCase = true),
-                    "Error message '${result.reason}' should contain '$expectedErrorKeyword'"
-                )
-            }
+            assertTrue(
+                result.reason.contains(expectedErrorKeyword, ignoreCase = true),
+                "Error message '${result.reason}' should contain '$expectedErrorKeyword'"
+            )
         }
     }
     
