@@ -18,13 +18,14 @@ class TransactionPersistenceService(
      * @param volumeDeciliters Volume in deciliters (dl)
      * @param amountOre Amount in øre
      * @param pricePerLiter Price per liter in cents/øre
+     * @return Database transaction ID (UUID) or null if failed
      */
     fun saveTransaction(
         dispenserAddress: Int,
         volumeDeciliters: Int,
         amountOre: Int,
         pricePerLiter: Int
-    ) {
+    ): String? {
         logger.info("Saving transaction: Dispenser=$dispenserAddress, Volume=${volumeDeciliters/10.0}L, Amount=${amountOre/100.0} kr")
         
         val request = SaveTransactionRequest(
@@ -34,12 +35,14 @@ class TransactionPersistenceService(
             pricePerLiter = pricePerLiter
         )
         
-        val success = lpgApiClient.saveTransaction(request)
+        val databaseId = lpgApiClient.saveTransaction(request)
         
-        if (success) {
-            logger.info("✅ Transaction saved successfully to database")
+        if (databaseId != null) {
+            logger.info("✅ Transaction saved successfully to database with ID: $databaseId")
         } else {
             logger.error("❌ Failed to save transaction to database")
         }
+        
+        return databaseId
     }
 }

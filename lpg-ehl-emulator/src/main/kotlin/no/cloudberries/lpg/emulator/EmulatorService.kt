@@ -1,6 +1,7 @@
 package no.cloudberries.lpg.emulator
 
 import kotlinx.coroutines.*
+import no.cloudberries.lpg.emulator.api.LpgApiClient
 import no.cloudberries.lpg.emulator.service.TransactionSink
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -17,7 +18,8 @@ class EmulatorService(
     @Value("\${emulator.price-per-litre-cents:1590}") private val pricePerLitreCents: Int,
     @Value("\${emulator.litres-per-second:0.5}") private val litresPerSecond: Double,
     @Value("\${emulator.port:9000}") private val port: Int,
-    private val transactionSink: TransactionSink
+    private val transactionSink: TransactionSink,
+    private val lpgApiClient: LpgApiClient
 ) {
     private val logger = LoggerFactory.getLogger(EmulatorService::class.java)
     private val emulator = EhlDispenserEmulator(address, pricePerLitreCents, litresPerSecond)
@@ -240,13 +242,29 @@ class EmulatorService(
                 val coreResponses = emulator.onBytesFromHost(encodedPacket)
                 logger.info("║ ✅ Core returned ${coreResponses.size} response(s)")
                 
+                // CRITICAL: Check if there's a pending transaction
+                val pendingTx = emulator.getPendingTransaction()
+                
+                if (pendingTx != null) {
+                    // Emulator denied UNBLOCK due to pending payment
+                    logger.error("║ ❌ UNBLOCK BLOCKED: Payment pending")
+                    logger.error("║ ❌ Pending transaction: ${pendingTx.amountNok} NOK")
+                    logger.error("╩════════════════════════════════════════════════════════════")
+                    
+                    // Send IDLE state to Windows (blocked)
+                    val response = "<STATE_TANK>;00000000"
+                    logger.info("📤 RESPONSE (legacy format): $response")
+                    sendText(response)
+                    return
+                }
+                
                 // Simulate nozzle lift to trigger PUMPING
                 emulator.simulateNozzleLift(true)
                 
                 if (simulationJob == null || simulationJob?.isActive == false) {
                     logger.info("║ Status: IDLE → FILLING")
                     logger.info("║ Action: Starting simulation coroutine...")
-                    logger.info("╚════════════════════════════════════════════════════════════")
+                    logger.info("╩════════════════════════════════════════════════════════════")
                     
                     // Send svar at vi er i gang (Status 1 på index 4 = Frigitt)
                     val response = "<STATE_TANK>;00001000"
@@ -257,7 +275,7 @@ class EmulatorService(
                     startSimulation()
                 } else {
                     logger.info("║ Status: Already filling, ignoring")
-                    logger.info("╚════════════════════════════════════════════════════════════")
+                    logger.info("╩════════════════════════════════════════════════════════════")
                 }
             }
             else if (cmd.contains("TANK_DISP_STOP")) {
@@ -280,6 +298,18 @@ class EmulatorService(
                 
                 // Stop simulation immediately
                 stopSimulation()
+                
+                // Send final TANK message with frozen values BEFORE state change
+                val pendingTx = emulator.getPendingTransaction()
+                if (pendingTx != null) {
+                    val price = pricePerLitreCents / 100.0
+                    val tankMsg = String.format(
+                        "<TANK>;0;%.2f;%.2f;%.2f;0;",
+                        pendingTx.amountNok, pendingTx.liters, price
+                    ).replace(',', '.')
+                    logger.info("📤 Sending frozen values to Windows: $tankMsg")
+                    sendText(tankMsg)
+                }
                 
                 // Enqueue frozen transaction if any
                 enqueuePendingTransaction()
@@ -454,7 +484,33 @@ class EmulatorService(
         
         logger.info("✅ Transaction settled: ${settledTransaction.liters} L @ ${settledTransaction.amountNok} NOK")
         
-        // 2. Broadcast reset to all Windows clients
+        // 2. Update payment status in database (wait for databaseId if needed)
+        if (settledTransaction.databaseId == null) {
+            logger.warn("⚠️ Transaction not yet saved to database, waiting up to 5 seconds...")
+            // Wait for async save to complete
+            var waited = 0
+            while (settledTransaction.databaseId == null && waited < 50) {
+                Thread.sleep(100)
+                waited++
+            }
+        }
+        
+        if (settledTransaction.databaseId != null) {
+            logger.info("💾 Updating payment status in database for ID: ${settledTransaction.databaseId}")
+            val updateSuccess = lpgApiClient.updatePaymentStatus(
+                transactionId = settledTransaction.databaseId!!,
+                paymentMethod = method
+            )
+            if (updateSuccess) {
+                logger.info("✅ Payment status updated in database")
+            } else {
+                logger.warn("⚠️ Failed to update payment status in database (transaction still settled locally)")
+            }
+        } else {
+            logger.error("❌ Transaction database ID not available after waiting - payment status NOT updated")
+        }
+        
+        // 3. Broadcast reset to all Windows clients
         logger.info("📢 Broadcasting reset to Windows clients...")
         
         val price = String.format(java.util.Locale.US, "%.2f", pricePerLitreCents / 100.0)

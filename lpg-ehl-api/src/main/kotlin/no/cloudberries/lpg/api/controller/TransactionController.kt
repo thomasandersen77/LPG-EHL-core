@@ -15,6 +15,7 @@ import no.cloudberries.lpg.api.dto.TransactionResponse
 import no.cloudberries.lpg.api.model.Transaction
 import no.cloudberries.lpg.api.service.TransactionService
 import java.math.BigDecimal
+import org.slf4j.LoggerFactory
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -28,6 +29,7 @@ import java.util.*
 class TransactionController(
     private val transactionService: TransactionService
 ) {
+    private val logger = LoggerFactory.getLogger(TransactionController::class.java)
 
     @GetMapping
     @Operation(
@@ -63,6 +65,10 @@ class TransactionController(
         @RequestParam(required = false)
         paymentType: String?,
 
+        @Parameter(description = "Filter by payment status (PENDING, PAID)")
+        @RequestParam(required = false)
+        paymentStatus: String?,
+
         @Parameter(description = "Filter by customer ID")
         @RequestParam(required = false)
         customerId: UUID?,
@@ -75,8 +81,10 @@ class TransactionController(
         @RequestParam(defaultValue = "50")
         size: Int
     ): ResponseEntity<PageResponse<TransactionResponse>> {
+        logger.info("📋 List transactions: page=$page, size=$size, dispenser=$dispenserAddress, paymentType=$paymentType, paymentStatus=$paymentStatus")
         val pageSize = size.coerceAtMost(100)
-        val transactions = transactionService.getTransactions(from, to, dispenserAddress, paymentType, customerId, page, pageSize)
+        val transactions = transactionService.getTransactions(from, to, dispenserAddress, paymentType, paymentStatus, customerId, page, pageSize)
+        logger.info("✅ Returned ${transactions.content.size} transactions (total=${transactions.totalElements})")
         return ResponseEntity.ok(transactions)
     }
 
@@ -96,8 +104,12 @@ class TransactionController(
         @Parameter(description = "Transaction UUID")
         @PathVariable id: UUID
     ): ResponseEntity<TransactionResponse> {
+        logger.info("🔍 Get transaction by ID: $id")
         val transaction = transactionService.getTransactionById(id)
-            ?: return ResponseEntity.notFound().build()
+            ?: run {
+                logger.warn("⚠️ Transaction not found: $id")
+                return ResponseEntity.notFound().build()
+            }
         return ResponseEntity.ok(transaction)
     }
 
@@ -135,6 +147,28 @@ class TransactionController(
         return ResponseEntity.ok(mapOf("count" to count))
     }
 
+    @PatchMapping("/{id}/payment")
+    @Operation(
+        summary = "Update payment status",
+        description = "Update the payment status and method for a transaction after settlement"
+    )
+    fun updatePaymentStatus(
+        @PathVariable id: UUID,
+        @RequestParam paymentMethod: String,
+        @RequestParam(defaultValue = "PAID") paymentStatus: String
+    ): ResponseEntity<TransactionResponse> {
+        logger.info("💳 Update payment status: id=$id, method=$paymentMethod, status=$paymentStatus")
+        
+        val updated = transactionService.updatePaymentStatus(id, paymentMethod, paymentStatus)
+            ?: run {
+                logger.warn("⚠️ Transaction not found: $id")
+                return ResponseEntity.notFound().build()
+            }
+        
+        logger.info("✅ Payment status updated for transaction $id")
+        return ResponseEntity.ok(TransactionResponse.from(updated))
+    }
+
     @PostMapping
     @Operation(
         summary = "Create transaction",
@@ -153,6 +187,8 @@ class TransactionController(
         )
         @RequestBody request: CreateTransactionRequest
     ): ResponseEntity<TransactionResponse> {
+        logger.info("➥ Create transaction: dispenser=${request.dispenserAddress}, volume=${request.volumeDeciliters/10.0}L, amount=${request.amountOre/100.0} NOK, paymentType=${request.paymentType ?: "PENDING"}, paymentStatus=PENDING")
+        
         // Convert request to Transaction entity
         val transaction = Transaction(
             dispenserAddress = request.dispenserAddress,
@@ -166,6 +202,7 @@ class TransactionController(
         )
         
         val saved = transactionService.saveTransaction(transaction)
+        logger.info("✅ Transaction created: id=${saved.transactionId}")
         return ResponseEntity.status(201).body(TransactionResponse.from(saved))
     }
 }

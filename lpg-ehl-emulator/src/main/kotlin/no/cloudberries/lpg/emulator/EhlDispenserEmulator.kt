@@ -516,6 +516,11 @@ class EhlDispenserEmulator(
                     "BLOCK command - authorization cancelled"
                 ))
             }
+            DispenserState.PAYMENT_PENDING -> {
+                // CRITICAL: Do NOT reset to IDLE when payment pending!
+                logger.warn("⚠️ BLOCK ignored - payment pending")
+                logger.info("🔒 STATE: PAYMENT_PENDING - Must settle before new transaction")
+            }
             else -> {
                 state = DispenserState.IDLE
                 productSelected = false

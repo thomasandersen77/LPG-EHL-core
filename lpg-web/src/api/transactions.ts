@@ -3,6 +3,7 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
 export type PaymentType = 'CASH' | 'CARD' | 'CREDIT' | 'UNKNOWN';
+export type PaymentStatus = 'PENDING' | 'PAID';
 
 export interface TransactionDto {
   transactionId: string;
@@ -13,6 +14,7 @@ export interface TransactionDto {
   amountKr: number;
   pricePerLiter: number;
   paymentType: PaymentType;
+  paymentStatus: PaymentStatus;
   customerName?: string;
   customerId?: string;
   includesRoadTax: boolean;

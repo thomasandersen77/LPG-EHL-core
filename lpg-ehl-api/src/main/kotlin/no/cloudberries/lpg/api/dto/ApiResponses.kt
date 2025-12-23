@@ -18,6 +18,7 @@ data class TransactionResponse(
     val amountKr: BigDecimal,
     val pricePerLiter: BigDecimal?,
     val paymentType: String?,
+    val paymentStatus: String,
     val customerId: UUID?,
     val customerName: String?,
     val includesRoadTax: Boolean,
@@ -34,6 +35,7 @@ data class TransactionResponse(
             amountKr = transaction.amountKr,
             pricePerLiter = transaction.pricePerLiter,
             paymentType = transaction.paymentType,
+            paymentStatus = transaction.paymentStatus,
             customerId = transaction.customerId,
             customerName = transaction.customerName,
             includesRoadTax = transaction.includesRoadTax,
@@ -133,7 +135,7 @@ data class CreateTransactionRequest(
     val volumeDeciliters: Int,
     val amountOre: Int,
     val pricePerLiter: Int,
-    val paymentType: String = "CASH",
+    val paymentType: String? = null, // null = awaiting payment
     val productCode: String? = "LPG",
     val includesRoadTax: Boolean = true
 )

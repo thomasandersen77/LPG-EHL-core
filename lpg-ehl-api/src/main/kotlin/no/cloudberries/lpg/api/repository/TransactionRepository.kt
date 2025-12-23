@@ -77,6 +77,7 @@ interface TransactionRepository : JpaRepository<Transaction, UUID> {
         """
         SELECT t FROM Transaction t
         WHERE (:paymentType IS NULL OR t.paymentType = :paymentType)
+        AND (:paymentStatus IS NULL OR t.paymentStatus = :paymentStatus)
         AND (CAST(:customerId AS string) IS NULL OR t.customerId = :customerId)
         AND (CAST(:from AS timestamp) IS NULL OR t.timestamp >= :from)
         AND (CAST(:to AS timestamp) IS NULL OR t.timestamp <= :to)
@@ -85,6 +86,7 @@ interface TransactionRepository : JpaRepository<Transaction, UUID> {
     )
     fun findWithFilters(
         @Param("paymentType") paymentType: String?,
+        @Param("paymentStatus") paymentStatus: String?,
         @Param("customerId") customerId: UUID?,
         @Param("from") from: LocalDateTime?,
         @Param("to") to: LocalDateTime?,

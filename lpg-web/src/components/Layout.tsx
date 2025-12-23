@@ -42,6 +42,9 @@ export function Layout() {
               <Link to="/transactions" className={linkClass('/transactions')}>
                 📋 Transaksjoner
               </Link>
+              <Link to="/payment-terminal" className={linkClass('/payment-terminal')}>
+                💳 Terminal
+              </Link>
               <Link to="/credit" className={linkClass('/credit')}>
                 🏪 Kreditt
               </Link>

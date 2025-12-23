@@ -1,15 +1,17 @@
 package no.cloudberries.lpg.emulator
 
+import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
-@RequestMapping("/api/emulator")
+@RequestMapping("/api/v1/emulator")
 class EmulatorController(
     private val emulatorService: EmulatorService,
     private val scenarioService: EmulatorScenarioService,
     private val logBuffer: LogBuffer
 ) {
+    private val logger = LoggerFactory.getLogger(EmulatorController::class.java)
 
     @GetMapping("/status")
     fun getStatus(): ResponseEntity<Map<String, Any>> {
@@ -29,12 +31,14 @@ class EmulatorController(
 
     @PostMapping("/scenario")
     fun setScenario(@RequestBody body: SetScenarioRequest): ResponseEntity<EmulatorStatus> {
+        logger.info("🎬 Setting emulator scenario: address=${body.dispenserAddress}, scenario=${body.scenario}")
         scenarioService.setScenario(body.dispenserAddress, body.scenario)
         return ResponseEntity.ok(scenarioService.status(body.dispenserAddress))
     }
 
     @PostMapping("/reset/{address}")
     fun resetScenario(@PathVariable("address") dispenserAddress: Int): ResponseEntity<EmulatorStatus> {
+        logger.info("🔄 Resetting emulator scenario: address=${dispenserAddress}")
         scenarioService.reset(dispenserAddress)
         return ResponseEntity.ok(scenarioService.status(dispenserAddress))
     }
@@ -72,8 +76,11 @@ class EmulatorController(
         @PathVariable id: Int,
         @RequestParam(defaultValue = "CARD") method: String
     ): ResponseEntity<Map<String, Any>> {
+        logger.info("💳 Settle payment request: dispenserId=$id, method=$method")
+        
         // Validate payment method
         if (method !in listOf("CARD", "CREDIT")) {
+            logger.warn("⚠️ Invalid payment method: $method")
             return ResponseEntity.badRequest().body(mapOf(
                 "status" to "error",
                 "message" to "Invalid payment method. Use CARD or CREDIT"
@@ -84,6 +91,7 @@ class EmulatorController(
         val settledTransaction = emulatorService.settleAndBroadcast(method)
         
         return if (settledTransaction != null) {
+            logger.info("✅ Payment settled: ${settledTransaction.amountNok} NOK, ${settledTransaction.liters} L")
             ResponseEntity.ok(mapOf(
                 "status" to "settled",
                 "method" to method,
@@ -98,6 +106,7 @@ class EmulatorController(
                 )
             ))
         } else {
+            logger.info("ℹ️ No pending transaction to settle")
             ResponseEntity.ok(mapOf(
                 "status" to "no_pending_transaction",
                 "message" to "No pending transaction to settle"

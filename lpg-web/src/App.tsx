@@ -6,6 +6,7 @@ import { TransactionsPage } from './pages/TransactionsPage';
 import { CreditAccountsPage } from './pages/CreditAccountsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { EmulatorDebugPage } from './pages/EmulatorDebugPage';
+import { PaymentTerminalPage } from './pages/PaymentTerminalPage';
 import { Layout } from './components/Layout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -30,6 +31,7 @@ function App() {
             <Route path="transactions" element={<TransactionsPage />} />
             <Route path="credit" element={<CreditAccountsPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="payment-terminal" element={<PaymentTerminalPage />} />
             <Route path="emulator-debug" element={<EmulatorDebugPage />} />
           </Route>
         </Routes>

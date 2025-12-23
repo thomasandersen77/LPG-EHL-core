@@ -19,9 +19,9 @@ class LpgApiClient(
         .build()
     
     /**
-     * Save a transaction to the API
+     * Save a transaction to the API and return the database transaction ID
      */
-    fun saveTransaction(transaction: SaveTransactionRequest): Boolean {
+    fun saveTransaction(transaction: SaveTransactionRequest): String? {
         return try {
             val json = """
                 {
@@ -30,7 +30,7 @@ class LpgApiClient(
                     "volumeDeciliters": ${transaction.volumeDeciliters},
                     "amountOre": ${transaction.amountOre},
                     "pricePerLiter": ${transaction.pricePerLiter},
-                    "paymentType": "${transaction.paymentType}",
+                    ${if (transaction.paymentType != null) "\"paymentType\": \"${transaction.paymentType}\"," else ""}
                     "productCode": "${transaction.productCode}",
                     "includesRoadTax": ${transaction.includesRoadTax}
                 }
@@ -47,13 +47,43 @@ class LpgApiClient(
             
             if (response.statusCode() in 200..299) {
                 logger.debug("Transaction saved successfully: ${response.body()}")
-                true
+                // Extract transactionId from JSON response
+                val transactionIdRegex = """"transactionId"\s*:\s*"([^"]+)""".toRegex()
+                val match = transactionIdRegex.find(response.body())
+                match?.groupValues?.get(1)
             } else {
                 logger.warn("Failed to save transaction: ${response.statusCode()} - ${response.body()}")
-                false
+                null
             }
         } catch (e: Exception) {
             logger.error("Error calling API to save transaction", e)
+            null
+        }
+    }
+
+    /**
+     * Update payment status for a transaction
+     */
+    fun updatePaymentStatus(transactionId: String, paymentMethod: String): Boolean {
+        return try {
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("$baseUrl/api/v1/transactions/$transactionId/payment?paymentMethod=$paymentMethod&paymentStatus=PAID"))
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.noBody())
+                .timeout(Duration.ofSeconds(10))
+                .build()
+            
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            
+            if (response.statusCode() in 200..299) {
+                logger.debug("Payment status updated successfully for transaction $transactionId")
+                true
+            } else {
+                logger.warn("Failed to update payment status: ${response.statusCode()} - ${response.body()}")
+                false
+            }
+        } catch (e: Exception) {
+            logger.error("Error updating payment status for transaction $transactionId", e)
             false
         }
     }
@@ -65,7 +95,7 @@ data class SaveTransactionRequest(
     val volumeDeciliters: Int,
     val amountOre: Int,
     val pricePerLiter: Int,
-    val paymentType: String = "CASH",
+    val paymentType: String? = null,  // null = PENDING, set on settlement
     val productCode: String = "LPG",
     val includesRoadTax: Boolean = true
 )

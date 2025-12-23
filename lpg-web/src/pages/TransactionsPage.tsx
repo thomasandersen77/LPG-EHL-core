@@ -85,15 +85,25 @@ export function TransactionsPage() {
                     {tx.pricePerLiter.toFixed(2)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                      ${tx.paymentType === 'CASH' ? 'bg-green-100 text-green-800' : 
-                        tx.paymentType === 'CARD' ? 'bg-blue-100 text-blue-800' : 
-                        'bg-purple-100 text-purple-800'}`}>
-                      {tx.paymentType}
-                    </span>
+                    {tx.paymentStatus === 'PENDING' ? (
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-600">
+                        ⏳ Venter
+                      </span>
+                    ) : (
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        ${tx.paymentType === 'CASH' ? 'bg-green-100 text-green-800' : 
+                          tx.paymentType === 'CARD' ? 'bg-blue-100 text-blue-800' : 
+                          'bg-purple-100 text-purple-800'}`}>
+                        {tx.paymentType}
+                      </span>
+                    )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    Ferdig
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {tx.paymentStatus === 'PENDING' ? (
+                      <span className="text-orange-600 font-medium">⏰ Venter på betaling</span>
+                    ) : (
+                      <span className="text-green-600 font-medium">✓ Betalt</span>
+                    )}
                   </td>
                 </tr>
               ))}

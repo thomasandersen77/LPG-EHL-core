@@ -24,6 +24,7 @@ class TransactionService(
         to: LocalDateTime?,
         dispenserAddress: Int?,
         paymentType: String?,
+        paymentStatus: String?,
         customerId: UUID?,
         page: Int = 0,
         size: Int = 50
@@ -32,6 +33,7 @@ class TransactionService(
         
         val resultPage = transactionRepository.findWithFilters(
             paymentType = paymentType,
+            paymentStatus = paymentStatus,
             customerId = customerId,
             from = from,
             to = to,
@@ -89,6 +91,18 @@ class TransactionService(
             transaction.customerId = customerId
         }
 
+        return transactionRepository.save(transaction)
+    }
+
+    @Transactional
+    fun updatePaymentStatus(transactionId: UUID, paymentMethod: String, paymentStatus: String): Transaction? {
+        val transaction = transactionRepository.findById(transactionId).orElse(null) ?: return null
+        
+        transaction.paymentType = paymentMethod
+        transaction.paymentStatus = paymentStatus
+        
+        logger.info("✅ Updated transaction {} payment: method={}, status={}", transactionId, paymentMethod, paymentStatus)
+        
         return transactionRepository.save(transaction)
     }
 }

@@ -84,7 +84,9 @@ springdoc:
 logging:
   level:
     root: INFO
-    no.cloudberries.lpg: DEBUG
+    no.cloudberries.lpg: INFO
+    no.cloudberries.lpg.api.controller: INFO
+    no.cloudberries.lpg.api.config.TokenAuthenticationFilter: WARN
     org.springframework.security: INFO
     org.hibernate.SQL: INFO
   pattern:

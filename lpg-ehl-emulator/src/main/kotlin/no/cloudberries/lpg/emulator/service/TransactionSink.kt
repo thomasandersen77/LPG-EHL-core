@@ -25,7 +25,8 @@ data class CompletedTransaction(
     val amountNok: Double,
     val unitPrice: Double,
     val finishedAt: Instant,
-    val idempotencyKey: String = UUID.randomUUID().toString()
+    val idempotencyKey: String = UUID.randomUUID().toString(),
+    var databaseId: String? = null  // Set after successful save
 )
 
 /**
@@ -52,6 +53,9 @@ class TransactionSink(
     
     // Buffered channel - non-blocking enqueue up to capacity
     private val queue = Channel<CompletedTransaction>(capacity = Channel.BUFFERED)
+    
+    // Track already-saved transaction IDs for idempotency
+    private val savedTransactionIds = Collections.synchronizedSet(mutableSetOf<String>())
     
     private var consumerJob: Job? = null
     
@@ -82,11 +86,21 @@ class TransactionSink(
      * @param transaction The completed transaction to save
      */
     fun enqueue(transaction: CompletedTransaction) {
+        // Idempotency check - skip if already saved or queued
+        if (savedTransactionIds.contains(transaction.idempotencyKey)) {
+            logger.debug("⚠️ Transaction ${transaction.idempotencyKey} already saved, skipping duplicate")
+            return
+        }
+        
+        savedTransactionIds.add(transaction.idempotencyKey)
+        
         val result = queue.trySend(transaction)
         if (result.isSuccess) {
             logger.debug("📥 Transaction enqueued: ${transaction.idempotencyKey} (${transaction.liters}L)")
         } else {
             logger.error("❌ Failed to enqueue transaction: queue full or closed")
+            // Remove from set if enqueue failed so it can be retried
+            savedTransactionIds.remove(transaction.idempotencyKey)
         }
     }
     
@@ -105,15 +119,20 @@ class TransactionSink(
                 try {
                     logger.info("💾 Saving transaction ${transaction.idempotencyKey} (attempt ${retryCount + 1})")
                     
-                    persistenceService.saveTransaction(
+                    val databaseId = persistenceService.saveTransaction(
                         dispenserAddress = transaction.dispenserId,
                         volumeDeciliters = (transaction.liters * 10).toInt(),
                         amountOre = (transaction.amountNok * 100).toInt(),
                         pricePerLiter = (transaction.unitPrice * 100).toInt()
                     )
                     
-                    logger.info("✅ Transaction ${transaction.idempotencyKey} saved successfully")
-                    success = true
+                    if (databaseId != null) {
+                        transaction.databaseId = databaseId
+                        logger.info("✅ Transaction ${transaction.idempotencyKey} saved with database ID: $databaseId")
+                        success = true
+                    } else {
+                        throw Exception("API returned null database ID")
+                    }
                     
                 } catch (e: Exception) {
                     retryCount++

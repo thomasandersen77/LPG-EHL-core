@@ -84,6 +84,9 @@ class EhlDispenserEmulator(
         }
     }
     
+    /**
+     * Handles product selection; transitions to authorized state
+     */
     private fun handleProductSelect(): List<EhlPacket> {
         logger.info("Product selected")
         if (state == EmulatorState.IDLE) {
@@ -116,9 +119,10 @@ class EhlDispenserEmulator(
             }
             EmulatorState.PAYMENT_PENDING -> {
                 // CRITICAL: Deny start when payment pending
-                logger.warn("UNBLOCK denied: Transaction awaiting payment (PAYMENT_PENDING)")
-                logger.warn("Totals frozen: ${completedTx?.volumeLitres} L, ${completedTx?.amountCents?.let { it/100.0 }} kr")
-                logger.warn("Call markPaid() or clear() to reset before new transaction")
+                logger.error("❌ UNBLOCK DENIED: Transaction awaiting payment (PAYMENT_PENDING)")
+                logger.error("❌ Totals frozen: ${completedTx?.volumeLitres} L, ${completedTx?.amountCents?.let { it/100.0 }} kr")
+                logger.error("❌ Must settle payment before starting new transaction")
+                logger.error("❌ Call settle endpoint (/api/v1/emulator/settle/{dispenserId}?method=CARD|CREDIT) to complete payment")
                 
                 // Return deterministic response: ACK + PAYMENT_PENDING state
                 listOf(
