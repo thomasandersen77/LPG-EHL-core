@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import no.cloudberries.lpg.api.model.Transaction
 import no.cloudberries.lpg.api.service.TransactionService
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Profile
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.math.BigDecimal
@@ -13,10 +14,13 @@ import java.time.LocalDateTime
 /**
  * Demo controller for testing frontend without authentication.
  * Provides simple endpoints for dispenser control simulation.
+ * 
+ * DEPRECATED: Only enabled with 'demo' profile. Use emulator API directly instead.
  */
+@Profile("demo")
 @RestController
 @RequestMapping("/api/v1/dispenser")
-@Tag(name = "Demo Dispenser", description = "Demo endpoints for frontend testing")
+@Tag(name = "Demo Dispenser", description = "Demo endpoints for frontend testing (deprecated)")
 class DemoDispenserController(
     private val transactionService: TransactionService
 ) {

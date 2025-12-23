@@ -3,11 +3,11 @@ import { useState } from 'react';
 import { dispenserApi } from '../api/dispenser';
 import type { DispenserStateDto } from '../types/api';
 
-type PaymentMethod = 'CASH' | 'CARD' | 'CREDIT';
+type PaymentMethod = 'CARD' | 'CREDIT';
 
 export function DispenserSimulator() {
   const queryClient = useQueryClient();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CARD');
 
   // Poll state every 500ms when delivering
   const { data: state, isLoading, error } = useQuery<DispenserStateDto>({
@@ -39,8 +39,8 @@ export function DispenserSimulator() {
     },
   });
 
-  const resetMutation = useMutation({
-    mutationFn: dispenserApi.reset,
+  const settleMutation = useMutation({
+    mutationFn: () => dispenserApi.settle(1, paymentMethod),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
     },
@@ -156,7 +156,6 @@ export function DispenserSimulator() {
               disabled={state?.state === 'DELIVERING'}
               className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="CASH">💰 Kontant</option>
               <option value="CARD">💳 Kort (simulert)</option>
               <option value="CREDIT">🏪 Stasjonskreditt</option>
             </select>
@@ -167,8 +166,8 @@ export function DispenserSimulator() {
             <div className={`p-3 rounded-lg text-center text-sm ${state?.dayMode ? 'bg-yellow-900/30 text-yellow-300' : 'bg-gray-700 text-gray-500'}`}>
               {state?.dayMode ? '☀️ Dagmodus' : '🌙 Nattmodus'}
             </div>
-            <div className={`p-3 rounded-lg text-center text-sm ${paymentMethod === 'CARD' ? 'bg-blue-900/30 text-blue-300' : paymentMethod === 'CREDIT' ? 'bg-purple-900/30 text-purple-300' : 'bg-gray-700 text-gray-500'}`}>
-              {paymentMethod === 'CARD' ? '💳 Kort' : paymentMethod === 'CREDIT' ? '🏪 Kreditt' : '💰 Kontant'}
+            <div className={`p-3 rounded-lg text-center text-sm ${paymentMethod === 'CARD' ? 'bg-blue-900/30 text-blue-300' : 'bg-purple-900/30 text-purple-300'}`}>
+              {paymentMethod === 'CARD' ? '💳 Kort' : '🏪 Kreditt'}
             </div>
           </div>
 
@@ -191,11 +190,11 @@ export function DispenserSimulator() {
             </button>
 
             <button
-              onClick={() => resetMutation.mutate()}
-              disabled={state?.state === 'DELIVERING' || resetMutation.isPending}
+              onClick={() => settleMutation.mutate()}
+              disabled={state?.state === 'DELIVERING' || settleMutation.isPending}
               className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg"
             >
-              {resetMutation.isPending ? '...' : '↻ Reset'}
+              {settleMutation.isPending ? '...' : '💳 Simuler betaling'}
             </button>
           </div>
         </div>
