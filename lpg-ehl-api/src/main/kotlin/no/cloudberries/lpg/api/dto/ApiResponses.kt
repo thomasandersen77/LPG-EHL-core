@@ -141,6 +141,39 @@ data class CreateTransactionRequest(
 )
 
 /**
+ * Azure Queue message DTO (for viewing messages in frontend)
+ */
+data class AzureQueueMessageDto(
+    val messageId: String,
+    val insertionTime: LocalDateTime,
+    val expirationTime: LocalDateTime,
+    val dequeueCount: Long,
+    val entityType: String?,
+    val entityId: String?,
+    val status: String?,
+    val retryCount: Int,
+    val transaction: TransactionData?
+) {
+    data class TransactionData(
+        val dispenserAddress: Int?,
+        val volumeLiters: Double?,
+        val amountKr: Double?,
+        val pricePerLiter: Double?,
+        val paymentType: String?,
+        val paymentStatus: String?,
+        val timestamp: String?
+    )
+}
+
+/**
+ * Azure Queue messages grouped by date
+ */
+data class AzureQueueByDateResponse(
+    val dates: Map<String, List<AzureQueueMessageDto>>,
+    val totalMessages: Int
+)
+
+/**
  * Error response
  */
 data class ErrorResponse(

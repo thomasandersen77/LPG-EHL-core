@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { fetchTransactions, type TransactionFilter } from '../api/transactions';
 import { format } from 'date-fns';
 import { nb } from 'date-fns/locale';
+import { AzureSyncStatus } from '../components/AzureSyncStatus';
 
 export function TransactionsPage() {
   const [page, setPage] = useState(0);
@@ -36,6 +37,9 @@ export function TransactionsPage() {
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4">
+      {/* Azure Sync Status */}
+      <AzureSyncStatus />
+
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-slate-900">Transaksjoner</h1>
         

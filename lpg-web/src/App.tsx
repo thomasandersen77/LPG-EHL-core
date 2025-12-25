@@ -7,6 +7,7 @@ import { CreditAccountsPage } from './pages/CreditAccountsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { EmulatorDebugPage } from './pages/EmulatorDebugPage';
 import { PaymentTerminalPage } from './pages/PaymentTerminalPage';
+import { AzureStoragePage } from './pages/AzureStoragePage';
 import { Layout } from './components/Layout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -33,6 +34,7 @@ function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="payment-terminal" element={<PaymentTerminalPage />} />
             <Route path="emulator-debug" element={<EmulatorDebugPage />} />
+            <Route path="azure-storage" element={<AzureStoragePage />} />
           </Route>
         </Routes>
       </BrowserRouter>

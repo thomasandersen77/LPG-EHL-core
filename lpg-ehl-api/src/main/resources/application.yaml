@@ -1,6 +1,8 @@
 spring:
   application:
     name: lpg-ehl-api
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
   
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lpg_ehl}
@@ -43,7 +45,7 @@ spring:
 azure:
   enabled: ${AZURE_ENABLED:true}
   storage:
-    connection-string: ${AZURE_CONNECTION_STRING:UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite:10001}
+    connection-string: ${AZURE_CONNECTION_STRING:UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://localhost:10001}
     queue-name: ${AZURE_QUEUE_NAME:lpg-transactions}
   sync:
     interval-seconds: ${AZURE_SYNC_INTERVAL:300}

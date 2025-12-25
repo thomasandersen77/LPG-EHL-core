@@ -15,7 +15,8 @@ import java.util.*
 @Service
 @Transactional(readOnly = true)
 class TransactionService(
-    private val transactionRepository: TransactionRepository
+    private val transactionRepository: TransactionRepository,
+    private val transactionSyncService: TransactionSyncService?
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -76,6 +77,9 @@ class TransactionService(
         
         val saved = transactionRepository.save(transaction)
         
+        // Queue for Azure sync
+        transactionSyncService?.queueTransactionForSync(saved, "CREATED")
+        
         logger.info("Transaction saved successfully with ID: {}", saved.transactionId)
         
         return saved
@@ -101,8 +105,13 @@ class TransactionService(
         transaction.paymentType = paymentMethod
         transaction.paymentStatus = paymentStatus
         
+        val saved = transactionRepository.save(transaction)
+        
+        // Queue for Azure sync when payment is updated
+        transactionSyncService?.queueTransactionForSync(saved, "PAYMENT_UPDATED")
+        
         logger.info("✅ Updated transaction {} payment: method={}, status={}", transactionId, paymentMethod, paymentStatus)
         
-        return transactionRepository.save(transaction)
+        return saved
     }
 }

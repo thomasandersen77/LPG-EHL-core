@@ -114,28 +114,57 @@ lpg-ehl/
    BUILD SUCCESS
    ```
 
-## 🐳 Docker Deployment
+## 🌩️ Cloud Integration & Simulation
 
-### Local Development (Mac / Linux VM)
+This project implements a complete **Edge-to-Cloud** architecture for LPG stations.
 
-Run with emulator for testing without hardware:
+### Architecture
+- **Edge (Pump Station)**: This project (`lpg-ehl`). Runs locally on the station hardware.
+  - Controls pumps via RS-485.
+  - Stores transactions in local PostgreSQL.
+  - Pushes transactions to **Azure Storage Queue** (via `azure_sync_queue` outbox table).
+- **Cloud (Admin System)**: The `MinLPG` project (separate repo).
+  - Consumes messages from Azure Storage Queue.
+  - Provides admin dashboard for station owners.
 
-```bash
-# Start all services (PostgreSQL + App with Emulator + pgAdmin)
-docker-compose -f docker-compose-local.yaml up
+### Running the Full Simulation (Local)
 
-# Access services:
-# - Application API:  http://localhost:8080
-# - PostgreSQL:       localhost:5432 (user: lpg_user, password: lpg_dev_password)
-# - pgAdmin:          http://localhost:5050 (admin@lpg-ehl.local / admin)
-# - Azure Emulator:   localhost:10001
+You can run both the **Pump System** and the **Cloud Admin System** simultaneously on your machine using Docker Compose.
 
-# View logs
-docker-compose -f docker-compose-local.yaml logs -f lpg-ehl-app
+1. **Start Pump System (Edge)**:
+   ```bash
+   # Starts API (8080), Emulator (9000), Postgres (5432), and Azurite (10001)
+   docker-compose -f docker-compose-local.yaml up
+   ```
 
-# Stop
-docker-compose -f docker-compose-local.yaml down
-```
+2. **Start Admin System (Cloud)**:
+   Navigate to the `MinLPG` project folder and start its stack.
+   ```bash
+   # Starts Backend (8081), Frontend (3001), and Postgres (5433)
+   cd ../MinLPG
+   docker-compose up
+   ```
+
+### Simulation Tools
+
+We provide scripts to simulate real-world usage:
+
+- **Generate Traffic**: Creates random fuel transactions and pays them.
+  ```bash
+  ./scripts/simulate-traffic.sh      # 1 customer per hour
+  ./scripts/simulate-traffic.sh 10   # 1 customer every 10 seconds (fast mode)
+  ```
+
+- **Monitor Azure Queue**: View raw messages being sent to the cloud.
+  ```bash
+  ./scripts/view-azurite-messages.sh --watch
+  ```
+
+### Access Points
+- **Pump API**: http://localhost:8080
+- **Pump Emulator**: http://localhost:3000 (if frontend running)
+- **Cloud Admin**: http://localhost:3001
+- **Azurite Queue**: http://localhost:10001
 
 ### Production Deployment (Pump Linux Machine)
 

@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 const EMULATOR_URL = import.meta.env.VITE_EMULATOR_URL || 'http://localhost:8090/api/v1';
 
 export type EmulatorScenario = 'NORMAL' | 'TIMEOUT' | 'CHECKSUM_ERROR' | 'NO_CONNECTION';

@@ -6,8 +6,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
+import no.cloudberries.lpg.api.dto.AzureQueueByDateResponse
+import no.cloudberries.lpg.api.dto.AzureQueueMessageDto
 import no.cloudberries.lpg.api.dto.SyncStatusResponse
+import no.cloudberries.lpg.api.service.AzureQueueReaderService
 import no.cloudberries.lpg.api.service.AzureSyncService
+import java.time.format.DateTimeFormatter
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -19,7 +23,8 @@ import java.util.*
 // @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 @ConditionalOnProperty(name = ["azure.enabled"], havingValue = "true")
 class SyncController(
-    private val azureSyncService: AzureSyncService
+    private val azureSyncService: AzureSyncService,
+    private val azureQueueReaderService: AzureQueueReaderService
 ) {
 
     @GetMapping("/status")
@@ -79,5 +84,51 @@ class SyncController(
     fun triggerSync(): ResponseEntity<Map<String, String>> {
         azureSyncService.syncPendingItems()
         return ResponseEntity.ok(mapOf("message" to "Sync job triggered"))
+    }
+
+    @GetMapping("/queue/messages")
+    @Operation(
+        summary = "Get Azure Queue messages",
+        description = "Peek at messages in Azure Storage Queue without removing them"
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "Successful operation"),
+            ApiResponse(responseCode = "401", description = "Unauthorized")
+        ]
+    )
+    fun getQueueMessages(
+        @Parameter(description = "Maximum number of messages to retrieve")
+        @RequestParam(defaultValue = "32") maxMessages: Int
+    ): ResponseEntity<List<AzureQueueMessageDto>> {
+        val messages = azureQueueReaderService.peekMessages(maxMessages.coerceAtMost(1000))
+        return ResponseEntity.ok(messages)
+    }
+
+    @GetMapping("/queue/by-date")
+    @Operation(
+        summary = "Get Azure Queue messages grouped by date",
+        description = "Get all messages from Azure Queue grouped by insertion date"
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "Successful operation"),
+            ApiResponse(responseCode = "401", description = "Unauthorized")
+        ]
+    )
+    fun getQueueMessagesByDate(): ResponseEntity<AzureQueueByDateResponse> {
+        val messagesByDate = azureQueueReaderService.getMessagesByDate()
+        
+        // Convert LocalDate keys to String for JSON serialization
+        val formatter = DateTimeFormatter.ISO_LOCAL_DATE
+        val datesMap = messagesByDate.mapKeys { it.key.format(formatter) }
+        val totalMessages = messagesByDate.values.sumOf { it.size }
+        
+        val response = AzureQueueByDateResponse(
+            dates = datesMap,
+            totalMessages = totalMessages
+        )
+        
+        return ResponseEntity.ok(response)
     }
 }
