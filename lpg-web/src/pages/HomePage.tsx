@@ -57,12 +57,14 @@ export function HomePage() {
             endpoint="Port 5432"
             status="Healthy"
           />
-          <Card
-            title="☁️ Azure Storage"
-            description="Queue storage for cloud sync (Azurite emulator)"
-            endpoint="Port 10001"
-            status="Running"
-          />
+          <Link to="/azure-storage">
+            <Card
+              title="☁️ Azure Storage"
+              description="Queue storage for cloud sync (Azurite emulator)"
+              endpoint="Port 10001"
+              status="Running"
+            />
+          </Link>
         </div>
 
         {/* Navigation Section */}
@@ -112,6 +114,15 @@ export function HomePage() {
               <div className="text-4xl mb-3">🔧</div>
               <h4 className="text-lg font-bold text-slate-900 mb-2">Emulator Debug</h4>
               <p className="text-sm text-slate-600">Test feilscenarier og debugging</p>
+            </Link>
+
+            <Link
+              to="/azure-storage"
+              className="p-6 bg-indigo-50 hover:bg-indigo-100 border-2 border-indigo-200 rounded-xl transition text-center group"
+            >
+              <div className="text-4xl mb-3">☁️</div>
+              <h4 className="text-lg font-bold text-slate-900 mb-2">Azure Storage</h4>
+              <p className="text-sm text-slate-600">Se transaksjoner i skykø (Azurite)</p>
             </Link>
 
             <a

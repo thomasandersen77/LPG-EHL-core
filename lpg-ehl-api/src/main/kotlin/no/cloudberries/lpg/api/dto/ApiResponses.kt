@@ -18,6 +18,7 @@ data class TransactionResponse(
     val amountKr: BigDecimal,
     val pricePerLiter: BigDecimal?,
     val paymentType: String?,
+    val paymentStatus: String,
     val customerId: UUID?,
     val customerName: String?,
     val includesRoadTax: Boolean,
@@ -34,6 +35,7 @@ data class TransactionResponse(
             amountKr = transaction.amountKr,
             pricePerLiter = transaction.pricePerLiter,
             paymentType = transaction.paymentType,
+            paymentStatus = transaction.paymentStatus,
             customerId = transaction.customerId,
             customerName = transaction.customerName,
             includesRoadTax = transaction.includesRoadTax,
@@ -133,9 +135,42 @@ data class CreateTransactionRequest(
     val volumeDeciliters: Int,
     val amountOre: Int,
     val pricePerLiter: Int,
-    val paymentType: String = "CASH",
+    val paymentType: String? = null, // null = awaiting payment
     val productCode: String? = "LPG",
     val includesRoadTax: Boolean = true
+)
+
+/**
+ * Azure Queue message DTO (for viewing messages in frontend)
+ */
+data class AzureQueueMessageDto(
+    val messageId: String,
+    val insertionTime: LocalDateTime,
+    val expirationTime: LocalDateTime,
+    val dequeueCount: Long,
+    val entityType: String?,
+    val entityId: String?,
+    val status: String?,
+    val retryCount: Int,
+    val transaction: TransactionData?
+) {
+    data class TransactionData(
+        val dispenserAddress: Int?,
+        val volumeLiters: Double?,
+        val amountKr: Double?,
+        val pricePerLiter: Double?,
+        val paymentType: String?,
+        val paymentStatus: String?,
+        val timestamp: String?
+    )
+}
+
+/**
+ * Azure Queue messages grouped by date
+ */
+data class AzureQueueByDateResponse(
+    val dates: Map<String, List<AzureQueueMessageDto>>,
+    val totalMessages: Int
 )
 
 /**

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const EMULATOR_URL = import.meta.env.VITE_EMULATOR_URL || 'http://localhost:8090/api/v1';
 
 export type EmulatorScenario = 'NORMAL' | 'TIMEOUT' | 'CHECKSUM_ERROR' | 'NO_CONNECTION';
 
@@ -13,7 +13,7 @@ export interface EmulatorStatus {
 }
 
 export async function setEmulatorScenario(address: number, scenario: EmulatorScenario): Promise<EmulatorStatus> {
-  const res = await axios.post<EmulatorStatus>(`${API_URL}/emulator/scenario`, {
+  const res = await axios.post<EmulatorStatus>(`${EMULATOR_URL}/emulator/scenario`, {
     dispenserAddress: address,
     scenario
   });
@@ -21,11 +21,35 @@ export async function setEmulatorScenario(address: number, scenario: EmulatorSce
 }
 
 export async function resetEmulator(address: number): Promise<EmulatorStatus> {
-  const res = await axios.post<EmulatorStatus>(`${API_URL}/emulator/reset/${address}`);
+  const res = await axios.post<EmulatorStatus>(`${EMULATOR_URL}/emulator/reset/${address}`);
   return res.data;
 }
 
 export async function getEmulatorStatus(address: number): Promise<EmulatorStatus> {
-  const res = await axios.get<EmulatorStatus>(`${API_URL}/emulator/status/${address}`);
+  const res = await axios.get<EmulatorStatus>(`${EMULATOR_URL}/emulator/status/${address}`);
+  return res.data;
+}
+
+export interface SettlementResponse {
+  status: string;
+  method: string;
+  windowsBroadcastSent?: boolean;
+  transaction?: {
+    dispenserId: number;
+    liters: number;
+    amountNok: number;
+    unitPrice: number;
+    finishedAt: string;
+    idempotencyKey: string;
+  };
+  message?: string;
+}
+
+export async function settlePayment(dispenserId: number, method: 'CARD' | 'CREDIT' = 'CARD'): Promise<SettlementResponse> {
+  const res = await axios.post<SettlementResponse>(
+    `${EMULATOR_URL}/emulator/settle/${dispenserId}`,
+    null,
+    { params: { method } }
+  );
   return res.data;
 }

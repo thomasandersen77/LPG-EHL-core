@@ -1,5 +1,7 @@
 package no.cloudberries.lpg.emulator
 
+import org.slf4j.LoggerFactory
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -7,6 +9,7 @@ import org.springframework.web.bind.annotation.*
 class EmulatorController(
     private val emulatorService: EmulatorService
 ) {
+    private val logger = LoggerFactory.getLogger(EmulatorController::class.java)
 
     data class SetScenarioRequest(
         val dispenserAddress: Int,
@@ -15,12 +18,14 @@ class EmulatorController(
 
     @PostMapping("/scenario")
     fun setScenario(@RequestBody body: SetScenarioRequest): EmulatorStatus {
+        logger.info("🎬 Setting emulator scenario: address=${body.dispenserAddress}, scenario=${body.scenario}")
         emulatorService.setScenario(body.dispenserAddress, body.scenario)
         return emulatorService.status(body.dispenserAddress)
     }
 
     @PostMapping("/reset/{address}")
     fun reset(@PathVariable("address") dispenserAddress: Int): EmulatorStatus {
+        logger.info("🔄 Resetting emulator: address=${dispenserAddress}")
         emulatorService.reset(dispenserAddress)
         return emulatorService.status(dispenserAddress)
     }

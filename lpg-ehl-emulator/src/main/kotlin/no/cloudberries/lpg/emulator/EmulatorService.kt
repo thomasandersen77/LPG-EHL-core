@@ -1,16 +1,16 @@
 package no.cloudberries.lpg.emulator
 
-import no.cloudberries.lpg.emulator.service.TransactionPersistenceService
+import kotlinx.coroutines.*
+import no.cloudberries.lpg.emulator.api.LpgApiClient
+import no.cloudberries.lpg.emulator.service.TransactionSink
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
-import kotlin.concurrent.thread
 
 @Service
 class EmulatorService(
@@ -18,7 +18,8 @@ class EmulatorService(
     @Value("\${emulator.price-per-litre-cents:1590}") private val pricePerLitreCents: Int,
     @Value("\${emulator.litres-per-second:0.5}") private val litresPerSecond: Double,
     @Value("\${emulator.port:9000}") private val port: Int,
-    private val transactionPersistenceService: TransactionPersistenceService
+    private val transactionSink: TransactionSink,
+    private val lpgApiClient: LpgApiClient
 ) {
     private val logger = LoggerFactory.getLogger(EmulatorService::class.java)
     private val emulator = EhlDispenserEmulator(address, pricePerLitreCents, litresPerSecond)
@@ -86,6 +87,38 @@ class EmulatorService(
             }
         }
     }
+    
+    /**
+     * Broadcast a legacy text message to all connected Windows clients.
+     * Used to notify Windows Dispenserkontroll of state changes (e.g., reset after payment).
+     * 
+     * This method is fail-safe: if one client fails, others still receive the message.
+     * 
+     * @param message Text message (without newline)
+     */
+    private fun broadcastLegacy(message: String) {
+        if (clientHandlers.isEmpty()) {
+            logger.debug("📭 No clients connected - skipping broadcast")
+            return
+        }
+        
+        logger.info("📢 Broadcasting to ${clientHandlers.size} client(s): $message")
+        
+        var successCount = 0
+        var failCount = 0
+        
+        clientHandlers.values.forEach { client ->
+            runCatching { 
+                client.sendLegacy(message)
+                successCount++
+            }.onFailure { e -> 
+                logger.warn("⚠️ Failed to broadcast to one client: ${e.message}")
+                failCount++
+            }
+        }
+        
+        logger.info("✅ Broadcast complete: $successCount OK, $failCount failed")
+    }
 
     @PreDestroy
     fun stop() {
@@ -109,8 +142,31 @@ class EmulatorService(
         private val clientId: String
     ) : Runnable {
 
-        private val isFilling = AtomicBoolean(false)
         private val output = socket.getOutputStream()
+        
+        // Coroutine scope and job for simulation
+        private val simulationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        private var simulationJob: Job? = null
+        
+        /**
+         * Send a legacy text message to this client.
+         * Thread-safe for concurrent broadcasts.
+         * 
+         * @param message Text message WITHOUT newline (will be added automatically)
+         */
+        @Synchronized
+        fun sendLegacy(message: String) {
+            try {
+                synchronized(output) {
+                    output.write((message + "\n").toByteArray(Charsets.UTF_8))
+                    output.flush()
+                }
+                logger.debug("📤 Sent legacy to $clientId: $message")
+            } catch (e: Exception) {
+                logger.error("❌ Failed to send legacy to $clientId", e)
+                throw e  // Re-throw so broadcast can log failure
+            }
+        }
         
         // Track final transaction totals
         @Volatile
@@ -186,27 +242,40 @@ class EmulatorService(
                 val coreResponses = emulator.onBytesFromHost(encodedPacket)
                 logger.info("║ ✅ Core returned ${coreResponses.size} response(s)")
                 
+                // CRITICAL: Check if there's a pending transaction
+                val pendingTx = emulator.getPendingTransaction()
+                
+                if (pendingTx != null) {
+                    // Emulator denied UNBLOCK due to pending payment
+                    logger.error("║ ❌ UNBLOCK BLOCKED: Payment pending")
+                    logger.error("║ ❌ Pending transaction: ${pendingTx.amountNok} NOK")
+                    logger.error("╩════════════════════════════════════════════════════════════")
+                    
+                    // Send IDLE state to Windows (blocked)
+                    val response = "<STATE_TANK>;00000000"
+                    logger.info("📤 RESPONSE (legacy format): $response")
+                    sendText(response)
+                    return
+                }
+                
                 // Simulate nozzle lift to trigger PUMPING
                 emulator.simulateNozzleLift(true)
                 
-                if (!isFilling.get()) {
-                    isFilling.set(true)
+                if (simulationJob == null || simulationJob?.isActive == false) {
                     logger.info("║ Status: IDLE → FILLING")
-                    logger.info("║ Action: Starting simulation thread...")
-                    logger.info("╚════════════════════════════════════════════════════════════")
+                    logger.info("║ Action: Starting simulation coroutine...")
+                    logger.info("╩════════════════════════════════════════════════════════════")
                     
                     // Send svar at vi er i gang (Status 1 på index 4 = Frigitt)
                     val response = "<STATE_TANK>;00001000"
                     logger.info("📤 RESPONSE (legacy format): $response")
                     sendText(response)
 
-                    // Start en tråd som teller opp liter og penger
-                    thread(start = true, isDaemon = true) {
-                        simulateFillingLoop()
-                    }
+                    // Start simulation coroutine
+                    startSimulation()
                 } else {
                     logger.info("║ Status: Already filling, ignoring")
-                    logger.info("╚════════════════════════════════════════════════════════════")
+                    logger.info("╩════════════════════════════════════════════════════════════")
                 }
             }
             else if (cmd.contains("TANK_DISP_STOP")) {
@@ -227,10 +296,23 @@ class EmulatorService(
                 // Simulate nozzle holster
                 emulator.simulateNozzleLift(false)
                 
-                // Stopp fylling
-                isFilling.set(false)
+                // Stop simulation immediately
+                stopSimulation()
                 
-                // Transaction will be saved by simulation thread after it stops
+                // Send final TANK message with frozen values BEFORE state change
+                val pendingTx = emulator.getPendingTransaction()
+                if (pendingTx != null) {
+                    val price = pricePerLitreCents / 100.0
+                    val tankMsg = String.format(
+                        "<TANK>;0;%.2f;%.2f;%.2f;0;",
+                        pendingTx.amountNok, pendingTx.liters, price
+                    ).replace(',', '.')
+                    logger.info("📤 Sending frozen values to Windows: $tankMsg")
+                    sendText(tankMsg)
+                }
+                
+                // Enqueue frozen transaction if any
+                enqueuePendingTransaction()
                 
                 val response = "<STATE_TANK>;00000000"
                 logger.info("📤 RESPONSE (legacy format): $response")
@@ -249,60 +331,87 @@ class EmulatorService(
             }
         }
 
-        private fun simulateFillingLoop() {
-            var volume = 0.0
-            var amount = 0.0
-            val price = pricePerLitreCents / 100.0
-
-            val startTime = System.currentTimeMillis()
+        /**
+         * Start fuel simulation coroutine.
+         * Uses isActive to allow immediate cancellation.
+         */
+        private fun startSimulation() {
+            // Cancel any existing job
+            simulationJob?.cancel()
             
-            logger.info("┌──────────────────────────────────────────────────────────")
-            logger.info("│ ⛽ FUEL SIMULATION STARTED")
-            logger.info("│ Price: $price NOK/L")
-            logger.info("│ Flow rate: $litresPerSecond L/s")
-            logger.info("│ Updates: Every 1 second")
-            logger.info("└──────────────────────────────────────────────────────────")
+            simulationJob = simulationScope.launch {
+                var volume = 0.0
+                var amount = 0.0
+                val price = pricePerLitreCents / 100.0
 
-            var updateCount = 0
-            
-            while (isFilling.get() && isRunning) {
-                Thread.sleep(1000) // Oppdater hvert sekund
+                val startTime = System.currentTimeMillis()
+                
+                logger.info("┌──────────────────────────────────────────────────────────")
+                logger.info("│ ⛽ FUEL SIMULATION STARTED")
+                logger.info("│ Price: $price NOK/L")
+                logger.info("│ Flow rate: $litresPerSecond L/s")
+                logger.info("│ Updates: Every 1 second")
+                logger.info("└──────────────────────────────────────────────────────────")
 
-                // Beregn ny status
-                volume += litresPerSecond
-                amount = volume * price
-                updateCount++
+                var updateCount = 0
+                
+                // Use isActive for immediate cancellation
+                while (isActive && isRunning) {
+                    delay(1000) // Suspend instead of Thread.sleep
 
-                // Format: <TANK>;<Ignored>;<Beløp>;<Volum>;<Pris>;<BankVises>;<BankTekst>
-                // Eksempel: <TANK>;0;15.90;1.00;15.90;1;BankTerminal...
-                val msg = String.format(
-                    "<TANK>;0;%.2f;%.2f;%.2f;1;Kort Godkjent",
-                    amount, volume, price
-                ).replace(',', '.') // Pass på punktum som desimaltegn!
+                    // Check again after delay
+                    if (!isActive) break
 
-                logger.info("⛽ Update #$updateCount: %.2f L @ %.2f NOK = %.2f NOK".format(volume, price, amount))
-                logger.debug("   📤 Sending: $msg")
-                sendText(msg)
+                    // Beregn ny status
+                    volume += litresPerSecond
+                    amount = volume * price
+                    updateCount++
+
+                    // Format: <TANK>;<Ignored>;<Beløp>;<Volum>;<Pris>;<BankVises>;<BankTekst>
+                    val msg = String.format(
+                        "<TANK>;0;%.2f;%.2f;%.2f;1;Kort Godkjent",
+                        amount, volume, price
+                    ).replace(',', '.') // Pass på punktum som desimaltegn!
+
+                    logger.info("⛽ Update #$updateCount: %.2f L @ %.2f NOK = %.2f NOK".format(volume, price, amount))
+                    logger.debug("   📤 Sending: $msg")
+                    sendText(msg)
+                }
+                
+                // Calculate final elapsed time
+                val elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000.0
+                
+                // Store final values
+                lastVolumeLitres = volume
+                lastAmountKr = amount
+                
+                logger.info("┌──────────────────────────────────────────────────────────")
+                logger.info("│ 🏁 FUEL SIMULATION STOPPED")
+                logger.info("│ Final volume: %.2f L".format(volume))
+                logger.info("│ Final amount: %.2f NOK".format(amount))
+                logger.info("│ Duration: %.1f seconds".format(elapsedSeconds))
+                logger.info("│ Updates sent: $updateCount")
+                logger.info("└──────────────────────────────────────────────────────────")
             }
+        }
+        
+        /**
+         * Stop simulation immediately by cancelling the job.
+         */
+        private fun stopSimulation() {
+            simulationJob?.cancel()
+            simulationJob = null
+            logger.debug("⏸️ Simulation stopped")
+        }
+        
+        /**
+         * Enqueue pending transaction to TransactionSink for async persistence.
+         */
+        private fun enqueuePendingTransaction() {
+            val tx = emulator.getPendingTransaction() ?: return
             
-            // Calculate final elapsed time
-            val elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000.0
-            
-            // Store final values for transaction save
-            lastVolumeLitres = volume
-            lastAmountKr = amount
-            
-            logger.info("┌──────────────────────────────────────────────────────────")
-            logger.info("│ 💞 Saving transaction to database...")
-            // Save transaction to database (now that values are set)
-            saveCurrentTransaction()
-            
-            logger.info("│ 🏁 FUEL SIMULATION STOPPED")
-            logger.info("│ Final volume: %.2f L".format(volume))
-            logger.info("│ Final amount: %.2f NOK".format(amount))
-            logger.info("│ Duration: %.1f seconds".format(elapsedSeconds))
-            logger.info("│ Updates sent: $updateCount")
-            logger.info("└──────────────────────────────────────────────────────────")
+            logger.info("📥 Enqueueing transaction ${tx.idempotencyKey} for async save")
+            transactionSink.enqueue(tx)
         }
 
         private fun sendText(text: String) {
@@ -329,34 +438,94 @@ class EmulatorService(
         }
 
         fun close() {
-            isFilling.set(false)
+            stopSimulation()
+            simulationScope.cancel()
             try { socket.close() } catch (e: Exception) {}
-        }
-        
-        private fun saveCurrentTransaction() {
-            try {
-                // Use final values from simulation
-                val volumeDeciliters = (lastVolumeLitres * 10).toInt() // Convert L to dl
-                val amountOre = (lastAmountKr * 100).toInt() // Convert kr to øre
-                
-                // Only save if there's actual volume
-                if (volumeDeciliters > 0) {
-                    transactionPersistenceService.saveTransaction(
-                        dispenserAddress = address,
-                        volumeDeciliters = volumeDeciliters,
-                        amountOre = amountOre,
-                        pricePerLiter = pricePerLitreCents
-                    )
-                    logger.info("💾 Transaction saved: ${lastVolumeLitres}L, ${lastAmountKr} kr")
-                } else {
-                    logger.debug("No volume dispensed, skipping transaction save")
-                }
-            } catch (e: Exception) {
-                logger.error("Failed to save transaction", e)
-            }
         }
     }
 
     fun getStatus(): Map<String, Any> = mapOf("clients" to clientHandlers.size)
     fun reset() = emulator.reset()
+    
+    /**
+     * Settle pending transaction and reset dispenser to IDLE.
+     * 
+     * @param method Payment method ("CARD" or "CREDIT")
+     * @return The settled transaction, or null if no transaction was pending
+     */
+    fun settle(method: String = "CARD") = emulator.settleAndReset(method)
+    
+    /**
+     * Settle pending transaction and broadcast reset to all Windows clients.
+     * 
+     * This is the CRITICAL method that solves the "Windows shows old values" problem.
+     * 
+     * Flow:
+     * 1. Settle transaction internally (emulator.settleAndReset())
+     * 2. Broadcast <TANK> with 0.00 / 0.00 to Windows
+     * 3. Broadcast <STATE_TANK> with idle state to Windows
+     * 
+     * @param method Payment method ("CARD" or "CREDIT")
+     * @return Settled transaction, or null if no pending transaction
+     */
+    fun settleAndBroadcast(method: String = "CARD"): no.cloudberries.lpg.emulator.service.CompletedTransaction? {
+        logger.info("┌────────────────────────────────────────────────────────────")
+        logger.info("│ 💳 SETTLE AND BROADCAST")
+        logger.info("│ Method: $method")
+        logger.info("└────────────────────────────────────────────────────────────")
+        
+        // 1. Settle internal state via emulator
+        val settledTransaction = emulator.settleAndReset(method)
+        
+        if (settledTransaction == null) {
+            logger.warn("⚠️ No transaction to settle - broadcast skipped")
+            return null
+        }
+        
+        logger.info("✅ Transaction settled: ${settledTransaction.liters} L @ ${settledTransaction.amountNok} NOK")
+        
+        // 2. Update payment status in database (wait for databaseId if needed)
+        if (settledTransaction.databaseId == null) {
+            logger.warn("⚠️ Transaction not yet saved to database, waiting up to 5 seconds...")
+            // Wait for async save to complete
+            var waited = 0
+            while (settledTransaction.databaseId == null && waited < 50) {
+                Thread.sleep(100)
+                waited++
+            }
+        }
+        
+        if (settledTransaction.databaseId != null) {
+            logger.info("💾 Updating payment status in database for ID: ${settledTransaction.databaseId}")
+            val updateSuccess = lpgApiClient.updatePaymentStatus(
+                transactionId = settledTransaction.databaseId!!,
+                paymentMethod = method
+            )
+            if (updateSuccess) {
+                logger.info("✅ Payment status updated in database")
+            } else {
+                logger.warn("⚠️ Failed to update payment status in database (transaction still settled locally)")
+            }
+        } else {
+            logger.error("❌ Transaction database ID not available after waiting - payment status NOT updated")
+        }
+        
+        // 3. Broadcast reset to all Windows clients
+        logger.info("📢 Broadcasting reset to Windows clients...")
+        
+        val price = String.format(java.util.Locale.US, "%.2f", pricePerLitreCents / 100.0)
+        
+        // <TANK> format: <TANK>;<ignored>;<beløp>;<volum>;<pris>;<bank_status>;<bank_text>
+        // Windows parser: parts[2]=amount, parts[3]=volume, parts[4]=price
+        broadcastLegacy("<TANK>;0;0.00;0.00;$price;0;")
+        
+        // <STATE_TANK> format: 8-character string
+        // Index 4 = '0' means idle (not released)
+        broadcastLegacy("<STATE_TANK>;00000000")
+        
+        logger.info("✅ Broadcast complete - Windows should now show 0.00 / 0.00")
+        logger.info("🟢 Dispenser ready for next customer")
+        
+        return settledTransaction
+    }
 }

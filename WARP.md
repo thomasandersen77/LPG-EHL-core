@@ -90,7 +90,22 @@ mvn verify -pl lpg-ehl-api
 ```bash
 # Start all services: postgres + azurite + emulator + api + frontend + wiremock
 docker-compose -f docker-compose-local.yaml up
+```
 
+**Cloud Simulation (MinLPG)**:
+This project (`lpg-ehl`) acts as the Edge/Pump system. To simulate the full Edge-to-Cloud flow, you can run the `MinLPG` project (Admin System) in parallel.
+
+1. Start `lpg-ehl` (provides Azurite on port 10001).
+2. Start `MinLPG` in a separate terminal:
+   ```bash
+   cd ../MinLPG
+   docker-compose up
+   ```
+   *MinLPG will connect to the Azurite instance running in this project.*
+
+**Access Points:**
+- Pump System: http://localhost:3000 (Frontend), http://localhost:8080 (API)
+- Admin System: http://localhost:3001 (Frontend), http://localhost:8081 (API)
 # Start in background
 docker-compose -f docker-compose-local.yaml up -d
 

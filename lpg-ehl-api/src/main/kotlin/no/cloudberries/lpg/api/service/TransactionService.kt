@@ -15,7 +15,8 @@ import java.util.*
 @Service
 @Transactional(readOnly = true)
 class TransactionService(
-    private val transactionRepository: TransactionRepository
+    private val transactionRepository: TransactionRepository,
+    private val transactionSyncService: TransactionSyncService?
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -24,6 +25,7 @@ class TransactionService(
         to: LocalDateTime?,
         dispenserAddress: Int?,
         paymentType: String?,
+        paymentStatus: String?,
         customerId: UUID?,
         page: Int = 0,
         size: Int = 50
@@ -32,6 +34,7 @@ class TransactionService(
         
         val resultPage = transactionRepository.findWithFilters(
             paymentType = paymentType,
+            paymentStatus = paymentStatus,
             customerId = customerId,
             from = from,
             to = to,
@@ -74,6 +77,9 @@ class TransactionService(
         
         val saved = transactionRepository.save(transaction)
         
+        // Queue for Azure sync
+        transactionSyncService?.queueTransactionForSync(saved, "CREATED")
+        
         logger.info("Transaction saved successfully with ID: {}", saved.transactionId)
         
         return saved
@@ -90,5 +96,22 @@ class TransactionService(
         }
 
         return transactionRepository.save(transaction)
+    }
+
+    @Transactional
+    fun updatePaymentStatus(transactionId: UUID, paymentMethod: String, paymentStatus: String): Transaction? {
+        val transaction = transactionRepository.findById(transactionId).orElse(null) ?: return null
+        
+        transaction.paymentType = paymentMethod
+        transaction.paymentStatus = paymentStatus
+        
+        val saved = transactionRepository.save(transaction)
+        
+        // Queue for Azure sync when payment is updated
+        transactionSyncService?.queueTransactionForSync(saved, "PAYMENT_UPDATED")
+        
+        logger.info("✅ Updated transaction {} payment: method={}, status={}", transactionId, paymentMethod, paymentStatus)
+        
+        return saved
     }
 }
