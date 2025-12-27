@@ -186,6 +186,9 @@ class EhlEmulatorIntegrationTest {
         comm.receive() // STATE
         comm.receive() // VOLUME
 
+        // Clear the transaction to reset emulator to IDLE
+        emulator.settleAndReset()
+
         // Second delivery - need to lift nozzle again (STOP resets nozzle state)
         emulator.simulateNozzleLift(true)
         comm.send(EhlPacket(1, EhlCommand.UNBLOCK))

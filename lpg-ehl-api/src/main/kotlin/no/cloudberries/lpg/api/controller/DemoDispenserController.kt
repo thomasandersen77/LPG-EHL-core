@@ -17,10 +17,9 @@ import java.time.LocalDateTime
  * 
  * DEPRECATED: Only enabled with 'demo' profile. Use emulator API directly instead.
  */
-@Profile("demo")
 @RestController
 @RequestMapping("/api/v1/dispenser")
-@Tag(name = "Demo Dispenser", description = "Demo endpoints for frontend testing (deprecated)")
+@Tag(name = "Demo Dispenser", description = "Demo endpoints for frontend testing")
 class DemoDispenserController(
     private val transactionService: TransactionService
 ) {
