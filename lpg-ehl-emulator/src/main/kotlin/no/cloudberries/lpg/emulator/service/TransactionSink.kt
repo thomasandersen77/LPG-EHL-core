@@ -12,15 +12,26 @@ import jakarta.annotation.PreDestroy
 /**
  * Data class representing a completed fuel transaction ready for persistence.
  * 
- * @property dispenserId Dispenser address (1-255)
+ * ## Multi-Station Support:
+ * Each transaction now includes station and edge identifiers to support
+ * multiple stations and dispensers in the cloud system.
+ * 
+ * @property stationId Station identifier (e.g., "S001", "S002") - identifies which physical station
+ * @property edgeId Edge device identifier (unique per station) - identifies the hardware running this code
+ * @property dispenserId Dispenser ID within the station (e.g., "D001", "D002")
+ * @property dispenserAddress Legacy EHL address (1-255) - for hardware protocol compatibility
  * @property liters Volume dispensed in liters
  * @property amountNok Total amount in Norwegian kroner
  * @property unitPrice Price per liter in kroner
  * @property finishedAt Timestamp when transaction completed
  * @property idempotencyKey Unique key to prevent duplicate saves (UUID)
+ * @property databaseId Cloud database ID after successful sync (set by cloud API)
  */
 data class CompletedTransaction(
-    val dispenserId: Int,
+    val stationId: String,
+    val edgeId: String,
+    val dispenserId: String,
+    val dispenserAddress: Int,
     val liters: Double,
     val amountNok: Double,
     val unitPrice: Double,
@@ -117,10 +128,13 @@ class TransactionSink(
             
             while (!success && retryCount < 5) {
                 try {
-                    logger.info("💾 Saving transaction ${transaction.idempotencyKey} (attempt ${retryCount + 1})")
+                    logger.info("💾 Saving transaction ${transaction.idempotencyKey} (attempt ${retryCount + 1}) [${transaction.stationId}/${transaction.dispenserId}]")
                     
                     val databaseId = persistenceService.saveTransaction(
-                        dispenserAddress = transaction.dispenserId,
+                        stationId = transaction.stationId,
+                        edgeId = transaction.edgeId,
+                        dispenserId = transaction.dispenserId,
+                        dispenserAddress = transaction.dispenserAddress,
                         volumeDeciliters = (transaction.liters * 10).toInt(),
                         amountOre = (transaction.amountNok * 100).toInt(),
                         pricePerLiter = (transaction.unitPrice * 100).toInt()

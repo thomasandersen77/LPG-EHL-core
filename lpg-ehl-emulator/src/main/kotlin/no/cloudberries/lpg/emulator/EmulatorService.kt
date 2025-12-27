@@ -14,6 +14,9 @@ import jakarta.annotation.PreDestroy
 
 @Service
 class EmulatorService(
+    @Value("\${station.id:S000}") private val stationId: String,
+    @Value("\${edge.id:EDGE-LOCAL}") private val edgeId: String,
+    @Value("\${dispenser.id:D001}") private val dispenserId: String,
     @Value("\${emulator.address:1}") private val address: Int,
     @Value("\${emulator.price-per-litre-cents:1590}") private val pricePerLitreCents: Int,
     @Value("\${emulator.litres-per-second:0.5}") private val litresPerSecond: Double,
@@ -22,7 +25,14 @@ class EmulatorService(
     private val lpgApiClient: LpgApiClient
 ) {
     private val logger = LoggerFactory.getLogger(EmulatorService::class.java)
-    private val emulator = EhlDispenserEmulator(address, pricePerLitreCents, litresPerSecond)
+    private val emulator = EhlDispenserEmulator(
+        stationId = stationId,
+        edgeId = edgeId,
+        dispenserId = dispenserId,
+        address = address,
+        pricePerLitreCents = pricePerLitreCents,
+        litresPerSecond = litresPerSecond
+    )
     private val clientHandlers = ConcurrentHashMap<String, ClientHandler>()
 
     @Volatile
@@ -38,10 +48,13 @@ class EmulatorService(
             isRunning = true
 
             logger.info("=".repeat(80))
-            logger.info("🚀 EHL EMULATOR STARTED - LEGACY INTEGRATION BRIDGE")
+            logger.info("🚀 EHL EMULATOR STARTED - MULTI-STATION EDGE DEVICE")
+            logger.info("   Station ID: $stationId")
+            logger.info("   Edge ID: $edgeId")
+            logger.info("   Dispenser ID: $dispenserId")
+            logger.info("   EHL Address: $address")
             logger.info("   Port: $port")
             logger.info("   Mode: Dual Protocol (EHL Binary + Legacy Text Tags)")
-            logger.info("   Dispenser Address: $address")
             logger.info("   Price: ${pricePerLitreCents / 100.0} NOK/L")
             logger.info("   Flow Rate: $litresPerSecond L/s")
             logger.info("   Ready to accept connections from Windows Dispenserkontroll...")

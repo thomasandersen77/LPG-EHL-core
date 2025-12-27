@@ -14,21 +14,33 @@ class TransactionPersistenceService(
     /**
      * Save a transaction to the database via API
      * 
-     * @param dispenserAddress The address of the dispenser (1, 2, or 3)
+     * Multi-Station Support:
+     * Includes station, edge, and dispenser identifiers for proper multi-tenant tracking.
+     * 
+     * @param stationId Station identifier (e.g., "S001")
+     * @param edgeId Edge device identifier
+     * @param dispenserId Dispenser identifier (e.g., "D001")
+     * @param dispenserAddress The EHL address of the dispenser (1, 2, or 3)
      * @param volumeDeciliters Volume in deciliters (dl)
      * @param amountOre Amount in øre
      * @param pricePerLiter Price per liter in cents/øre
      * @return Database transaction ID (UUID) or null if failed
      */
     fun saveTransaction(
+        stationId: String,
+        edgeId: String,
+        dispenserId: String,
         dispenserAddress: Int,
         volumeDeciliters: Int,
         amountOre: Int,
         pricePerLiter: Int
     ): String? {
-        logger.info("Saving transaction: Dispenser=$dispenserAddress, Volume=${volumeDeciliters/10.0}L, Amount=${amountOre/100.0} kr")
+        logger.info("Saving transaction: Station=$stationId, Dispenser=$dispenserId, Volume=${volumeDeciliters/10.0}L, Amount=${amountOre/100.0} kr")
         
         val request = SaveTransactionRequest(
+            stationId = stationId,
+            edgeId = edgeId,
+            dispenserId = dispenserId,
             dispenserAddress = dispenserAddress,
             volumeDeciliters = volumeDeciliters,
             amountOre = amountOre,
