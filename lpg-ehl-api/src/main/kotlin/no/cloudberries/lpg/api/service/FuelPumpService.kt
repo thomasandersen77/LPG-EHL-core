@@ -36,15 +36,17 @@ class FuelPumpService(
      * ## Protocol Steps:
      * 1. Verify pump is IDLE
      * 2. Send PRODUCT_SELECT (0xC3)
-     * 3. Send UNBLOCK (0x77)
-     * 4. Verify state transitions to AUTHORIZED
+     * 3. Send PROG_PRC (0xA9) - Program price (required by many physical dispensers)
+     * 4. Send UNBLOCK (0x77)
+     * 5. Verify state transitions to AUTHORIZED
      * 
      * @param pumpId Dispenser address (1-255)
      * @param productId Fuel product/grade ID (e.g., 1=Regular, 2=Premium)
+     * @param pricePerLitre Price per litre in kr (e.g., 15.90). If null, PROG_PRC is skipped (emulator mode).
      * @return StartFuelingResult - Success or specific error
      * @throws IllegalStateException if pump is not IDLE
      */
-    fun startFueling(pumpId: Int, productId: Int): StartFuelingResult {
+    fun startFueling(pumpId: Int, productId: Int, pricePerLitre: Double? = null): StartFuelingResult {
         logger.info("Starting fueling for pump $pumpId, product $productId")
         
         // Step 1: Verify pump is IDLE
@@ -72,7 +74,45 @@ class FuelPumpService(
             return StartFuelingResult.NoResponse
         }
         
-        // Step 3: Send UNBLOCK command
+        // Step 3: Send PROG_PRC (price programming) if price is provided
+        // This is REQUIRED by many physical dispensers (e.g., Gilbarco, Tokheim)
+        // to accept authorization. Emulator mode can skip this.
+        if (pricePerLitre != null) {
+            logger.debug("Sending PROG_PRC for pump $pumpId with price $pricePerLitre kr/L")
+            
+            // Format price as 4 ASCII digits (reversed: pennies, dimes, ones, tens)
+            // Example: 15.90 kr/L -> "1590" -> bytes [0x30, 0x39, 0x35, 0x31] (reversed)
+            val priceString = "%.2f".format(pricePerLitre)
+            val parts = priceString.split(".")
+            val priceData = byteArrayOf(
+                parts[1][1].code.toByte(),  // Pennies (last decimal digit)
+                parts[1][0].code.toByte(),  // Dimes (first decimal digit)
+                parts[0][parts[0].length - 1].code.toByte(),  // Ones
+                parts[0][parts[0].length - 2].code.toByte()   // Tens
+            )
+            
+            val progPrcPacket = EhlPacket(
+                address = pumpId,
+                command = EhlCommand.PROG_PRC,
+                data = priceData
+            )
+            
+            val progPrcResponse = dispenserService.sendCommandAndWaitForResponse(
+                packet = progPrcPacket,
+                timeoutMs = 3000
+            )
+            
+            if (progPrcResponse == null) {
+                logger.error("No response to PROG_PRC from pump $pumpId")
+                return StartFuelingResult.NoResponse
+            }
+            
+            logger.debug("PROG_PRC acknowledged by pump $pumpId")
+        } else {
+            logger.debug("PROG_PRC skipped (no price provided, emulator mode)")
+        }
+        
+        // Step 4: Send UNBLOCK command
         logger.debug("Sending UNBLOCK for pump $pumpId")
         val unblockPacket = EhlPacket(
             address = pumpId,
@@ -90,7 +130,7 @@ class FuelPumpService(
             return StartFuelingResult.NoResponse
         }
         
-        // Step 4: Poll STATE to verify AUTHORIZED
+        // Step 5: Poll STATE to verify AUTHORIZED
         logger.debug("Verifying pump $pumpId transitioned to AUTHORIZED")
         val verifiedStatus = waitForStateTransition(
             pumpId = pumpId,

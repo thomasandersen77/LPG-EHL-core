@@ -515,15 +515,24 @@ class EmulatorService(
         
         val price = String.format(java.util.Locale.US, "%.2f", pricePerLitreCents / 100.0)
         
+        // CRITICAL: <RESTART> tag triggers Windows Dispenserkontroll to reset its internal state
+        // This is the legacy-correct way to clear the Windows UI completely
+        broadcastLegacy("<RESTART>;00000000;<SLUTT>")
+        
         // <TANK> format: <TANK>;<ignored>;<beløp>;<volum>;<pris>;<bank_status>;<bank_text>
         // Windows parser: parts[2]=amount, parts[3]=volume, parts[4]=price
-        broadcastLegacy("<TANK>;0;0.00;0.00;$price;0;")
+        // Send TANK with all zeros to clear the display
+        broadcastLegacy("<TANK>;0;0.00;0.00;$price;1;Kort;0;")
         
         // <STATE_TANK> format: 8-character string
         // Index 4 = '0' means idle (not released)
         broadcastLegacy("<STATE_TANK>;00000000")
         
+        // Terminal message for user feedback
+        broadcastLegacy("<TANK_TERMINAL_MESSAGE>;KLAR FOR NY FYLLING;<SLUTT>")
+        
         logger.info("✅ Broadcast complete - Windows should now show 0.00 / 0.00")
+        logger.info("🔄 <RESTART> sent - Windows Dispenserkontroll reset")
         logger.info("🟢 Dispenser ready for next customer")
         
         return settledTransaction
