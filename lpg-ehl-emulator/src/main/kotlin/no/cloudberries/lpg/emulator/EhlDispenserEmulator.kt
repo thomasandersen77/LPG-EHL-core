@@ -30,11 +30,20 @@ import kotlin.math.roundToInt
  * - Bit 3 (0x08): Transaction Complete
  * - Bit 7 (0x80): Error Flag
  * 
- * @property address Dispenser address (1-255)
+ * ## Multi-Station Support:
+ * Each emulator instance represents a specific dispenser at a specific station.
+ * 
+ * @property stationId Station identifier (e.g., "S001") - from environment
+ * @property edgeId Edge device identifier (unique per station) - from environment
+ * @property dispenserId Dispenser ID (e.g., "D001") - from environment
+ * @property address Dispenser EHL address (1-255) - for protocol compatibility
  * @property pricePerLitreCents Price per litre in cents (øre)
  * @property litresPerSecond Simulated flow rate for testing
  */
 class EhlDispenserEmulator(
+    private val stationId: String = System.getenv("STATION_ID") ?: "S000",
+    private val edgeId: String = System.getenv("EDGE_ID") ?: "EDGE-UNKNOWN",
+    private val dispenserId: String = System.getenv("DISPENSER_ID") ?: "D001",
     private val address: Int = 1,
     private val pricePerLitreCents: Int = 1126,      // 11.26 kr/l
     private val litresPerSecond: Double = 0.5,       // Simulated flow rate
@@ -180,18 +189,23 @@ class EhlDispenserEmulator(
      * Freeze current transaction totals for payment pending state.
      * Called by STOP/BLOCK handlers to create immutable transaction snapshot.
      * 
+     * Includes station and edge identifiers for multi-station cloud synchronization.
+     * 
      * @return The frozen transaction
      */
     fun freezeTransaction(): CompletedTransaction {
         val tx = CompletedTransaction(
-            dispenserId = address,
+            stationId = stationId,
+            edgeId = edgeId,
+            dispenserId = dispenserId,
+            dispenserAddress = address,
             liters = volumeLitres,
             amountNok = amountCents / 100.0,
             unitPrice = currentPricePerLitreCents / 100.0,
             finishedAt = Instant.now()
         )
         pendingTransaction = tx
-        logger.info("🧊 Transaction frozen: ${tx.liters} L @ ${tx.unitPrice} NOK/L = ${tx.amountNok} NOK (${tx.idempotencyKey})")
+        logger.info("🧊 Transaction frozen: [$stationId/$dispenserId] ${tx.liters} L @ ${tx.unitPrice} NOK/L = ${tx.amountNok} NOK (${tx.idempotencyKey})")
         return tx
     }
     

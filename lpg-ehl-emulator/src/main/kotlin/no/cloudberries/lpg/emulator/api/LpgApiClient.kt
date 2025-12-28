@@ -25,6 +25,9 @@ class LpgApiClient(
         return try {
             val json = """
                 {
+                    "stationId": "${transaction.stationId}",
+                    "edgeId": "${transaction.edgeId}",
+                    "dispenserId": "${transaction.dispenserId}",
                     "dispenserAddress": ${transaction.dispenserAddress},
                     "nozzleNumber": ${transaction.nozzleNumber},
                     "volumeDeciliters": ${transaction.volumeDeciliters},
@@ -89,7 +92,19 @@ class LpgApiClient(
     }
 }
 
+/**
+ * Request to save a transaction to the cloud API.
+ * 
+ * Multi-Station Support:
+ * - stationId: Identifies the physical station (e.g., "S001", "S002")
+ * - edgeId: Identifies the edge device running the emulator
+ * - dispenserId: Identifies the specific dispenser within the station
+ * - dispenserAddress: Legacy EHL address for protocol compatibility
+ */
 data class SaveTransactionRequest(
+    val stationId: String,
+    val edgeId: String,
+    val dispenserId: String,
     val dispenserAddress: Int,
     val nozzleNumber: Int = 1,
     val volumeDeciliters: Int,
