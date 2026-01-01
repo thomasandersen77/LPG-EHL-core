@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Emulator S003" type="JetRunConfigurationType">
+    <option name="MAIN_CLASS_NAME" value="no.cloudberries.lpg.emulator.LpgEhlEmulatorApplicationKt" />
+    <module name="lpg-ehl-emulator" />
+    <option name="VM_PARAMETERS" value="-Dserver.port=8093" />
+    <envs>
+      <env name="EMULATOR_PORT" value="9003" />
+      <env name="STATION_ID" value="S003" />
+      <env name="EDGE_ID" value="EDGE-S003-LOCAL" />
+      <env name="LPG_API_BASE_URL" value="http://localhost:8081" />
+    </envs>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

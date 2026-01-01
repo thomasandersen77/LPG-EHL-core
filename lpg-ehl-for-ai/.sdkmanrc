@@ -1,0 +1,6 @@
+# SDKMAN configuration for LPG-EHL project
+# This file ensures everyone uses the correct Java and Maven versions
+# Enable auto-switching in your shell: sdk env install
+
+java=21.0.7-tem
+maven=3.9.11
