@@ -8,18 +8,29 @@ import java.nio.charset.StandardCharsets
  * 
  * Used by Ingenico/Verifone terminals over TCP port 8009.
  * 
- * Protocol format:
+ * Supports two framing modes:
+ * 
+ * **1. RS232/Serial Mode (Legacy):**
  * ```
  * <STX> <Payload> <ETX> <LRC>
  * ```
- * 
  * Where:
  * - STX = 0x02 (Start of Text)
  * - ETX = 0x03 (End of Text)  
  * - LRC = XOR checksum of all bytes from payload through ETX (exclusive of STX)
  * 
+ * **2. TCP/Ethernet Mode (Modern Ingenico Self/4000):**
+ * ```
+ * [2-byte Length Header (Big-Endian)] + [Payload (ASCII/ISO-8859-1)]
+ * ```
+ * Example: For payload "P;10;1;200;0" (13 bytes)
+ * - Length: 13 bytes
+ * - Header: 0x00 0x0D
+ * - Full packet: 00 0D 50 3B 31 30 3B 31 3B 32 30 30 3B 30
+ * 
  * Common commands:
- * - Purchase: "P,<OperatorID>,<AmountCents>"
+ * - Purchase: "P;10;operatorId;amountCents;0"
+ * - Preauth: "P;03;operatorId;amountCents;0"
  * - Cancel: "C"
  * - Status: "S"
  *
@@ -38,7 +49,25 @@ object NetsBaxProtocol {
     const val EOT: Byte = 0x04
     
     /**
+     * Framing mode for BAX protocol
+     */
+    enum class FramingMode {
+        /** RS232/Serial mode with STX/ETX/LRC */
+        SERIAL,
+        /** TCP/Ethernet mode with 2-byte length header */
+        TCP_ETHERNET
+    }
+    
+    /** Current framing mode - defaults to TCP for modern terminals */
+    @Volatile
+    var framingMode: FramingMode = FramingMode.TCP_ETHERNET
+    
+    /**
      * Create Purchase command
+     * 
+     * Format depends on framing mode:
+     * - TCP_ETHERNET: "P;10;operatorId;amountCents;0"
+     * - SERIAL: "P,operatorId,amountCents"
      * 
      * @param amountCents Amount in øre/cents (100 = 1.00 NOK)
      * @param operatorId Operator ID (default "1")
@@ -47,8 +76,11 @@ object NetsBaxProtocol {
     fun createPurchaseCommand(amountCents: Int, operatorId: String = "1"): ByteArray {
         require(amountCents > 0) { "Amount must be positive" }
         
-        val commandString = "P,$operatorId,$amountCents"
-        logger.debug("Creating Purchase command: $commandString")
+        val commandString = when (framingMode) {
+            FramingMode.TCP_ETHERNET -> "P;10;$operatorId;$amountCents;0"
+            FramingMode.SERIAL -> "P,$operatorId,$amountCents"
+        }
+        logger.debug("Creating Purchase command (${framingMode}): $commandString")
         
         return buildFrame(commandString)
     }
@@ -56,14 +88,21 @@ object NetsBaxProtocol {
     /**
      * Create Pre-authorization command (reserve amount)
      * 
+     * Format depends on framing mode:
+     * - TCP_ETHERNET: "P;03;operatorId;amountCents;0"
+     * - SERIAL: "A,operatorId,amountCents"
+     * 
      * @param amountCents Maximum amount to reserve
      * @param operatorId Operator ID
      */
     fun createPreauthCommand(amountCents: Int, operatorId: String = "1"): ByteArray {
         require(amountCents > 0) { "Amount must be positive" }
         
-        val commandString = "A,$operatorId,$amountCents"
-        logger.debug("Creating Preauth command: $commandString")
+        val commandString = when (framingMode) {
+            FramingMode.TCP_ETHERNET -> "P;03;$operatorId;$amountCents;0"
+            FramingMode.SERIAL -> "A,$operatorId,$amountCents"
+        }
+        logger.debug("Creating Preauth command (${framingMode}): $commandString")
         
         return buildFrame(commandString)
     }
@@ -98,12 +137,57 @@ object NetsBaxProtocol {
     }
     
     /**
-     * Build protocol frame with STX, ETX, and LRC
+     * Build protocol frame based on current framing mode
+     * 
+     * @param payload The command string without framing
+     * @return Complete frame ready to send
+     */
+    fun buildFrame(payload: String): ByteArray {
+        return when (framingMode) {
+            FramingMode.SERIAL -> buildSerialFrame(payload)
+            FramingMode.TCP_ETHERNET -> buildTcpFrame(payload)
+        }
+    }
+    
+    /**
+     * Build TCP/Ethernet frame with 2-byte length header
+     * 
+     * Format: [2-byte Length (Big-Endian)] + [Payload]
+     * 
+     * Example: "P;10;1;200;0" (13 bytes) becomes:
+     * - Header: 0x00 0x0D (length = 13)
+     * - Full packet: 00 0D 50 3B 31 30 3B 31 3B 32 30 30 3B 30
+     * 
+     * @param payload The command string
+     * @return Complete TCP frame: [length_high][length_low][payload]
+     */
+    fun buildTcpFrame(payload: String): ByteArray {
+        val payloadBytes = payload.toByteArray(StandardCharsets.ISO_8859_1)
+        val length = payloadBytes.size
+        
+        // Create 2-byte header (Big Endian)
+        val header = ByteArray(2)
+        header[0] = ((length shr 8) and 0xFF).toByte()  // High byte
+        header[1] = (length and 0xFF).toByte()           // Low byte
+        
+        val frame = header + payloadBytes
+        
+        if (logger.isDebugEnabled) {
+            logger.debug("Built TCP frame: ${frame.toHexString()}")
+            logger.debug("  Length: $length bytes")
+            logger.debug("  Payload: $payload")
+        }
+        
+        return frame
+    }
+    
+    /**
+     * Build RS232/Serial frame with STX, ETX, and LRC
      * 
      * @param payload The command string without framing
      * @return Complete frame: [STX][payload bytes][ETX][LRC]
      */
-    fun buildFrame(payload: String): ByteArray {
+    fun buildSerialFrame(payload: String): ByteArray {
         val payloadBytes = payload.toByteArray(StandardCharsets.ISO_8859_1)
         
         // Pre-allocate exact size: STX + payload + ETX + LRC
@@ -118,7 +202,7 @@ object NetsBaxProtocol {
         frame[frame.size - 1] = lrc
         
         if (logger.isDebugEnabled) {
-            logger.debug("Built frame: ${frame.toHexString()}")
+            logger.debug("Built serial frame: ${frame.toHexString()}")
             logger.debug("  Payload: $payload")
             logger.debug("  LRC: 0x${"$02X".format(lrc)}")
         }
@@ -198,7 +282,7 @@ object NetsBaxProtocol {
     }
     
     /**
-     * Parse response from terminal
+     * Parse response from terminal based on framing mode
      * 
      * @param data Raw bytes from terminal
      * @return Parsed BaxResponse
@@ -208,6 +292,44 @@ object NetsBaxProtocol {
             return BaxResponse.Error("Empty response")
         }
         
+        return when (framingMode) {
+            FramingMode.SERIAL -> parseSerialResponse(data)
+            FramingMode.TCP_ETHERNET -> parseTcpResponse(data)
+        }
+    }
+    
+    /**
+     * Parse TCP/Ethernet response (no STX/ETX/LRC, just length + payload)
+     */
+    private fun parseTcpResponse(data: ByteArray): BaxResponse {
+        // TCP responses may start with 2-byte length header or be raw payload
+        val payloadStart = if (data.size >= 2) {
+            val declaredLength = ((data[0].toInt() and 0xFF) shl 8) or (data[1].toInt() and 0xFF)
+            if (declaredLength > 0 && declaredLength + 2 == data.size) {
+                2 // Skip length header
+            } else {
+                0 // No header, raw payload
+            }
+        } else {
+            0
+        }
+        
+        val payload = if (payloadStart > 0) {
+            data.copyOfRange(payloadStart, data.size)
+        } else {
+            data
+        }
+        
+        val payloadString = String(payload, StandardCharsets.ISO_8859_1).trim()
+        logger.debug("Parsed TCP response payload: $payloadString")
+        
+        return parsePayload(payloadString)
+    }
+    
+    /**
+     * Parse RS232/Serial response with STX/ETX/LRC
+     */
+    private fun parseSerialResponse(data: ByteArray): BaxResponse {
         // Check for simple ACK/NAK (single byte)
         if (data.size == 1) {
             return when (data[0]) {
@@ -265,9 +387,18 @@ object NetsBaxProtocol {
     
     /**
      * Parse the payload string into appropriate response type
+     * Handles both comma (,) and semicolon (;) delimiters
      */
     private fun parsePayload(payloadString: String): BaxResponse {
-        val parts = payloadString.split(",")
+        // Split by either comma or semicolon
+        val delimiter = if (payloadString.contains(";")) ";" else ","
+        val parts = payloadString.split(delimiter)
+        
+        // Handle Ingenico-specific response formats
+        if (payloadString.startsWith("A000") || payloadString.startsWith("D!") || 
+            payloadString.startsWith("[")) {
+            return BaxResponse.Data(payloadString)
+        }
         
         return when {
             // Success codes
