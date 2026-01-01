@@ -123,10 +123,68 @@ object NetsBaxProtocol {
     }
     
     /**
-     * Create Status query command
+     * Create Refund/Reversal command
+     * 
+     * Used to reverse a completed transaction or issue a refund.
+     * 
+     * Format depends on framing mode:
+     * - TCP_ETHERNET: "P;20;operatorId;amountCents;0" (command 20 = refund)
+     * - SERIAL: "R,operatorId,amountCents"
+     * 
+     * @param amountCents Amount to refund in øre/cents
+     * @param operatorId Operator ID
+     * @param transactionId Optional reference to original transaction
      */
-    fun createStatusCommand(): ByteArray {
-        return buildFrame("S")
+    fun createRefundCommand(
+        amountCents: Int, 
+        operatorId: String = "1",
+        transactionId: String? = null
+    ): ByteArray {
+        require(amountCents > 0) { "Amount must be positive" }
+        
+        val commandString = when (framingMode) {
+            FramingMode.TCP_ETHERNET -> {
+                if (transactionId != null) {
+                    "P;20;$operatorId;$amountCents;0;$transactionId"
+                } else {
+                    "P;20;$operatorId;$amountCents;0"
+                }
+            }
+            FramingMode.SERIAL -> {
+                if (transactionId != null) {
+                    "R,$operatorId,$amountCents,$transactionId"
+                } else {
+                    "R,$operatorId,$amountCents"
+                }
+            }
+        }
+        logger.debug("Creating Refund command (${framingMode}): $commandString")
+        
+        return buildFrame(commandString)
+    }
+    
+    /**
+     * Create Status query command
+     * 
+     * Queries terminal for current status. Some terminals support detailed
+     * status queries with specific parameters.
+     * 
+     * @param statusType Optional status type for detailed queries
+     *                   - null: General status
+     *                   - "PRINTER": Printer status
+     *                   - "CARD": Card reader status
+     *                   - "TRANSACTION": Last transaction status
+     */
+    fun createStatusCommand(statusType: String? = null): ByteArray {
+        val commandString = when {
+            statusType != null -> when (framingMode) {
+                FramingMode.TCP_ETHERNET -> "P;90;$statusType"
+                FramingMode.SERIAL -> "S,$statusType"
+            }
+            else -> "S"
+        }
+        logger.debug("Creating Status command: $commandString")
+        return buildFrame(commandString)
     }
     
     /**

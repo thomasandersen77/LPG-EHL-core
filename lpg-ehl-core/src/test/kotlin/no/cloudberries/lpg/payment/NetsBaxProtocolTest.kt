@@ -240,4 +240,96 @@ class NetsBaxProtocolTest {
         
         assertEquals(expectedLength, actualLength)
     }
+    
+    // ===== REFUND/REVERSAL TESTS =====
+    
+    @Test
+    fun `TCP mode - createRefundCommand generates correct format`() {
+        val command = NetsBaxProtocol.createRefundCommand(amountCents = 150, operatorId = "2")
+        
+        val payload = "P;20;2;150;0"
+        val expectedLength = payload.length
+        
+        assertAll(
+            { assertEquals(expectedLength + 2, command.size) },
+            { assertEquals(payload, String(command.copyOfRange(2, command.size), Charsets.ISO_8859_1)) }
+        )
+    }
+    
+    @Test
+    fun `TCP mode - createRefundCommand with transaction ID`() {
+        val command = NetsBaxProtocol.createRefundCommand(
+            amountCents = 150, 
+            operatorId = "2",
+            transactionId = "TX123"
+        )
+        
+        val payloadString = String(command.copyOfRange(2, command.size), Charsets.ISO_8859_1)
+        assertTrue(payloadString.contains("P;20;2;150;0;TX123"))
+    }
+    
+    @Test
+    fun `Serial mode - createRefundCommand generates correct format`() {
+        NetsBaxProtocol.framingMode = NetsBaxProtocol.FramingMode.SERIAL
+        
+        val command = NetsBaxProtocol.createRefundCommand(amountCents = 150, operatorId = "2")
+        
+        // Verify payload uses comma delimiter and R command
+        val payload = String(command.copyOfRange(1, command.size - 2), Charsets.ISO_8859_1)
+        assertEquals("R,2,150", payload)
+    }
+    
+    // ===== DETAILED STATUS TESTS =====
+    
+    @Test
+    fun `TCP mode - createStatusCommand with specific type`() {
+        val command = NetsBaxProtocol.createStatusCommand(statusType = "PRINTER")
+        
+        val payloadString = String(command.copyOfRange(2, command.size), Charsets.ISO_8859_1)
+        assertEquals("P;90;PRINTER", payloadString)
+    }
+    
+    @Test
+    fun `TCP mode - createStatusCommand without type`() {
+        val command = NetsBaxProtocol.createStatusCommand()
+        
+        val payloadString = String(command.copyOfRange(2, command.size), Charsets.ISO_8859_1)
+        assertEquals("S", payloadString)
+    }
+    
+    // ===== EXACT FRAME VERIFICATION (Gemini Requirement) =====
+    
+    @Test
+    fun `testTcpFramingPurchaseCommand - verifies exact TCP frame structure`() {
+        // Set TCP mode explicitly
+        NetsBaxProtocol.framingMode = NetsBaxProtocol.FramingMode.TCP_ETHERNET
+        
+        // Create purchase command for 2.00 NOK
+        val command = NetsBaxProtocol.createPurchaseCommand(amountCents = 200, operatorId = "1")
+        
+        // Expected payload: "P;10;1;200;0" (12 bytes)
+        val expectedPayload = "P;10;1;200;0"
+        val expectedLength = expectedPayload.length // 12
+        
+        assertAll(
+            "TCP frame structure verification",
+            // Verify frame starts with length header, not STX
+            { assertEquals(0x00, command[0].toInt(), "High byte of length header") },
+            { assertEquals(0x0C, command[1].toInt(), "Low byte of length (0x0C = 12 decimal)") },
+            
+            // Verify total length
+            { assertEquals(expectedLength + 2, command.size, "Total frame size (header + payload)") },
+            
+            // Verify payload content
+            { assertEquals(expectedPayload, String(command.copyOfRange(2, command.size), Charsets.ISO_8859_1), "Payload content") },
+            
+            // Verify NO STX/ETX/LRC in frame (critical for TCP mode)
+            { assertFalse(command.contains(NetsBaxProtocol.STX), "Frame must NOT contain STX (0x02) in TCP mode") },
+            { assertFalse(command.contains(NetsBaxProtocol.ETX), "Frame must NOT contain ETX (0x03) in TCP mode") },
+            
+            // Verify uses semicolon delimiter (TCP), not comma (Serial)
+            { assertTrue(expectedPayload.contains(";"), "TCP mode uses semicolon delimiter") },
+            { assertFalse(expectedPayload.contains(","), "TCP mode should not use comma delimiter") }
+        )
+    }
 }
