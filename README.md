@@ -237,6 +237,106 @@ We provide scripts to simulate real-world usage:
    docker-compose ps
    ```
 
+## 🤖 AI Analysis - Zipping Modules
+
+For AI analysis (Claude, ChatGPT, Gemini), you can create focused ZIP archives of specific modules or legacy code.
+
+### Zip Individual Modules
+
+**Core module (EHL protocol):**
+```bash
+zip -r lpg-ehl-core-for-ai.zip lpg-ehl-core/src \
+    lpg-ehl-core/pom.xml \
+    lpg-ehl-core/README.md \
+    -x "*/target/*" "*/.idea/*" "*/node_modules/*"
+```
+
+**API module (Spring Boot REST API + Nets Cloud Connect):**
+```bash
+zip -r lpg-ehl-api-for-ai.zip lpg-ehl-api/src \
+    lpg-ehl-api/pom.xml \
+    lpg-ehl-api/README.md \
+    lpg-ehl-api/.env.local.example \
+    -x "*/target/*" "*/.idea/*" "*/node_modules/*"
+```
+
+**Emulator module:**
+```bash
+zip -r lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src \
+    lpg-ehl-emulator/pom.xml \
+    lpg-ehl-emulator/README.md \
+    -x "*/target/*" "*/.idea/*"
+```
+
+### Zip Legacy Code for Analysis
+
+**VB6 Legacy Code (Original Dispenserkontroll):**
+```bash
+zip -r norgesgass-legacy-for-ai.zip norgesgass_legacy/ \
+    -x "*/bin/*" "*/obj/*" "*/.vs/*"
+```
+
+**Python PoC (Proof-of-Concept re-implementation):**
+```bash
+zip -r python-legacy-for-ai.zip more_legacy/ehl_pumpekontroll_clone/ \
+    -x "*/__pycache__/*" "*/.pytest_cache/*" "*/venv/*"
+```
+
+### Zip Documentation Only
+
+**Project documentation:**
+```bash
+zip -r docs-for-ai.zip docs/ WARP.md README.md CHANGELOG.md \
+    LEGACY_ANALYSIS.md IMPLEMENTATION_ROADMAP.md
+```
+
+**Archived Baxi protocol (for historical analysis):**
+```bash
+zip -r archived-baxi-for-ai.zip _archived/baxi-protocol/ \
+    -x "*/Terminal/images/*"
+```
+
+### Quick Script - Zip Everything
+
+Create all archives at once:
+```bash
+#!/bin/bash
+# Save as scripts/zip-all-for-ai.sh
+
+echo "Creating AI analysis archives..."
+
+zip -r lpg-ehl-core-for-ai.zip lpg-ehl-core/src lpg-ehl-core/pom.xml lpg-ehl-core/README.md -x "*/target/*" "*/.idea/*"
+echo "✓ Core module zipped"
+
+zip -r lpg-ehl-api-for-ai.zip lpg-ehl-api/src lpg-ehl-api/pom.xml lpg-ehl-api/README.md lpg-ehl-api/.env.local.example -x "*/target/*" "*/.idea/*"
+echo "✓ API module zipped"
+
+zip -r lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src lpg-ehl-emulator/pom.xml lpg-ehl-emulator/README.md -x "*/target/*" "*/.idea/*"
+echo "✓ Emulator module zipped"
+
+zip -r norgesgass-legacy-for-ai.zip norgesgass_legacy/ -x "*/bin/*" "*/obj/*" "*/.vs/*"
+echo "✓ VB6 legacy zipped"
+
+zip -r python-legacy-for-ai.zip more_legacy/ehl_pumpekontroll_clone/ -x "*/__pycache__/*" "*/.pytest_cache/*" "*/venv/*"
+echo "✓ Python PoC zipped"
+
+zip -r docs-for-ai.zip docs/ WARP.md README.md CHANGELOG.md LEGACY_ANALYSIS.md IMPLEMENTATION_ROADMAP.md
+echo "✓ Documentation zipped"
+
+zip -r archived-baxi-for-ai.zip _archived/baxi-protocol/ -x "*/Terminal/images/*"
+echo "✓ Archived Baxi protocol zipped"
+
+echo ""
+echo "All archives created! Upload to AI for analysis:"
+ls -lh *-for-ai.zip
+```
+
+**Make executable and run:**
+```bash
+chmod +x scripts/zip-all-for-ai.sh
+./scripts/zip-all-for-ai.sh
+   ```
+
 4. **Verify deployment**
    ```bash
    # Health check
