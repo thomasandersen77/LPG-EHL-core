@@ -2,6 +2,26 @@
 
 This directory contains manual tests for real-world payment terminal communication.
 
+## Available Tests
+
+### 1. ManualTerminalTest.kt - Production Test
+
+Test TCP/Ethernet communication with Ingenico Self/4000 payment terminal without needing full Spring infrastructure or deployment.
+
+### 2. RawTerminalDebugTest.kt - Debug Mode  ⚠️ USE THIS FIRST!
+
+**Use this first if you're getting strange responses!**
+
+Reads RAW BYTES from terminal without any protocol interpretation. Shows EXACTLY what terminal sends.
+
+**When to use:**
+- Getting timeout errors
+- Seeing thousands of zero bytes
+- Terminal behaves unexpectedly
+- Need to see actual wire format
+
+---
+
 ## ManualTerminalTest.kt
 
 ### Purpose
