@@ -200,14 +200,22 @@ object ManualTerminalTest {
     /**
      * Read a message from the terminal
      * TCP mode: [2-byte length] + [payload]
+     * 
+     * FIXED: Now properly reads ONE message at a time,
+     * handling multiple messages in sequence correctly.
      */
     private fun readMessage(input: InputStream): ByteArray? {
+        // Wait for at least the header (2 bytes)
         if (input.available() < 2) return null
         
-        // Read length header
+        // Read length header (blocking read for exactly 2 bytes)
         val header = ByteArray(2)
-        val headerRead = input.read(header)
-        if (headerRead != 2) return null
+        var headerRead = 0
+        while (headerRead < 2) {
+            val read = input.read(header, headerRead, 2 - headerRead)
+            if (read == -1) return null // Connection closed
+            headerRead += read
+        }
         
         val length = ((header[0].toInt() and 0xFF) shl 8) or (header[1].toInt() and 0xFF)
         
@@ -216,12 +224,12 @@ object ManualTerminalTest {
             return byteArrayOf(0, 0)
         }
         
-        // Read payload
+        // Read payload (blocking read for exact length)
         val payload = ByteArray(length)
         var totalRead = 0
         while (totalRead < length) {
             val read = input.read(payload, totalRead, length - totalRead)
-            if (read == -1) break
+            if (read == -1) return null // Connection closed
             totalRead += read
         }
         

@@ -1,7 +1,6 @@
 package no.cloudberries.lpg.manual
 
 import no.cloudberries.lpg.payment.NetsBaxProtocol
-import java.io.InputStream
 import java.net.ServerSocket
 import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
