@@ -9,6 +9,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2026-01-02
+
+#### Migration: Nets Baxi Protocol → Cloud Connect API
+
+**Branch:** `feature/ethernet-bax-protocol` (continued)
+
+Major architectural shift from direct TCP/ECR protocol to modern REST-based Cloud Connect API.
+
+**Why the Change:**
+- Nets recommends Cloud Connect for new integrations
+- Eliminates complex TCP socket and binary protocol management
+- Better reliability and monitoring via Nets cloud infrastructure
+- Simplified testing and maintenance
+
+**What Changed:**
+
+1. **Archived Legacy Code** → `_archived/baxi-protocol/`
+   - `NetsBaxProtocol.kt` (559 lines of TCP/hex protocol)
+   - `BaxProtocolAnalyzer.kt`, `PaymentTerminal.kt`, `PaymentTerminalClient.kt`
+   - All Baxi test files and related documentation
+   - `Terminal/` directory (experimental implementations)
+
+2. **New Cloud Connect Implementation** in `lpg-ehl-api`
+   - `NetsCloudConfig.kt` - Spring Configuration Properties
+   - `NetsCloudClient.kt` - REST client using Spring RestClient
+   - `NetsCloudPaymentGateway.kt` - Implements `PaymentGateway` interface
+   - Full async polling support for terminal responses
+
+3. **Configuration**
+   - Added `nets.cloud-connect` section to `application.yaml`
+   - Created `.env.local.example` with Nets credentials template
+   - Feature flag: `NETS_CLOUD_ENABLED=true/false`
+
+4. **Documentation**
+   - New: `docs/NETS_CLOUD_CONNECT.md` - Complete setup and API guide
+   - Terminal configuration instructions (ECR IP: 3.33.230.243:6001)
+   - Payment flow diagrams and troubleshooting
+
+**Architecture:**
+```
+OLD: LPG-EHL API ←→ TCP Socket (port 8009) ←→ Terminal
+NEW: LPG-EHL API ←→ Nets Cloud REST API ←→ Nets Cloud ←→ Terminal
+```
+
+**Key Benefits:**
+- ✅ No TCP socket management
+- ✅ No hex encoding/decoding
+- ✅ No binary protocol checksums
+- ✅ Nets handles terminal connectivity
+- ✅ Easy to test with mocks
+
+**Terminal Setup:**
+- ECR = Yes
+- ECR IP = **3.33.230.243** (Nets Cloud, NOT local server!)
+- ECR Port = **6001**
+- Communication = Ethernet/WIFI
+
+**API Compatibility:**
+- ✅ `PaymentGateway` interface unchanged
+- ✅ `PaymentRequest` / `Payment` models unchanged
+- ✅ REST API endpoints unchanged
+- ✅ No breaking changes for API consumers!
+
+**Configuration Example:**
+```yaml
+nets:
+  cloud-connect:
+    enabled: true
+    base-url: https://api.nets.eu/terminal/v1
+    username: ${NETS_CLOUD_USERNAME}
+    password: ${NETS_CLOUD_PASSWORD}
+    terminal-id: "42696609"
+    polling-interval-ms: 500
+    max-poll-attempts: 120
+```
+
+**Testing:**
+- Local: Use `SimulatedPaymentGateway` (NETS_CLOUD_ENABLED=false)
+- Production: Enable Cloud Connect and configure terminal
+
+**Migration Path:**
+- Old Baxi code preserved in `_archived/baxi-protocol/` for 6 months
+- Can be restored if needed (rollback plan)
+- EHL pump protocol (core) unaffected - only payment changed
+
+**Files Added:**
+- `lpg-ehl-api/src/main/kotlin/no/cloudberries/lpg/api/config/NetsCloudConfig.kt`
+- `lpg-ehl-api/src/main/kotlin/no/cloudberries/lpg/api/integration/NetsCloudClient.kt`
+- `lpg-ehl-api/src/main/kotlin/no/cloudberries/lpg/api/payment/NetsCloudPaymentGateway.kt`
+- `lpg-ehl-api/.env.local.example`
+- `docs/NETS_CLOUD_CONNECT.md`
+
+**Files Moved to Archive:**
+- `_archived/baxi-protocol/NetsBaxProtocol.kt`
+- `_archived/baxi-protocol/BaxProtocolAnalyzer.kt`
+- `_archived/baxi-protocol/PaymentTerminal*.kt`
+- `_archived/baxi-protocol/Terminal/` (entire directory)
+- `_archived/baxi-protocol/TCP_ETHERNET_FRAMING.md`
+- `_archived/baxi-protocol/BAX_TERMINAL_INTEGRATION_REPORT.md`
+
+**Next Steps:**
+1. ⏳ Receive Nets Cloud Connect credentials
+2. ⏳ Configure terminal with Nets Cloud IP
+3. ⏳ Test with real terminal
+4. ⏳ Verify complete payment flow
+5. ⏳ Deploy to production
+
+**References:**
+- Setup guide: https://support.nets.eu/nb-NO/article/how-to-setup-your-terminal-for-connectcloud
+- Implementation: `docs/NETS_CLOUD_CONNECT.md`
+
+---
+
 ### Added - 2026-01-01
 
 #### TCP/Ethernet Framing Mode for Nets/Bax Protocol

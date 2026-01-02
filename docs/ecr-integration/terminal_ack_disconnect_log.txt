@@ -1,0 +1,11 @@
+Manual Ingenico Self/4000 Terminal Test
+---------------------------------------
+[SENT] 00 0C 50 3B 31 30 3B 31 3B 32 30 30 3B 30
+CMD: P;10;1;200;0
+
+[RECEIVED]
+HEX: 5B 30 30 5D ...
+TXT: [00] ...
+
+STATUS: ECR Indicator turned RED immediately after this response.
+DISPLAY: "Ikke kontakt med kasse"

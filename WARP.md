@@ -19,11 +19,18 @@ lpg-ehl/
 ├── lpg-ehl-core/           # Core protocol implementation (Kotlin)
 │   ├── protocol/           # EHL packet encoding/decoding
 │   ├── transaction/        # Transaction state machine
-│   ├── payment/            # Nets Bax payment terminal
 │   └── communication/      # Serial port abstraction
+│
+├── lpg-ehl-api/            # Spring Boot REST API
+│   ├── payment/            # Payment integration (Cloud Connect)
+│   ├── integration/        # External API clients (Nets)
+│   └── controller/         # REST endpoints
 │
 ├── lpg-ehl-emulator/       # Testing emulator (Spring Boot)
 │   └── Simulates dispenser hardware
+│
+├── _archived/              # Archived legacy implementations
+│   └── baxi-protocol/      # Old TCP/ECR protocol (pre-Cloud Connect)
 │
 ├── norgesgass_legacy/      # VB6 legacy code (reference only)
 │   ├── pumpekontroll.frm   # Original UI + logic
@@ -118,8 +125,45 @@ Build all:
 mvn clean install
 ```
 
+## Payment Integration - Nets Cloud Connect
+
+**Modern Cloud-Based Payment Architecture**
+
+The system uses **Nets Cloud Connect** for payment terminal integration, eliminating the need for direct TCP/ECR protocol management.
+
+### Architecture
+```
+┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
+│                 │   REST  │                 │   ECR   │                 │
+│  LPG-EHL API    │────────▶│  Nets Cloud     │────────▶│  Payment        │
+│  (Spring Boot)  │   HTTPS │  (Managed)      │  Proto  │  Terminal       │
+│                 │◀────────│                 │◀────────│  (Ingenico)     │
+└─────────────────┘         └─────────────────┘         └─────────────────┘
+```
+
+### What We Manage
+✅ REST API calls to Nets Cloud
+✅ Payment polling and status tracking
+✅ Transaction recording and cloud sync
+✅ Business logic and error handling
+
+### What Nets Manages (NOT Our Responsibility)
+❌ Terminal connectivity and state
+❌ ECR protocol (TCP/hex/framing)
+❌ Terminal firmware and configuration
+❌ Network failover and retry logic
+❌ Card processing and security
+
+**Documentation:** See `docs/NETS_CLOUD_CONNECT.md` for setup and API details.
+
+### Terminal Configuration
+- ECR IP: **3.33.230.243** (Nets Cloud)
+- ECR Port: **6001**
+- Communication: Ethernet/WIFI
+- Terminal connects TO Nets (not to our server)
+
 ## Cloud Integration
 
 Transactions synced to MinLPG cloud with full multi-tenant metadata.
 
-See full documentation in README.md and IMPLEMENTATION_PLAN_PAYMENT_RESET.md
+See full documentation in README.md and CHANGELOG.md

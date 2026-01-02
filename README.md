@@ -114,6 +114,43 @@ lpg-ehl/
    BUILD SUCCESS
    ```
 
+## 💳 Payment Integration - Nets Cloud Connect
+
+The system uses **Nets Cloud Connect** for modern, cloud-based payment terminal integration.
+
+### What This Means
+- ✅ **No TCP socket management** - We communicate via REST API only
+- ✅ **No terminal state tracking** - Nets handles all terminal connectivity
+- ✅ **No binary protocols** - Clean REST JSON instead of hex/ECR protocols
+- ✅ **Simplified testing** - Easy to mock REST endpoints
+
+### Architecture
+```
+LPG-EHL API → REST → Nets Cloud → ECR Protocol → Payment Terminal
+    (Us)              (Nets Managed)                 (Ingenico)
+```
+
+**What We Manage:**
+- REST API calls to Nets Cloud
+- Payment status polling
+- Transaction recording
+
+**What Nets Manages (NOT our responsibility):**
+- Terminal connectivity and state
+- TCP/ECR protocol handling
+- Terminal firmware updates
+- Network failover
+- Card processing security
+
+**Setup Guide:** See [`docs/NETS_CLOUD_CONNECT.md`](docs/NETS_CLOUD_CONNECT.md)
+
+**Terminal Configuration:**
+- ECR IP: `3.33.230.243` (Nets Cloud)
+- ECR Port: `6001`
+- Terminal connects TO Nets (not to our server)
+
+---
+
 ## 🌩️ Cloud Integration & Simulation
 
 This project implements a complete **Edge-to-Cloud** architecture for LPG stations.
