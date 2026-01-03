@@ -87,8 +87,9 @@ Simulates:
 - Connects to postgres, azurite, and emulator
 
 ### 5. Web (React Frontend)
-- **Port**: 3000 (mapped from nginx port 80)
+- **Port**: 3000 (mapped from Vite dev server port 3001)
 - **Build**: Vite + TypeScript + Tailwind CSS
+- **Mode**: Development (hot reload enabled)
 
 ### 6. ngrok
 - **Port**: 4040 (web interface)
