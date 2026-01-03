@@ -7,8 +7,9 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.SocketTimeoutException
-import javax.net.ssl.SSLSocket
-import javax.net.ssl.SSLSocketFactory
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.*
 
 /**
  * Cloud Terminal Client
@@ -48,7 +49,8 @@ class CloudTerminalClient(
     private val host: String = "3.33.230.243",
     private val port: Int = 6001,
     private val connectTimeoutMs: Int = 10000,  // Longer timeout for SSL handshake
-    private val readTimeoutMs: Int = 30000      // Longer timeout for cloud latency
+    private val readTimeoutMs: Int = 30000,     // Longer timeout for cloud latency
+    private val trustAllCertificates: Boolean = true  // For development - Nets uses self-signed cert
 ) : Closeable {
     
     private val logger = LoggerFactory.getLogger(CloudTerminalClient::class.java)
@@ -89,8 +91,15 @@ class CloudTerminalClient(
         logger.info("Connecting to Nets Cloud Connect at $host:$port...")
         
         try {
-            // Create SSL socket
-            val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
+            // Create SSL socket factory
+            val factory = if (trustAllCertificates) {
+                logger.debug("Using TrustAll SSL context (development mode)")
+                createTrustAllSSLSocketFactory()
+            } else {
+                logger.debug("Using default SSL context (production mode)")
+                SSLSocketFactory.getDefault() as SSLSocketFactory
+            }
+            
             socket = factory.createSocket() as SSLSocket
             
             // Set socket options
@@ -293,6 +302,30 @@ class CloudTerminalClient(
     
     private fun ByteArray.toHexString(): String = 
         joinToString(" ") { "%02X".format(it) }
+    
+    companion object {
+        /**
+         * Create SSL socket factory that trusts all certificates
+         * 
+         * WARNING: Only for development/testing! In production, use proper certificate validation.
+         */
+        private fun createTrustAllSSLSocketFactory(): SSLSocketFactory {
+            // Create a trust manager that trusts all certificates
+            val trustAllCerts = arrayOf<TrustManager>(
+                object : X509TrustManager {
+                    override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+                    override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+                    override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+                }
+            )
+            
+            // Install the trust manager
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, SecureRandom())
+            
+            return sslContext.socketFactory
+        }
+    }
 }
 
 /**
