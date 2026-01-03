@@ -1,9 +1,9 @@
 import axios from 'axios';
 import type { DispenserStateDto, ProtocolResponse, VolumeResponse, TankResponse, PriceResponse, DispenserErrorResponse } from '../types/api';
 
-// Use emulator API directly (port 8090) for settlement
+// Use emulator API directly (port 9001) for settlement
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-const EMULATOR_BASE_URL = 'http://localhost:8090';
+const EMULATOR_BASE_URL = 'http://localhost:9001';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
