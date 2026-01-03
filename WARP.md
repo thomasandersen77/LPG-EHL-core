@@ -29,8 +29,9 @@ lpg-ehl/
 ├── lpg-ehl-emulator/       # Testing emulator (Spring Boot)
 │   └── Simulates dispenser hardware
 │
-├── _archived/              # Archived legacy implementations
-│   └── baxi-protocol/      # Old TCP/ECR protocol (pre-Cloud Connect)
+├── _archived/              # Archived implementations
+│   ├── baxi-protocol/      # Direct TCP/ECR protocol (pre-Cloud Connect)
+│   └── rest-api-attempt/   # Incorrect REST API approach (2025-01-02)
 │
 ├── norgesgass_legacy/      # VB6 legacy code (reference only)
 │   ├── pumpekontroll.frm   # Original UI + logic
@@ -127,40 +128,79 @@ mvn clean install
 
 ## Payment Integration - Nets Cloud Connect
 
-**Modern Cloud-Based Payment Architecture**
+**SSL/TLS Encrypted Payment Architecture**
 
-The system uses **Nets Cloud Connect** for payment terminal integration, eliminating the need for direct TCP/ECR protocol management.
+The system uses **Nets Cloud Connect** - a secure SSL/TLS tunnel for encrypted terminal communication using the standard Baxi protocol.
+
+**IMPORTANT:** Cloud Connect is NOT a REST API. It's an SSL/TLS socket tunnel that carries Baxi protocol frames.
 
 ### Architecture
 ```
-┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
-│                 │   REST  │                 │   ECR   │                 │
-│  LPG-EHL API    │────────▶│  Nets Cloud     │────────▶│  Payment        │
-│  (Spring Boot)  │   HTTPS │  (Managed)      │  Proto  │  Terminal       │
-│                 │◀────────│                 │◀────────│  (Ingenico)     │
-└─────────────────┘         └─────────────────┘         └─────────────────┘
+┌─────────────────┌         ┌────────────────────────────┌         ┌─────────────────┌
+│                 │         │                            │         │                 │
+│  LPG-EHL Core    ├─────────▶│  Nets Cloud Connect     ├─────────▶│  Payment        │
+│  (Edge Device)   │ SSL/TLS │  3.33.230.243:6001      │   ECR   │  Terminal       │
+│                 │◀─────────│  (Baxi Protocol Frames) │◀─────────│  (Ingenico)     │
+└─────────────────┘         └────────────────────────────┘         └─────────────────┘
+  CloudTerminalClient              Encrypted Tunnel                  Baxi Protocol
 ```
 
 ### What We Manage
-✅ REST API calls to Nets Cloud
-✅ Payment polling and status tracking
+✅ SSL/TLS socket connection to Nets Cloud
+✅ Baxi protocol command creation and parsing
 ✅ Transaction recording and cloud sync
 ✅ Business logic and error handling
 
 ### What Nets Manages (NOT Our Responsibility)
-❌ Terminal connectivity and state
-❌ ECR protocol (TCP/hex/framing)
+❌ Terminal connectivity and routing
+❌ SSL certificate management
 ❌ Terminal firmware and configuration
 ❌ Network failover and retry logic
 ❌ Card processing and security
 
-**Documentation:** See `docs/NETS_CLOUD_CONNECT.md` for setup and API details.
+**Documentation:** See `docs/NETS_CLOUD_CONNECT.md` for setup and implementation details.
+
+### Implementation
+
+**Core Components:**
+- `NetsBaxProtocol.kt` - Baxi protocol implementation (559 lines)
+- `CloudTerminalClient.kt` - SSL/TLS socket client (358 lines)
+- `BaxResponse` - Protocol response types
+
+**Protocol Framing:**
+- TCP_ETHERNET mode: 2-byte length header + payload
+- SERIAL mode: STX/ETX/LRC framing (legacy)
 
 ### Terminal Configuration
-- ECR IP: **3.33.230.243** (Nets Cloud)
-- ECR Port: **6001**
-- Communication: Ethernet/WIFI
-- Terminal connects TO Nets (not to our server)
+- **ECR**: Yes
+- **ECR IP**: `3.33.230.243` (Nets Cloud SSL endpoint)
+- **ECR Port**: `6001`
+- **TLS/SSL**: Enabled
+- **Communication**: Ethernet/WIFI
+- Terminal connects TO Nets (outbound only, no firewall config needed)
+
+### Testing Cloud Connect
+
+Run demo:
+```bash
+cd lpg-ehl-core
+mvn exec:java -Dexec.mainClass="no.cloudberries.lpg.MainKt" -Dexec.args="--cloud-connect"
+```
+
+### Architecture History
+
+**2025-01-03:** SSL/TLS Socket (Current)
+- CloudTerminalClient with SSLSocket
+- Baxi protocol over TLS 1.2/1.3
+- Direct connection to 3.33.230.243:6001
+
+**2025-01-02:** REST API Attempt (ARCHIVED)
+- Incorrectly assumed Cloud Connect was REST API
+- Archived to `_archived/rest-api-attempt/`
+
+**Pre-2025:** Direct TCP/ECR (ARCHIVED)
+- Direct TCP socket to terminal
+- Archived to `_archived/baxi-protocol/`
 
 ## Cloud Integration
 
