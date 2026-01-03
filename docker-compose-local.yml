@@ -1,0 +1,115 @@
+# Local Development Docker Compose
+# Simulates complete LPG-EHL system with PLS + Payment Terminal
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: lpg-postgres-local
+    environment:
+      POSTGRES_DB: lpg_ehl
+      POSTGRES_USER: lpguser
+      POSTGRES_PASSWORD: lpgpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lpguser -d lpg_ehl"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Azure Storage Emulator (Azurite)
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: lpg-azurite-local
+    ports:
+      - "10000:10000"  # Blob service
+      - "10001:10001"  # Queue service
+      - "10002:10002"  # Table service
+    volumes:
+      - azurite-data:/data
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0
+
+  # Emulator - Simulates PLS + Payment Terminal (FakeNetsCloudServer)
+  emulator:
+    build:
+      context: .
+      dockerfile: lpg-ehl-emulator/Dockerfile
+    container_name: lpg-emulator-local
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SERVER_PORT: 9001
+      STATION_ID: S001
+      EDGE_ID: EDGE-LOCAL
+      DISPENSER_ID: D001
+    ports:
+      - "9001:9001"
+      - "6001:6001"  # FakeNetsCloudServer SSL port
+    # Healthcheck disabled - emulator runs socket server on same port
+    # Use docker logs to verify startup instead
+
+  # API - Spring Boot backend
+  api:
+    build:
+      context: .
+      dockerfile: lpg-ehl-api/Dockerfile
+    container_name: lpg-api-local
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lpg_ehl
+      SPRING_DATASOURCE_USERNAME: lpguser
+      SPRING_DATASOURCE_PASSWORD: lpgpass
+      AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;QueueEndpoint=http://azurite:10001/devstoreaccount1;TableEndpoint=http://azurite:10002/devstoreaccount1;
+      EMULATOR_HOST: emulator
+      EMULATOR_PORT: 9001
+      NETS_CLOUD_HOST: emulator
+      NETS_CLOUD_PORT: 6001
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      emulator:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Web - React/Vite frontend
+  web:
+    build:
+      context: ./lpg-web
+      dockerfile: Dockerfile
+    container_name: lpg-web-local
+    environment:
+      VITE_API_BASE_URL: http://localhost:8081
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ngrok - Expose API to internet for Tobias
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: lpg-ngrok
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTH_TOKEN}
+    command: http api:8081 --log=stdout
+    ports:
+      - "4040:4040"  # ngrok web interface
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  azurite-data:

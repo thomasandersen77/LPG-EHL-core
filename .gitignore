@@ -87,6 +87,7 @@ local.properties
 # Docker & Database
 local-data/
 .env
+.env.local
 !.env.example
 
 # Backups
