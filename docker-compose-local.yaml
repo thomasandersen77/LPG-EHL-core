@@ -181,3 +181,6 @@ volumes:
 #   3. Set EMULATOR_HOST=host.docker.internal in api environment
 #   4. Ensure Windows VM is accessible from Mac (network/firewall)
 #   5. Start stack: docker-compose -f docker-compose-local.yaml up
+https://app:
+  warp:
+    dev/drive/notebook/Migration-Nets-Baxi-Protocol-Cloud-Connect-API-ClWK5qIAPEYoprKkQHrXS8:

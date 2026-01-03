@@ -9,6 +9,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### CRITICAL CORRECTION - 2025-01-03
+
+#### Nets Cloud Connect: SSL/TLS Socket Architecture (NOT REST API)
+
+**Branch:** `feature/ethernet-bax-protocol` (continued)
+
+**ARCHITECTURAL CORRECTION:** Previous Cloud Connect implementation was based on incorrect assumption that it was a REST API. 
+
+**ACTUAL ARCHITECTURE:** Nets Cloud Connect is a **secure SSL/TLS socket tunnel** using **Baxi protocol internally**.
+
+**What Was Wrong:**
+- ❌ Believed Cloud Connect was REST-based: `https://api.nets.eu/terminal/v1`
+- ❌ Implemented HTTP client with polling
+- ❌ Created REST DTOs and endpoints
+- ❌ Used Spring WebClient
+
+**What Is Correct:**
+- ✅ Cloud Connect uses SSL/TLS encrypted socket
+- ✅ Host: `3.33.230.243`, Port: `6001`
+- ✅ Protocol: Standard Baxi frames over TLS
+- ✅ Same payload format as direct TCP/ECR
+
+**Actions Taken:**
+
+1. **Archived REST Implementation** → `_archived/rest-api-attempt/`
+   - `NetsCloudClient.kt` (REST client)
+   - `NetsCloudConfig.kt` (Spring config)
+   - `NetsCloudPaymentGateway.kt` (polling gateway)
+   - All REST-based test files
+   - `.env.local.example`
+
+2. **Restored Baxi Protocol** from `_archived/baxi-protocol/`
+   - `NetsBaxProtocol.kt` → Back to active code in `lpg-ehl-core`
+   - Full 559-line implementation with TCP/Serial framing
+   - All protocol command/response handling
+
+3. **Implemented SSL Socket Client**
+   - New: `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/payment/CloudTerminalClient.kt`
+   - Uses `javax.net.ssl.SSLSocket` and `SSLSocketFactory`
+   - Connects to `3.33.230.243:6001`
+   - TLS 1.2/1.3 support
+   - Same command/response flow as `PaymentTerminalClient`, but over SSL
+
+**Correct Architecture:**
+```
+[LPG Edge] <--SSL/TLS--> [Nets Cloud 3.33.230.243:6001] <--ECR--> [Terminal]
+              (Baxi Protocol Frames Encrypted)
+```
+
+**Terminal Configuration (CONFIRMED):**
+- ECR = Yes
+- ECR IP = `3.33.230.243` (Nets Cloud SSL endpoint)
+- ECR Port = `6001`
+- TLS/SSL = Enabled
+- Communication = Ethernet/WIFI
+
+**Sources:**
+- ChatGPT: "Nets Cloud Connect is not a REST API—it's a secure SSL/TLS socket tunnel"
+- Gemini: "Terminal configuration: ECR IP 3.33.230.243, Port 6001, Communication: Ethernet/WIFI with TLS"
+
+**Implementation Details:**
+
+`CloudTerminalClient.kt`:
+- SSL socket creation with `SSLSocketFactory.getDefault()`
+- TLS handshake via `startHandshake()`
+- Reads/writes use standard `InputStream`/`OutputStream`
+- Protocol framing: Uses `NetsBaxProtocol.buildFrame()` and `parseResponse()`
+- Timeout handling: 10s connect, 30s read (increased for cloud latency)
+
+**Files Added:**
+- `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/payment/CloudTerminalClient.kt` (358 lines)
+- `_archived/rest-api-attempt/README.md` (explanation of mistake)
+
+**Files Restored:**
+- `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/payment/NetsBaxProtocol.kt` (from archive)
+
+**Files Archived (REST attempt):**
+- `_archived/rest-api-attempt/NetsCloudClient.kt`
+- `_archived/rest-api-attempt/NetsCloudConfig.kt`
+- `_archived/rest-api-attempt/NetsCloudPaymentGateway.kt`
+- `_archived/rest-api-attempt/NetsCloudClientTest.kt`
+- `_archived/rest-api-attempt/NetsCloudPaymentGatewayTest.kt`
+
+**Lesson Learned:**
+
+Always verify protocol details before implementing integration layer. "Cloud Connect" does not automatically mean REST API - it's a marketing term for their SSL tunnel service.
+
+---
+
 ### Changed - 2026-01-02
 
 #### Migration: Nets Baxi Protocol → Cloud Connect API
