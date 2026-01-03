@@ -15,9 +15,9 @@ import java.time.LocalDateTime
  * Demo controller for testing frontend without authentication.
  * Provides simple endpoints for dispenser control simulation.
  * 
- * DEPRECATED: Only enabled with 'demo' profile. Use emulator API directly instead.
+ * Enabled for local development and demo profiles.
  */
-@Profile("demo")
+@Profile("local", "demo")
 @RestController
 @RequestMapping("/api/v1/dispenser")
 @Tag(name = "Demo Dispenser", description = "Demo endpoints for frontend testing (deprecated)")
