@@ -37,6 +37,8 @@ class SecurityConfig(
             // .addFilterBefore(tokenAuthenticationFilter(), UsernamePasswordAuthenticationFilter::class.java)
             .authorizeHttpRequests { auth ->
                 auth
+                    // CORS preflight requests (OPTIONS)
+                    .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                     // Public endpoints - no authentication required
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
