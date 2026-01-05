@@ -130,6 +130,9 @@ data class SyncStatusResponse(
  * Create transaction request (from emulator)
  */
 data class CreateTransactionRequest(
+    val stationId: String? = null,  // Multi-station support
+    val edgeId: String? = null,      // Edge device ID
+    val dispenserId: String? = null, // Dispenser ID within station
     val dispenserAddress: Int,
     val nozzleNumber: Int = 1,
     val volumeDeciliters: Int,
