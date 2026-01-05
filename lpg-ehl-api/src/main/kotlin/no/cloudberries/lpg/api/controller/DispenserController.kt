@@ -16,7 +16,8 @@ import org.springframework.web.bind.annotation.*
 @Tag(name = "Dispensers", description = "Dispenser status endpoints")
 // @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 class DispenserController(
-    private val dispenserService: DispenserService
+    private val dispenserService: DispenserService,
+    private val plsService: no.cloudberries.lpg.api.pls.MockPlsService?
 ) {
 
     @GetMapping
@@ -74,5 +75,58 @@ class DispenserController(
         val dispenser = dispenserService.getDispenserStatus(address)
             ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(dispenser)
+    }
+    
+    data class LiveStatusResponse(
+        val state: String,
+        val volumeLiters: Double,
+        val amountKr: Double,
+        val pricePerLiter: Double,
+        val isActive: Boolean,
+        val message: String
+    )
+    
+    @GetMapping("/status")
+    @Operation(
+        summary = "Get live dispenser status",
+        description = "Get real-time status for customer display during fueling"
+    )
+    fun getLiveStatus(): ResponseEntity<LiveStatusResponse> {
+        // Get current price from PLS
+        val currentPrice = plsService?.getCurrentPrice("LPG")?.pricePerLiter?.toDouble() ?: 15.90
+        
+        // Get status for dispenser 1 (default)
+        val dispenser = dispenserService.getDispenserStatus(1)
+        
+        return if (dispenser != null) {
+            // DispenserStatusResponse doesn't have volume/amount, so return default for now
+            ResponseEntity.ok(
+                LiveStatusResponse(
+                    state = dispenser.state,
+                    volumeLiters = 0.0,  // Would need to track this separately
+                    amountKr = 0.0,       // Would need to track this separately
+                    pricePerLiter = currentPrice,
+                    isActive = dispenser.state == "DISPENSING" || dispenser.state == "AUTHORIZED",
+                    message = when (dispenser.state) {
+                        "IDLE" -> "Klar for fylling"
+                        "AUTHORIZED" -> "Autorisert - Start fylling"
+                        "DISPENSING" -> "Fyller..."
+                        "FINISHED" -> "Fylling fullført"
+                        else -> "Ukjent status"
+                    }
+                )
+            )
+        } else {
+            ResponseEntity.ok(
+                LiveStatusResponse(
+                    state = "IDLE",
+                    volumeLiters = 0.0,
+                    amountKr = 0.0,
+                    pricePerLiter = currentPrice,
+                    isActive = false,
+                    message = "Klar for fylling"
+                )
+            )
+        }
     }
 }

@@ -30,4 +30,25 @@ class PaymentController(
     @GetMapping("/{id}")
     fun getPayment(@PathVariable id: UUID): Payment? =
         paymentGateway.getPayment(id)
+    
+    data class PaymentStatusResponse(
+        val status: String,
+        val message: String,
+        val paymentId: UUID?,
+        val amountCents: Long?,
+        val canProceed: Boolean
+    )
+    
+    @GetMapping("/status")
+    fun getPaymentStatus(): PaymentStatusResponse {
+        // For now, returns a simple status
+        // In production, this would check actual terminal state
+        return PaymentStatusResponse(
+            status = "IDLE",
+            message = "Ready for payment",
+            paymentId = null,
+            amountCents = null,
+            canProceed = true
+        )
+    }
 }

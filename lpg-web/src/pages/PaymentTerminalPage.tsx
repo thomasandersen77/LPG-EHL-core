@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { settlePayment, type SettlementResponse } from '../api/emulator';
 import { fetchTransactions } from '../api/transactions';
+import { dispenserApi } from '../api/dispenser';
 
 export function PaymentTerminalPage() {
-  const [dispenserId] = useState(1);
-  const [lastSettlement, setLastSettlement] = useState<SettlementResponse | null>(null);
+  const [lastSettlement, setLastSettlement] = useState<any>(null);
   const queryClient = useQueryClient();
 
   // Fetch latest transactions to show pending amounts
@@ -16,15 +15,53 @@ export function PaymentTerminalPage() {
   });
 
   const settlementMutation = useMutation({
-    mutationFn: (method: 'CARD' | 'CREDIT') => settlePayment(dispenserId, method),
-    onSuccess: (data) => {
+    mutationFn: async (method: 'CARD' | 'CREDIT') => {
+      // Check if we have a pending transaction to pay
+      if (!latestTransaction) {
+        throw new Error('No pending transaction to pay');
+      }
+      
+      // Only check transactions with PENDING status
+      if (latestTransaction.paymentStatus !== 'PENDING') {
+        throw new Error(`Transaction already ${latestTransaction.paymentStatus}`);
+      }
+      
+      console.log('💳 Paying transaction via Terminal:', latestTransaction.transactionId, '-', latestTransaction.amountKr, 'kr');
+      
+      // IMPORTANT: Call settle endpoint to release the dispenser
+      // This updates payment status AND resets dispenser state to IDLE
+      console.log('🔓 Calling settle endpoint to release dispenser...');
+      const settleResult = await dispenserApi.settle(1, method);
+      console.log('✅ Dispenser released:', settleResult);
+      
+      return {
+        status: 'settled',
+        method: method,
+        source: 'terminal-payment',
+        dispenserReleased: true,
+        transaction: {
+          dispenserId: latestTransaction.dispenserAddress,
+          liters: latestTransaction.volumeLiters,
+          amountNok: latestTransaction.amountKr,
+          unitPrice: latestTransaction.pricePerLiter,
+          finishedAt: latestTransaction.timestamp,
+          idempotencyKey: latestTransaction.transactionId
+        }
+      };
+    },
+    onSuccess: (data: any) => {
       setLastSettlement(data);
       // Invalidate transactions to refresh the list
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      // Also invalidate dispenser state so simulator updates
+      queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
       
       // Show success message
       if (data.transaction) {
-        console.log('✅ Payment settled:', data.transaction);
+        console.log(`✅ Payment settled via ${data.source}:`, data.transaction);
+        if (data.dispenserReleased) {
+          console.log('🚀 Dispenser state reset to IDLE - ready for next fueling');
+        }
       }
     },
     onError: (error) => {
@@ -156,11 +193,10 @@ export function PaymentTerminalPage() {
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
         <h3 className="font-bold text-blue-900 mb-2">ℹ️ Om betalingssimulatoren</h3>
         <ul className="text-sm text-blue-800 space-y-1">
-          <li>✅ Denne siden simulerer en Nets-betalingsterminal</li>
-          <li>✅ Når du trykker "Kortbetaling" eller "Bedriftskreditt", blir transaksjonen gjort opp</li>
-          <li>✅ Windows Dispenserkontroll får beskjed om å nullstille displayet til 0.00 / 0.00</li>
-          <li>✅ Pumpen blir klar for neste kunde</li>
-          <li>⚠️ KONTANT betalingsmetode er fjernet (kun kort/kreditt)</li>
+          <li>✅ Henter transaksjoner fra lpg-ehl database</li>
+          <li>✅ Kvitterer betaling via lpg-ehl API (port 8080)</li>
+          <li>✅ Oppdaterer paymentStatus fra PENDING til PAID</li>
+          <li>⚠️ Kun transaksjoner med status PENDING kan betales</li>
         </ul>
       </div>
 
