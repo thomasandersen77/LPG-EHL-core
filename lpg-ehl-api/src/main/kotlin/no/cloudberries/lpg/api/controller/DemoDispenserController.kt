@@ -24,7 +24,8 @@ import java.time.LocalDateTime
 class DemoDispenserController(
     private val transactionService: TransactionService,
     private val transactionRepository: no.cloudberries.lpg.api.repository.TransactionRepository,
-    private val plsService: no.cloudberries.lpg.api.pls.MockPlsService?
+    private val plsService: no.cloudberries.lpg.api.pls.MockPlsService?,
+    private val roadTaxSettingsRepository: no.cloudberries.lpg.api.repository.RoadTaxSettingsRepository
 ) {
 
     // Simulated state
@@ -32,6 +33,8 @@ class DemoDispenserController(
     private var litres: Double = 0.0
     private var amountToPay: Double = 0.0
     private var pricePerLitre: Double = 15.90 // Dynamic price, updated from PLS
+    private var roadTaxPerLiterOre: Int = 0 // Road tax in øre, loaded from database
+    private var includeRoadTax: Boolean = true // Whether to include road tax in calculations
     private var lastUnblockTime: Long = 0
     private var currentPaymentType: String = "CASH"
     
@@ -43,11 +46,20 @@ class DemoDispenserController(
         // Update price from PLS if available
         val currentPrice = plsService?.getCurrentPrice("LPG")?.pricePerLiter?.toDouble() ?: 15.90
         
+        // Load current road tax if not already loaded
+        if (roadTaxPerLiterOre == 0) {
+            val currentTax = roadTaxSettingsRepository.findFirstByOrderByEffectiveFromDesc()
+            roadTaxPerLiterOre = currentTax?.taxPerLiterOre ?: 0
+            logger.info("🚗 Loaded road tax: {} øre/L", roadTaxPerLiterOre)
+        }
+        
         // Simulate delivery progress
         if (state == DispenserState.DELIVERING) {
             val secondsElapsed = (System.currentTimeMillis() - lastUnblockTime) / 1000.0
             litres = secondsElapsed * 0.5 // 0.5 L/s flow rate
-            amountToPay = litres * pricePerLitre // Use price that was set when starting
+            val baseAmount = litres * pricePerLitre
+            val taxAmount = if (includeRoadTax) litres * (roadTaxPerLiterOre / 100.0) else 0.0
+            amountToPay = baseAmount + taxAmount
         }
 
         return ResponseEntity.ok(
@@ -56,7 +68,8 @@ class DemoDispenserController(
                 amountToPay = amountToPay,
                 litres = litres,
                 pricePerLitre = if (state == DispenserState.DELIVERING) pricePerLitre else currentPrice,
-                includeRoadTax = true,
+                roadTaxPerLiterOre = roadTaxPerLiterOre,
+                includeRoadTax = includeRoadTax,
                 cardModeActive = false,
                 dayMode = true,
                 stationCreditActive = false,
@@ -368,6 +381,7 @@ class DemoDispenserController(
         val amountToPay: Double,
         val litres: Double,
         val pricePerLitre: Double,
+        val roadTaxPerLiterOre: Int,
         val includeRoadTax: Boolean,
         val cardModeActive: Boolean,
         val dayMode: Boolean,

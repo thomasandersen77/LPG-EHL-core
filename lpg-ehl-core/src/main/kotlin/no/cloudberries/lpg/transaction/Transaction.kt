@@ -78,6 +78,8 @@ enum class PaymentType(val code: Int, val description: String) {
  * @property deliveredVolume Delivered volume in liters
  * @property deliveredAmount Delivered amount in øre/cents
  * @property unitPrice Unit price in øre/cents per liter
+ * @property roadTaxPerLiterOre Road tax per liter in øre/cents
+ * @property includesRoadTax Whether road tax is included in the total amount
  * @property cashbackAmount Cashback amount in øre/cents
  * @property startTime Transaction start timestamp
  * @property endTime Transaction end timestamp
@@ -91,6 +93,8 @@ data class Transaction(
     var deliveredVolume: Float = 0.0f,
     var deliveredAmount: Int = 0,
     var unitPrice: Float = 0.0f,
+    var roadTaxPerLiterOre: Int = 0,
+    var includesRoadTax: Boolean = true,
     var cashbackAmount: Int = 0,
     val startTime: Instant = Instant.now(),
     var endTime: Instant? = null
@@ -118,6 +122,41 @@ data class Transaction(
      */
     fun isActive(): Boolean {
         return state == TransactionState.ACTIVE
+    }
+    
+    /**
+     * Calculate total amount including road tax if enabled
+     * 
+     * @param volumeLiters Delivered volume in liters
+     * @param pricePerLiterOre Price per liter in øre
+     * @param roadTaxPerLiterOre Road tax per liter in øre
+     * @param includeRoadTax Whether to include road tax in calculation
+     * @return Total amount in øre
+     */
+    fun calculateTotalAmount(
+        volumeLiters: Float,
+        pricePerLiterOre: Float,
+        roadTaxPerLiterOre: Int,
+        includeRoadTax: Boolean
+    ): Int {
+        val baseAmount = (volumeLiters * pricePerLiterOre).toInt()
+        return if (includeRoadTax) {
+            baseAmount + (volumeLiters * roadTaxPerLiterOre).toInt()
+        } else {
+            baseAmount
+        }
+    }
+    
+    /**
+     * Update delivered amount with current road tax settings
+     */
+    fun updateDeliveredAmount() {
+        deliveredAmount = calculateTotalAmount(
+            deliveredVolume,
+            unitPrice,
+            roadTaxPerLiterOre,
+            includesRoadTax
+        )
     }
     
     /**

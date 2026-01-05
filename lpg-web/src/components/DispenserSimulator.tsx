@@ -8,6 +8,7 @@ type PaymentMethod = 'CARD' | 'CREDIT';
 export function DispenserSimulator() {
   const queryClient = useQueryClient();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CARD');
+  const [includeRoadTax, setIncludeRoadTax] = useState<boolean>(true);
   const [settlementMessage, setSettlementMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -164,12 +165,32 @@ export function DispenserSimulator() {
           {/* Price Info */}
           <div className="bg-gray-700 rounded-xl p-4 mb-8">
             <div className="flex justify-between items-center">
-              <span className="text-gray-400">Pris per liter:</span>
+              <span className="text-gray-400">Pris per liter (basispris):</span>
               <span className="text-xl font-bold">{state?.pricePerLitre.toFixed(2)} kr/L</span>
             </div>
-            {state?.includeRoadTax && (
-              <div className="text-xs text-gray-500 mt-1">
-                Inkludert veibruksavgift
+            {state?.roadTaxPerLiterOre && state.roadTaxPerLiterOre > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-600">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400">🚗 Veitrafikkavgift:</span>
+                  <span className={`font-bold ${includeRoadTax ? 'text-yellow-400' : 'text-gray-500 line-through'}`}>
+                    {(state.roadTaxPerLiterOre / 100).toFixed(2)} kr/L
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-600">
+                  <div className="flex justify-between">
+                    <span>Totalpris:</span>
+                    <span className="font-bold text-white">
+                      {includeRoadTax 
+                        ? (state.pricePerLitre + state.roadTaxPerLiterOre / 100).toFixed(2)
+                        : state.pricePerLitre.toFixed(2)} kr/L
+                    </span>
+                  </div>
+                  {!includeRoadTax && (
+                    <div className="text-xs text-orange-400 mt-1 text-right">
+                      ⚠️ Avgift ikke inkludert
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -187,6 +208,29 @@ export function DispenserSimulator() {
               <option value="CREDIT">🏪 Stasjonskreditt</option>
             </select>
           </div>
+
+          {/* Road Tax Toggle */}
+          {state?.roadTaxPerLiterOre && state.roadTaxPerLiterOre > 0 && (
+            <div className="mb-6">
+              <label className="flex items-center gap-3 cursor-pointer bg-gray-700 rounded-lg px-4 py-3 border border-gray-600 hover:bg-gray-650 transition">
+                <input 
+                  type="checkbox" 
+                  checked={includeRoadTax}
+                  onChange={(e) => setIncludeRoadTax(e.target.checked)}
+                  disabled={state?.state === 'DELIVERING'}
+                  className="w-5 h-5 rounded accent-yellow-500 disabled:opacity-50"
+                />
+                <div className="flex-1">
+                  <span className="text-white font-medium">🚗 Inkluder veitrafikkavgift</span>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {includeRoadTax 
+                      ? `+${(state.roadTaxPerLiterOre / 100).toFixed(2)} kr/L` 
+                      : 'Avgift ikke inkludert'}
+                  </div>
+                </div>
+              </label>
+            </div>
+          )}
 
           {/* Status Indicators */}
           <div className="grid grid-cols-2 gap-4 mb-8">

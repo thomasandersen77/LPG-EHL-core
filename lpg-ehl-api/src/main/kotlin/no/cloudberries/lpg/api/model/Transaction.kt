@@ -48,6 +48,9 @@ class Transaction(
     @Column(name = "includes_road_tax")
     var includesRoadTax: Boolean = true,
 
+    @Column(name = "road_tax_per_liter_ore")
+    var roadTaxPerLiterOre: Int? = null,
+
     @Column(name = "timestamp", nullable = false)
     var timestamp: LocalDateTime = LocalDateTime.now(),
 
