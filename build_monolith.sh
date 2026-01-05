@@ -90,7 +90,7 @@ echo -e "${GREEN}[4/5]${NC} Building Spring Boot monolith JAR..."
 cd lpg-ehl-api
 
 echo "  Running Maven package (skipping tests for faster build)..."
-./mvnw clean package -DskipTests
+../mvnw clean package -DskipTests
 
 # Find the built JAR
 JAR_FILE=$(find target -name "lpg-ehl-api-*.jar" -not -name "*-plain.jar" | head -1)
@@ -111,14 +111,15 @@ cd "$SCRIPT_DIR"
 RELEASE_DIR="release"
 mkdir -p "$RELEASE_DIR"
 
-# Extract version from pom.xml
-VERSION=$(grep -m1 "<version>" pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
-RELEASE_JAR="$RELEASE_DIR/lpg-ehl-monolith-$VERSION.jar"
+RELEASE_JAR="$RELEASE_DIR/lpg-ehl-monolith.jar"
 
-# Copy JAR to release with better naming
-cp "$JAR_FILE" "$RELEASE_JAR"
+# Copy JAR to release with better naming (using full path)
+cp "lpg-ehl-api/$JAR_FILE" "$RELEASE_JAR"
 
-echo -e "  ${GREEN}✓${NC} Release JAR created"
+# Make JAR executable (already set in pom.xml, but ensure permissions)
+chmod +x "$RELEASE_JAR"
+
+echo -e "  ${GREEN}✓${NC} Release JAR created (executable)"
 echo ""
 
 # Build summary
@@ -130,7 +131,6 @@ echo -e "${YELLOW}Release Information:${NC}"
 echo "  File:     $(basename "$RELEASE_JAR")"
 echo "  Location: $RELEASE_JAR"
 echo "  Size:     $(du -h "$RELEASE_JAR" | cut -f1)"
-echo "  Version:  $VERSION"
 echo ""
 echo -e "${YELLOW}What's included:${NC}"
 echo "  ✓ lpg-ehl-core (Kotlin protocol implementation)"
@@ -148,7 +148,7 @@ echo "  Deploy to ARK machine:"
 echo "    scp $RELEASE_JAR user@ark-machine:/opt/lpg-ehl/"
 echo "    ssh user@ark-machine"
 echo "    sudo systemctl stop lpg-ehl"
-echo "    sudo cp /opt/lpg-ehl/lpg-ehl-monolith-$VERSION.jar /opt/lpg-ehl/lpg-ehl.jar"
+echo "    sudo cp /opt/lpg-ehl/lpg-ehl-monolith.jar /opt/lpg-ehl/lpg-ehl.jar"
 echo "    sudo systemctl start lpg-ehl"
 echo ""
 echo -e "${YELLOW}IntelliJ Development:${NC}"

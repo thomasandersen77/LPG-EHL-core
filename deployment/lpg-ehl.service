@@ -1,0 +1,75 @@
+# Systemd service file for LPG-EHL Monolith
+# 
+# Installation:
+#   sudo cp lpg-ehl.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable lpg-ehl
+#   sudo systemctl start lpg-ehl
+#
+# Management:
+#   sudo systemctl status lpg-ehl
+#   sudo systemctl stop lpg-ehl
+#   sudo systemctl restart lpg-ehl
+#   sudo journalctl -u lpg-ehl -f
+#
+# This service will:
+# - Start automatically on boot
+# - Restart automatically on failure
+# - Run as lpg-ehl user (created during deployment)
+# - Wait for network and PostgreSQL to be ready
+
+[Unit]
+Description=LPG-EHL Edge System (Monolith)
+Documentation=https://github.com/cloudberries/lpg-ehl
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=exec
+User=lpg-ehl
+Group=lpg-ehl
+WorkingDirectory=/opt/lpg-ehl
+
+# Main executable JAR
+ExecStart=/usr/bin/java -jar /opt/lpg-ehl/lpg-ehl-monolith.jar
+
+# Environment variables
+Environment="SPRING_PROFILES_ACTIVE=production"
+Environment="DB_HOST=localhost"
+Environment="DB_PORT=5432"
+Environment="DB_NAME=lpg_ehl"
+Environment="DB_USER=lpg_user"
+# DB_PASSWORD should be set in /opt/lpg-ehl/lpg-ehl.env for security
+
+# Load additional environment variables from secure file
+EnvironmentFile=-/opt/lpg-ehl/lpg-ehl.env
+
+# JVM Memory settings (adjust based on available RAM)
+Environment="JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC"
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=5min
+StartLimitBurst=3
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lpg-ehl
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/lpg-ehl/logs /opt/lpg-ehl/data
+
+# Process limits
+LimitNOFILE=65536
+TimeoutStartSec=90
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

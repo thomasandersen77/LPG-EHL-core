@@ -49,6 +49,8 @@ class SecurityConfig(
                     .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/**").permitAll()
                     .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/**").permitAll()
                     .requestMatchers("/error").permitAll() // Allow error endpoint
+                    // Static assets (CSS, JS, images, etc.)
+                    .requestMatchers("/assets/**", "/*.ico", "/*.png", "/*.svg").permitAll()
                     // Protected actuator endpoints
                     .requestMatchers("/actuator/**").authenticated()
                     .requestMatchers("/*").permitAll()

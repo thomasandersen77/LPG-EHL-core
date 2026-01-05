@@ -27,18 +27,18 @@ export function ProtocolTester() {
   const productSelectMutation = useMutation({
     mutationFn: ({ address, product }: { address: number; product: string }) => 
       dispenserApi.selectProduct(address, product),
-    onSuccess: (data: ProtocolResponse) => {
+    onSuccess: (data: ProtocolResponse, variables) => {
       addTestResult({
-        command: `PRODUCT_SELECT(195) - ${productInput}`,
+        command: `PRODUCT_SELECT(195) - ${variables.product}`,
         success: data.success,
         message: data.message,
         responseCode: data.responseCode,
         timestamp: new Date()
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
       addTestResult({
-        command: `PRODUCT_SELECT(195) - ${productInput}`,
+        command: `PRODUCT_SELECT(195) - ${variables.product}`,
         success: false,
         message: `Error: ${error.message}`,
         timestamp: new Date()
@@ -49,18 +49,18 @@ export function ProtocolTester() {
   const priceProgramMutation = useMutation({
     mutationFn: ({ address, price }: { address: number; price: string }) => 
       dispenserApi.programPrice(address, price),
-    onSuccess: (data: ProtocolResponse) => {
+    onSuccess: (data: ProtocolResponse, variables) => {
       addTestResult({
-        command: `PROG_PRC(169) - ${priceInput} kr/L`,
+        command: `PROG_PRC(169) - ${variables.price} kr/L`,
         success: data.success,
         message: data.message,
         responseCode: data.responseCode,
         timestamp: new Date()
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
       addTestResult({
-        command: `PROG_PRC(169) - ${priceInput} kr/L`,
+        command: `PROG_PRC(169) - ${variables.price} kr/L`,
         success: false,
         message: `Error: ${error.message}`,
         timestamp: new Date()
@@ -71,18 +71,18 @@ export function ProtocolTester() {
   const amountPresetMutation = useMutation({
     mutationFn: ({ address, amount }: { address: number; amount: number }) => 
       dispenserApi.programAmount(address, amount),
-    onSuccess: (data: ProtocolResponse) => {
+    onSuccess: (data: ProtocolResponse, variables) => {
       addTestResult({
-        command: `PROG_AMOUNT(170) - ${amountInput} øre`,
+        command: `PROG_AMOUNT(170) - ${variables.amount} øre`,
         success: data.success,
         message: data.message,
         responseCode: data.responseCode,
         timestamp: new Date()
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
       addTestResult({
-        command: `PROG_AMOUNT(170) - ${amountInput} øre`,
+        command: `PROG_AMOUNT(170) - ${variables.amount} øre`,
         success: false,
         message: `Error: ${error.message}`,
         timestamp: new Date()
@@ -93,18 +93,18 @@ export function ProtocolTester() {
   const volumePresetMutation = useMutation({
     mutationFn: ({ address, volume }: { address: number; volume: number }) => 
       dispenserApi.programVolume(address, volume),
-    onSuccess: (data: ProtocolResponse) => {
+    onSuccess: (data: ProtocolResponse, variables) => {
       addTestResult({
-        command: `PROG_VOLUME(171) - ${volumeInput} L`,
+        command: `PROG_VOLUME(171) - ${variables.volume} L`,
         success: data.success,
         message: data.message,
         responseCode: data.responseCode,
         timestamp: new Date()
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
       addTestResult({
-        command: `PROG_VOLUME(171) - ${volumeInput} L`,
+        command: `PROG_VOLUME(171) - ${variables.volume} L`,
         success: false,
         message: `Error: ${error.message}`,
         timestamp: new Date()

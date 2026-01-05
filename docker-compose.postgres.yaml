@@ -1,0 +1,84 @@
+# Docker Compose for PostgreSQL + Azurite (Local Development)
+# 
+# This setup runs PostgreSQL and Azurite (Azure Storage Emulator)
+# for local development on Mac. The Spring Boot API runs in IntelliJ
+# or via Maven on port 8080, and connects to these services.
+#
+# Usage:
+#   docker-compose -f docker-compose.postgres.yaml up -d
+#   docker-compose -f docker-compose.postgres.yaml down
+#   docker-compose -f docker-compose.postgres.yaml logs -f
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lpg-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lpg_ehl
+      POSTGRES_USER: lpg_user
+      POSTGRES_PASSWORD: lpg_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lpg_user -d lpg_ehl"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: lpg-azurite
+    restart: unless-stopped
+    command: azurite-queue --queueHost 0.0.0.0 --queuePort 10001 --loose --skipApiVersionCheck
+    ports:
+      - "10001:10001"  # Queue service
+    volumes:
+      - azurite-dev-data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "10001"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-dev-data:
+    driver: local
+  azurite-dev-data:
+    driver: local
+
+# Connection details for Spring Boot application:
+#
+# When running lpg-ehl-api locally (IntelliJ or Maven), use these settings:
+#
+# PostgreSQL:
+#   DB_HOST=localhost
+#   DB_PORT=5432
+#   DB_NAME=lpg_ehl
+#   DB_USER=lpg_user
+#   DB_PASSWORD=lpg_dev_password
+#   JDBC URL: jdbc:postgresql://localhost:5432/lpg_ehl
+#
+# Azurite (Azure Storage Emulator):
+#   AZURE_CONNECTION_STRING=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://localhost:10001
+#   AZURE_QUEUE_NAME=lpg-transactions
+#   Queue Service URL: http://localhost:10001
+#
+# IntelliJ Run Configuration:
+#   1. Run this docker-compose file first
+#   2. Run lpg-ehl-api with VM options: -Dspring.profiles.active=local
+#   3. Application will start on http://localhost:8080
+#   4. No additional environment variables needed (defaults in application.yaml work)
+#
+# These match the defaults in application.yaml, so no configuration needed
+# if running with SPRING_PROFILES_ACTIVE=local
+#
+# Commands:
+#   Start services:     docker-compose -f docker-compose.postgres.yaml up -d
+#   Stop services:      docker-compose -f docker-compose.postgres.yaml down
+#   View logs:          docker-compose -f docker-compose.postgres.yaml logs -f
+#   Wipe data:          docker-compose -f docker-compose.postgres.yaml down -v
+#   Connect with psql:  docker exec -it lpg-postgres-dev psql -U lpg_user -d lpg_ehl
+#   Check Azurite:      curl http://localhost:10001/devstoreaccount1/lpg-transactions

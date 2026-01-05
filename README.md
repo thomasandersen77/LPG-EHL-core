@@ -23,6 +23,7 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 
 ## 📚 Documentation
 
+- **[IntelliJ IDEA Setup](INTELLIJ_SETUP.md)** - 🚀 Quick start for debugging in IntelliJ (Recommended for Development)
 - **[Executive Summary](docs/EXECUTIVE_SUMMARY.md)** - Quick overview for decision makers (cost, timeline, comparison)
 - **[Architecture Analysis](docs/ARCHITECTURE_ANALYSIS.md)** - Detailed technical comparison: Cloudberries vs WordPress/Node/MQTT
 - **[WARP.md](WARP.md)** - Complete technical documentation for development
