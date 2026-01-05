@@ -6,6 +6,7 @@ import no.cloudberries.lpg.emulator.service.TransactionSink
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
@@ -44,7 +45,11 @@ class EmulatorService(
     @PostConstruct
     fun start() {
         try {
-            serverSocket = ServerSocket(port)
+            // Bind to IPv4 explicitly for Windows compatibility (Parallels networking)
+            serverSocket = ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress("0.0.0.0", port))
+            }
             isRunning = true
 
             logger.info("=".repeat(80))
