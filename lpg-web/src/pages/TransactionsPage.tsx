@@ -1,11 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { fetchTransactions, type TransactionFilter } from '../api/transactions';
+import { fetchTransactions, updateTransactionPayment, type TransactionFilter, type PaymentType } from '../api/transactions';
 import { format } from 'date-fns';
 import { nb } from 'date-fns/locale';
 import { AzureSyncStatus } from '../components/AzureSyncStatus';
 
 export function TransactionsPage() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<TransactionFilter>({
     page: 0,
@@ -16,6 +17,16 @@ export function TransactionsPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['transactions', page, filter],
     queryFn: () => fetchTransactions({ ...filter, page }),
+    refetchInterval: 3000, // Auto-refresh every 3 seconds
+  });
+
+  const settleMutation = useMutation({
+    mutationFn: ({ transactionId, paymentMethod }: { transactionId: string; paymentMethod: PaymentType }) =>
+      updateTransactionPayment(transactionId, paymentMethod),
+    onSuccess: () => {
+      // Invalidate and refetch transactions
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    },
   });
 
   const handlePageChange = (newPage: number) => {
@@ -68,6 +79,7 @@ export function TransactionsPage() {
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Pris/L</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Betaling</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Handling</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -109,11 +121,33 @@ export function TransactionsPage() {
                       <span className="text-green-600 font-medium">✓ Betalt</span>
                     )}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {tx.paymentStatus === 'PENDING' ? (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => settleMutation.mutate({ transactionId: tx.transactionId, paymentMethod: 'CASH' })}
+                          disabled={settleMutation.isPending}
+                          className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 text-xs font-medium"
+                        >
+                          💵 Kontant
+                        </button>
+                        <button
+                          onClick={() => settleMutation.mutate({ transactionId: tx.transactionId, paymentMethod: 'CARD' })}
+                          disabled={settleMutation.isPending}
+                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-xs font-medium"
+                        >
+                          💳 Kort
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-xs">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {data?.content.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     Ingen transaksjoner funnet
                   </td>
                 </tr>
