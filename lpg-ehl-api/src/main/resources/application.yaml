@@ -52,6 +52,18 @@ azure:
     batch-size: ${AZURE_SYNC_BATCH_SIZE:10}
     max-retries: ${AZURE_SYNC_MAX_RETRIES:3}
 
+# Nets Cloud Connect Configuration (SSL/TLS Socket)
+# No configuration needed in application.yaml - CloudTerminalClient is configured in code
+# Connection parameters: 3.33.230.243:6001 (SSL/TLS)
+# Protocol: Baxi (same as direct TCP/ECR)
+nets:
+  cloud-connect:
+    # Optional overrides (defaults in CloudTerminalClient)
+    host: ${NETS_CLOUD_HOST:3.33.230.243}
+    port: ${NETS_CLOUD_PORT:6001}
+    connect-timeout-ms: ${NETS_CONNECT_TIMEOUT_MS:10000}
+    read-timeout-ms: ${NETS_READ_TIMEOUT_MS:30000}
+
 # Security Configuration
 security:
   api-token: ${API_AUTH_TOKEN:dev-token-12345}

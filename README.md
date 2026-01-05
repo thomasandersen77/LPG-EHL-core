@@ -114,6 +114,43 @@ lpg-ehl/
    BUILD SUCCESS
    ```
 
+## 💳 Payment Integration - Nets Cloud Connect
+
+The system uses **Nets Cloud Connect** for modern, cloud-based payment terminal integration.
+
+### What This Means
+- ✅ **No TCP socket management** - We communicate via REST API only
+- ✅ **No terminal state tracking** - Nets handles all terminal connectivity
+- ✅ **No binary protocols** - Clean REST JSON instead of hex/ECR protocols
+- ✅ **Simplified testing** - Easy to mock REST endpoints
+
+### Architecture
+```
+LPG-EHL API → REST → Nets Cloud → ECR Protocol → Payment Terminal
+    (Us)              (Nets Managed)                 (Ingenico)
+```
+
+**What We Manage:**
+- REST API calls to Nets Cloud
+- Payment status polling
+- Transaction recording
+
+**What Nets Manages (NOT our responsibility):**
+- Terminal connectivity and state
+- TCP/ECR protocol handling
+- Terminal firmware updates
+- Network failover
+- Card processing security
+
+**Setup Guide:** See [`docs/NETS_CLOUD_CONNECT.md`](docs/NETS_CLOUD_CONNECT.md)
+
+**Terminal Configuration:**
+- ECR IP: `3.33.230.243` (Nets Cloud)
+- ECR Port: `6001`
+- Terminal connects TO Nets (not to our server)
+
+---
+
 ## 🌩️ Cloud Integration & Simulation
 
 This project implements a complete **Edge-to-Cloud** architecture for LPG stations.
@@ -198,6 +235,106 @@ We provide scripts to simulate real-world usage:
    
    # Check status
    docker-compose ps
+   ```
+
+## 🤖 AI Analysis - Zipping Modules
+
+For AI analysis (Claude, ChatGPT, Gemini), you can create focused ZIP archives of specific modules or legacy code.
+
+### Zip Individual Modules
+
+**Core module (EHL protocol):**
+```bash
+zip -r lpg-ehl-core-for-ai.zip lpg-ehl-core/src \
+    lpg-ehl-core/pom.xml \
+    lpg-ehl-core/README.md \
+    -x "*/target/*" "*/.idea/*" "*/node_modules/*"
+```
+
+**API module (Spring Boot REST API + Nets Cloud Connect):**
+```bash
+zip -r lpg-ehl-api-for-ai.zip lpg-ehl-api/src \
+    lpg-ehl-api/pom.xml \
+    lpg-ehl-api/README.md \
+    lpg-ehl-api/.env.local.example \
+    -x "*/target/*" "*/.idea/*" "*/node_modules/*"
+```
+
+**Emulator module:**
+```bash
+zip -r lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src \
+    lpg-ehl-emulator/pom.xml \
+    lpg-ehl-emulator/README.md \
+    -x "*/target/*" "*/.idea/*"
+```
+
+### Zip Legacy Code for Analysis
+
+**VB6 Legacy Code (Original Dispenserkontroll):**
+```bash
+zip -r norgesgass-legacy-for-ai.zip norgesgass_legacy/ \
+    -x "*/bin/*" "*/obj/*" "*/.vs/*"
+```
+
+**Python PoC (Proof-of-Concept re-implementation):**
+```bash
+zip -r python-legacy-for-ai.zip more_legacy/ehl_pumpekontroll_clone/ \
+    -x "*/__pycache__/*" "*/.pytest_cache/*" "*/venv/*"
+```
+
+### Zip Documentation Only
+
+**Project documentation:**
+```bash
+zip -r docs-for-ai.zip docs/ WARP.md README.md CHANGELOG.md \
+    LEGACY_ANALYSIS.md IMPLEMENTATION_ROADMAP.md
+```
+
+**Archived Baxi protocol (for historical analysis):**
+```bash
+zip -r archived-baxi-for-ai.zip _archived/baxi-protocol/ \
+    -x "*/Terminal/images/*"
+```
+
+### Quick Script - Zip Everything
+
+Create all archives at once:
+```bash
+#!/bin/bash
+# Save as scripts/zip-all-for-ai.sh
+
+echo "Creating AI analysis archives..."
+
+zip -r lpg-ehl-core-for-ai.zip lpg-ehl-core/src lpg-ehl-core/pom.xml lpg-ehl-core/README.md -x "*/target/*" "*/.idea/*"
+echo "✓ Core module zipped"
+
+zip -r lpg-ehl-api-for-ai.zip lpg-ehl-api/src lpg-ehl-api/pom.xml lpg-ehl-api/README.md lpg-ehl-api/.env.local.example -x "*/target/*" "*/.idea/*"
+echo "✓ API module zipped"
+
+zip -r lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src lpg-ehl-emulator/pom.xml lpg-ehl-emulator/README.md -x "*/target/*" "*/.idea/*"
+echo "✓ Emulator module zipped"
+
+zip -r norgesgass-legacy-for-ai.zip norgesgass_legacy/ -x "*/bin/*" "*/obj/*" "*/.vs/*"
+echo "✓ VB6 legacy zipped"
+
+zip -r python-legacy-for-ai.zip more_legacy/ehl_pumpekontroll_clone/ -x "*/__pycache__/*" "*/.pytest_cache/*" "*/venv/*"
+echo "✓ Python PoC zipped"
+
+zip -r docs-for-ai.zip docs/ WARP.md README.md CHANGELOG.md LEGACY_ANALYSIS.md IMPLEMENTATION_ROADMAP.md
+echo "✓ Documentation zipped"
+
+zip -r archived-baxi-for-ai.zip _archived/baxi-protocol/ -x "*/Terminal/images/*"
+echo "✓ Archived Baxi protocol zipped"
+
+echo ""
+echo "All archives created! Upload to AI for analysis:"
+ls -lh *-for-ai.zip
+```
+
+**Make executable and run:**
+```bash
+chmod +x scripts/zip-all-for-ai.sh
+./scripts/zip-all-for-ai.sh
    ```
 
 4. **Verify deployment**
