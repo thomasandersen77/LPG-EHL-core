@@ -16,7 +16,7 @@ spring:
 
 # Emulator connection (local development)
 emulator:
-  base-url: ${EMULATOR_BASE_URL:http://localhost:9000}
+  base-url: ${EMULATOR_BASE_URL:http://localhost:8090}
   connect-timeout-ms: 3000
   read-timeout-ms: 5000
 

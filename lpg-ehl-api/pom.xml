@@ -174,10 +174,15 @@
                 <version>${spring-boot.version}</version>
                 <configuration>
                     <mainClass>no.cloudberries.lpg.api.LpgEhlApiApplicationKt</mainClass>
+                    <!-- Make JAR executable on Linux -->
+                    <executable>true</executable>
+                    <!-- Include all dependencies (Fat JAR) -->
+                    <layout>JAR</layout>
                 </configuration>
                 <executions>
                     <execution>
                         <goals>
+                            <!-- Repackage goal creates executable Fat JAR -->
                             <goal>repackage</goal>
                         </goals>
                     </execution>

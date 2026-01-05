@@ -78,17 +78,22 @@ class EmulatorController(
     ): ResponseEntity<Map<String, Any>> {
         logger.info("💳 Settle payment request: dispenserId=$id, method=$method")
         
-        // Validate payment method
-        if (method !in listOf("CARD", "CREDIT")) {
-            logger.warn("⚠️ Invalid payment method: $method")
-            return ResponseEntity.badRequest().body(mapOf(
-                "status" to "error",
-                "message" to "Invalid payment method. Use CARD or CREDIT"
-            ))
+        // Map frontend payment methods to emulator payment methods
+        val emulatorMethod = when (method.uppercase()) {
+            "CASH" -> "CARD"  // Map CASH to CARD (both are non-credit)
+            "CARD" -> "CARD"
+            "CREDIT" -> "CREDIT"
+            else -> {
+                logger.warn("⚠️ Invalid payment method: $method")
+                return ResponseEntity.badRequest().body(mapOf(
+                    "status" to "error",
+                    "message" to "Invalid payment method. Use CASH, CARD, or CREDIT"
+                ))
+            }
         }
         
         // Use new broadcast method instead of direct settle
-        val settledTransaction = emulatorService.settleAndBroadcast(method)
+        val settledTransaction = emulatorService.settleAndBroadcast(emulatorMethod)
         
         return if (settledTransaction != null) {
             logger.info("✅ Payment settled: ${settledTransaction.amountNok} NOK, ${settledTransaction.liters} L")

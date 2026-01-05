@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
+import no.cloudberries.lpg.api.client.EmulatorClient
 import no.cloudberries.lpg.api.dto.CreateTransactionRequest
 import no.cloudberries.lpg.api.dto.ErrorResponse
 import no.cloudberries.lpg.api.dto.PageResponse
@@ -27,7 +28,8 @@ import java.util.*
 @Tag(name = "Transactions", description = "Transaction management endpoints")
 // @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 class TransactionController(
-    private val transactionService: TransactionService
+    private val transactionService: TransactionService,
+    private val emulatorClient: EmulatorClient
 ) {
     private val logger = LoggerFactory.getLogger(TransactionController::class.java)
 
@@ -166,6 +168,16 @@ class TransactionController(
             }
         
         logger.info("✅ Payment status updated for transaction $id")
+        
+        // Notify emulator to reset dispenser and broadcast to Windows
+        logger.info("📢 Notifying emulator to settle dispenser #${updated.dispenserAddress}")
+        val settled = emulatorClient.settleDispenser(updated.dispenserAddress, paymentMethod)
+        if (settled) {
+            logger.info("✅ Emulator reset broadcast sent to Windows")
+        } else {
+            logger.warn("⚠️ Failed to notify emulator (Windows may still show old values)")
+        }
+        
         return ResponseEntity.ok(TransactionResponse.from(updated))
     }
 

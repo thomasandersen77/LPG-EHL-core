@@ -7,6 +7,7 @@ export interface DispenserStateDto {
   amountToPay: number;
   litres: number;
   pricePerLitre: number;
+  roadTaxPerLiterOre: number;
   includeRoadTax: boolean;
   cardModeActive: boolean;
   dayMode: boolean;
