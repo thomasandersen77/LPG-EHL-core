@@ -28,8 +28,11 @@ class EmulatorClient(
      */
     fun settleDispenser(dispenserId: Int, paymentMethod: String): Boolean {
         return try {
+            val url = "$baseUrl/api/v1/emulator/settle/$dispenserId?method=$paymentMethod"
+            logger.info("🔗 Calling emulator settle endpoint: $url")
+            
             val request = HttpRequest.newBuilder()
-                .uri(URI.create("$baseUrl/api/v1/emulator/settle/$dispenserId?method=$paymentMethod"))
+                .uri(URI.create(url))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .timeout(Duration.ofSeconds(10))
@@ -38,14 +41,18 @@ class EmulatorClient(
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             
             if (response.statusCode() in 200..299) {
-                logger.info("✅ Emulator settled: dispenser=$dispenserId, method=$paymentMethod")
+                logger.info("✅ Emulator settled successfully: $dispenserId")
+                logger.info("📢 Windows should now be reset to 0.00/0.00")
+                logger.debug("Response: ${response.body()}")
                 true
             } else {
-                logger.warn("⚠️ Failed to settle emulator: ${response.statusCode()} - ${response.body()}")
+                logger.error("❌ Emulator settle FAILED: HTTP ${response.statusCode()}")
+                logger.error("Response body: ${response.body()}")
                 false
             }
         } catch (e: Exception) {
-            logger.error("❌ Error calling emulator to settle dispenser $dispenserId", e)
+            logger.error("❌ Exception calling emulator settle endpoint", e)
+            logger.error("Make sure emulator is running on $baseUrl")
             false
         }
     }
