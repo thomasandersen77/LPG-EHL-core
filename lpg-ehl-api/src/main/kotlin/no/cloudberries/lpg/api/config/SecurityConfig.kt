@@ -32,16 +32,22 @@ class SecurityConfig(
             .csrf { it.disable() }
             .cors { it.configurationSource(corsConfigurationSource()) }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            .anonymous { it.disable() } // Disable anonymous authentication - not needed for demo
+            .anonymous { it.authorities("ROLE_ANONYMOUS") } // Enable anonymous for local demo
             // Removed authentication filter - all /api/v1/** endpoints are public for local demo
             // .addFilterBefore(tokenAuthenticationFilter(), UsernamePasswordAuthenticationFilter::class.java)
             .authorizeHttpRequests { auth ->
                 auth
+                    // CORS preflight requests (OPTIONS) - MUST be first
+                    .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                     // Public endpoints - no authentication required
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                    // All API v1 endpoints open for local demo testing
-                    .requestMatchers("/api/v1/**").permitAll()
+                    // All API v1 endpoints open for local demo testing - including PATCH
+                    .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/**").permitAll()
+                    .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/**").permitAll()
+                    .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/**").permitAll()
+                    .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/**").permitAll()
+                    .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/**").permitAll()
                     .requestMatchers("/error").permitAll() // Allow error endpoint
                     // Protected actuator endpoints
                     .requestMatchers("/actuator/**").authenticated()
@@ -60,10 +66,9 @@ class SecurityConfig(
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
         val configuration = CorsConfiguration()
-        configuration.allowedOrigins = allowedOrigins.split(",").map { it.trim() }
-        configuration.allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "OPTIONS")
+        configuration.allowedOrigins = listOf("*")
+        configuration.allowedMethods = listOf("*")
         configuration.allowedHeaders = listOf("*")
-        configuration.allowCredentials = true
         configuration.maxAge = 3600L
 
         val source = UrlBasedCorsConfigurationSource()

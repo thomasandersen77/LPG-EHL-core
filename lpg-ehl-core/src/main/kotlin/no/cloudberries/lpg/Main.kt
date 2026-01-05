@@ -1,22 +1,10 @@
 package no.cloudberries.lpg
 
-import no.cloudberries.lpg.payment.PaymentTerminalDemo
 import no.cloudberries.lpg.protocol.*
 import no.cloudberries.lpg.transaction.*
 import org.slf4j.LoggerFactory
 
 fun main(args: Array<String>) {
-    // Check if payment demo mode is requested
-    if (args.contains("--payment")) {
-        PaymentTerminalDemo.main(args)
-        return
-    }
-    
-    // Check if ECR server mode is requested
-    if (args.contains("--ecr-server")) {
-        no.cloudberries.lpg.payment.EcrServerApp.main(args)
-        return
-    }
     val logger = LoggerFactory.getLogger("Main")
     
     println("=== LPG/EHL Core - Protocol Implementation ===")

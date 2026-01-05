@@ -5,3 +5,5 @@ databaseChangeLog:
       file: db/changelog/changes/002-fix-daily-summary-view.yaml
   - include:
       file: db/changelog/changes/006-add-payment-status-column.yaml
+  - include:
+      file: db/changelog/changes/007-add-price-history-table.yaml

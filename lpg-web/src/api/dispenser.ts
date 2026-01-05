@@ -1,9 +1,8 @@
 import axios from 'axios';
 import type { DispenserStateDto, ProtocolResponse, VolumeResponse, TankResponse, PriceResponse, DispenserErrorResponse } from '../types/api';
 
-// Use emulator API directly (port 8090) for settlement
+// Use emulator API directly (port 9001) for settlement
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-const EMULATOR_BASE_URL = 'http://localhost:8090';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -49,11 +48,11 @@ export const dispenserApi = {
   },
 
   /**
-   * Settle payment and reset dispenser (calls emulator directly)
-   * This simulates successful card/credit payment and resets Windows Dispenserkontroll
+   * Settle payment and reset dispenser
+   * This marks the transaction as paid and resets the dispenser to IDLE
    */
-  settle: async (dispenserId: number = 1, method: 'CARD' | 'CREDIT' = 'CARD'): Promise<void> => {
-    const response = await axios.post(`${EMULATOR_BASE_URL}/api/v1/emulator/settle/${dispenserId}?method=${method}`);
+  settle: async (_dispenserId: number = 1, method: 'CARD' | 'CREDIT' = 'CARD'): Promise<any> => {
+    const response = await api.post(`/api/v1/dispenser/settle?paymentMethod=${method}`);
     return response.data;
   },
 

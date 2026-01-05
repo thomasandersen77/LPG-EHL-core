@@ -162,8 +162,8 @@ We provide scripts to simulate real-world usage:
 
 ### Access Points
 - **Pump API**: http://localhost:8080
-- **Pump Emulator**: http://localhost:3000 (if frontend running)
-- **Cloud Admin**: http://localhost:3001
+- **Pump Frontend**: http://localhost:3001 (LPG-EHL Web UI)
+- **Cloud Admin**: http://localhost:3000 (MinLPG System - separate project)
 - **Azurite Queue**: http://localhost:10001
 
 ### Production Deployment (Pump Linux Machine)
