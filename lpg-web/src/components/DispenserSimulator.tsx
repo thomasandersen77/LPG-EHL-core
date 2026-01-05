@@ -8,6 +8,8 @@ type PaymentMethod = 'CARD' | 'CREDIT';
 export function DispenserSimulator() {
   const queryClient = useQueryClient();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CARD');
+  const [settlementMessage, setSettlementMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Poll state every 500ms when delivering
   const { data: state, isLoading, error } = useQuery<DispenserStateDto>({
@@ -20,6 +22,9 @@ export function DispenserSimulator() {
   });
 
   const handleStartWithPayment = () => {
+    // Clear any previous messages
+    setErrorMessage(null);
+    setSettlementMessage(null);
     // For demo purposes, all payment types start the pump immediately
     // In production, CARD/CREDIT would require payment authorization first
     unblockMutation.mutate(paymentMethod);
@@ -29,6 +34,16 @@ export function DispenserSimulator() {
     mutationFn: dispenserApi.unblock,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
+      setErrorMessage(null);
+    },
+    onError: (error: any) => {
+      // Handle unpaid transaction error
+      if (error.response?.status === 409) {
+        const data = error.response.data;
+        setErrorMessage(data.message || 'Du må betale for forrige fylling før du kan starte på nytt');
+      } else {
+        setErrorMessage('Kunne ikke starte pumping');
+      }
     },
   });
 
@@ -43,6 +58,18 @@ export function DispenserSimulator() {
     mutationFn: () => dispenserApi.settle(1, paymentMethod),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
+      setSettlementMessage('Betaling fullført! ✅');
+      setErrorMessage(null);
+      // Clear success message after 3 seconds
+      setTimeout(() => setSettlementMessage(null), 3000);
+    },
+    onError: (error: any) => {
+      if (error.response?.status === 404) {
+        setErrorMessage('Ingen ubetalt transaksjon funnet');
+      } else {
+        setErrorMessage('Betalingsfeil: ' + (error.response?.data?.message || 'Ukjent feil'));
+      }
+      setTimeout(() => setErrorMessage(null), 5000);
     },
   });
 
@@ -171,14 +198,34 @@ export function DispenserSimulator() {
             </div>
           </div>
 
+          {/* Error Message */}
+          {errorMessage && (
+            <div className="mb-6 bg-red-900/30 border border-red-500 rounded-xl p-4 text-center">
+              <p className="text-red-300 font-bold">⚠️ {errorMessage}</p>
+            </div>
+          )}
+
+          {/* Success Message */}
+          {settlementMessage && (
+            <div className="mb-6 bg-green-900/30 border border-green-500 rounded-xl p-4 text-center">
+              <p className="text-green-300 font-bold">{settlementMessage}</p>
+            </div>
+          )}
+
           {/* Control Buttons */}
           <div className="grid grid-cols-3 gap-4">
             <button
               onClick={handleStartWithPayment}
-              disabled={state?.state === 'DELIVERING' || unblockMutation.isPending}
-              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg"
+              disabled={state?.state === 'DELIVERING' || state?.state === 'FINISHED' || unblockMutation.isPending}
+              className={`${
+                state?.state === 'FINISHED' 
+                  ? 'bg-red-600 cursor-not-allowed' 
+                  : state?.state === 'DELIVERING' || unblockMutation.isPending
+                  ? 'bg-gray-600 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700'
+              } text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg`}
             >
-              {unblockMutation.isPending ? '...' : '▶ Start'}
+              {unblockMutation.isPending ? '...' : state?.state === 'FINISHED' ? '🚫 Betal først' : '▶ Start'}
             </button>
 
             <button

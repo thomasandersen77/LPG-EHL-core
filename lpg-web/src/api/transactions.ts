@@ -65,3 +65,16 @@ export async function fetchTransactionCount(): Promise<number> {
   const res = await axios.get<{ count: number }>(`${API_URL}/transactions/count`);
   return res.data.count;
 }
+
+export async function updateTransactionPayment(
+  transactionId: string,
+  paymentMethod: PaymentType,
+  paymentStatus: PaymentStatus = 'PAID'
+): Promise<TransactionDto> {
+  const res = await axios.patch<TransactionDto>(
+    `${API_URL}/transactions/${transactionId}/payment`,
+    null,
+    { params: { paymentMethod, paymentStatus } }
+  );
+  return res.data;
+}

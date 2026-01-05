@@ -22,14 +22,16 @@ import java.time.LocalDateTime
 @RequestMapping("/api/v1/dispenser")
 @Tag(name = "Demo Dispenser", description = "Demo endpoints for frontend testing (deprecated)")
 class DemoDispenserController(
-    private val transactionService: TransactionService
+    private val transactionService: TransactionService,
+    private val transactionRepository: no.cloudberries.lpg.api.repository.TransactionRepository,
+    private val plsService: no.cloudberries.lpg.api.pls.MockPlsService?
 ) {
 
     // Simulated state
     private var state: DispenserState = DispenserState.IDLE
     private var litres: Double = 0.0
     private var amountToPay: Double = 0.0
-    private val pricePerLitre: Double = 15.90
+    private var pricePerLitre: Double = 15.90 // Dynamic price, updated from PLS
     private var lastUnblockTime: Long = 0
     private var currentPaymentType: String = "CASH"
     
@@ -38,11 +40,14 @@ class DemoDispenserController(
     @GetMapping("/state")
     @Operation(summary = "Get current dispenser state", description = "Returns the current state of the demo dispenser")
     fun getState(): ResponseEntity<DispenserStateDto> {
+        // Update price from PLS if available
+        val currentPrice = plsService?.getCurrentPrice("LPG")?.pricePerLiter?.toDouble() ?: 15.90
+        
         // Simulate delivery progress
         if (state == DispenserState.DELIVERING) {
             val secondsElapsed = (System.currentTimeMillis() - lastUnblockTime) / 1000.0
             litres = secondsElapsed * 0.5 // 0.5 L/s flow rate
-            amountToPay = litres * pricePerLitre
+            amountToPay = litres * pricePerLitre // Use price that was set when starting
         }
 
         return ResponseEntity.ok(
@@ -50,7 +55,7 @@ class DemoDispenserController(
                 state = state.name,
                 amountToPay = amountToPay,
                 litres = litres,
-                pricePerLitre = pricePerLitre,
+                pricePerLitre = if (state == DispenserState.DELIVERING) pricePerLitre else currentPrice,
                 includeRoadTax = true,
                 cardModeActive = false,
                 dayMode = true,
@@ -64,14 +69,61 @@ class DemoDispenserController(
     @Operation(summary = "Start fuel delivery", description = "Unblock the dispenser and start delivery")
     fun unblock(
         @RequestParam(defaultValue = "CASH") paymentType: String
-    ): ResponseEntity<DispenserStateDto> {
-        if (state == DispenserState.IDLE || state == DispenserState.FINISHED) {
-            state = DispenserState.DELIVERING
-            lastUnblockTime = System.currentTimeMillis()
-            litres = 0.0
-            amountToPay = 0.0
-            currentPaymentType = paymentType
+    ): ResponseEntity<*> {
+        // Check current state - must be IDLE to start
+        if (state != DispenserState.IDLE) {
+            logger.warn("⚠️ Cannot start pumping - dispenser state is: {}", state)
+            
+            // If state is FINISHED, there's an unpaid transaction
+            if (state == DispenserState.FINISHED) {
+                val unpaidTransaction = transactionRepository.findFirstByDispenserAddressAndPaymentStatusOrderByTimestampDesc(1, "PENDING")
+                return ResponseEntity.status(409).body(mapOf(
+                    "error" to "UNPAID_TRANSACTION",
+                    "message" to "Du må betale for forrige fylling før du kan starte på nytt",
+                    "unpaidTransaction" to mapOf(
+                        "id" to unpaidTransaction?.transactionId,
+                        "amount" to unpaidTransaction?.amountKr,
+                        "liters" to unpaidTransaction?.volumeLiters,
+                        "timestamp" to unpaidTransaction?.timestamp
+                    )
+                ))
+            }
+            
+            return ResponseEntity.status(409).body(mapOf(
+                "error" to "INVALID_STATE",
+                "message" to "Dispenseren er ikke klar for fylling (state: ${state.name})",
+                "currentState" to state.name
+            ))
         }
+        
+        // Double-check for unpaid transactions (should not happen if state management is correct)
+        val hasUnpaid = transactionRepository.existsByDispenserAddressAndPaymentStatus(1, "PENDING")
+        if (hasUnpaid) {
+            val unpaidTransaction = transactionRepository.findFirstByDispenserAddressAndPaymentStatusOrderByTimestampDesc(1, "PENDING")
+            logger.warn("⚠️ Cannot start pumping - unpaid transaction exists: {}", unpaidTransaction?.transactionId)
+            return ResponseEntity.status(409).body(mapOf(
+                "error" to "UNPAID_TRANSACTION",
+                "message" to "Du må betale for forrige fylling før du kan starte på nytt",
+                "unpaidTransaction" to mapOf(
+                    "id" to unpaidTransaction?.transactionId,
+                    "amount" to unpaidTransaction?.amountKr,
+                    "liters" to unpaidTransaction?.volumeLiters,
+                    "timestamp" to unpaidTransaction?.timestamp
+                )
+            ))
+        }
+        
+        // All checks passed - start delivery
+        // Lock in the current price when starting delivery
+        pricePerLitre = plsService?.getCurrentPrice("LPG")?.pricePerLiter?.toDouble() ?: 15.90
+        logger.info("🚀 Starting delivery at price: {} kr/L", pricePerLitre)
+        
+        state = DispenserState.DELIVERING
+        lastUnblockTime = System.currentTimeMillis()
+        litres = 0.0
+        amountToPay = 0.0
+        currentPaymentType = paymentType
+        
         return getState()
     }
 
@@ -132,6 +184,45 @@ class DemoDispenserController(
         litres = 0.0
         amountToPay = 0.0
         return getState()
+    }
+    
+    @PostMapping("/settle")
+    @Operation(summary = "Settle payment for completed transaction", description = "Mark the last transaction as paid and reset to IDLE")
+    fun settle(
+        @RequestParam(defaultValue = "CARD") paymentMethod: String
+    ): ResponseEntity<*> {
+        logger.info("💳 Settle payment request: method={}", paymentMethod)
+        
+        // Find the latest unpaid transaction
+        val unpaidTransaction = transactionRepository.findFirstByDispenserAddressAndPaymentStatusOrderByTimestampDesc(1, "PENDING")
+        
+        if (unpaidTransaction == null) {
+            logger.warn("⚠️ No unpaid transaction found")
+            return ResponseEntity.status(404).body(mapOf(
+                "error" to "NO_UNPAID_TRANSACTION",
+                "message" to "Ingen ubetalt transaksjon funnet"
+            ))
+        }
+        
+        // Update payment status
+        val updated = transactionService.updatePaymentStatus(unpaidTransaction.transactionId!!, paymentMethod, "PAID")
+        logger.info("✅ Transaction {} marked as PAID with method {}", updated?.transactionId, paymentMethod)
+        
+        // Reset to IDLE
+        state = DispenserState.IDLE
+        litres = 0.0
+        amountToPay = 0.0
+        
+        return ResponseEntity.ok(mapOf(
+            "status" to "PAID",
+            "message" to "Betaling fullført",
+            "transaction" to mapOf(
+                "id" to updated?.transactionId,
+                "amount" to updated?.amountKr,
+                "liters" to updated?.volumeLiters,
+                "paymentMethod" to paymentMethod
+            )
+        ))
     }
 
     @PostMapping("/product-select")

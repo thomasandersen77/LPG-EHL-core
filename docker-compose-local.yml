@@ -90,9 +90,11 @@ services:
       dockerfile: Dockerfile
     container_name: lpg-web-local
     environment:
-      VITE_API_BASE_URL: http://localhost:8081
+      VITE_API_BASE_URL: http://localhost:8080
     ports:
       - "3000:3001"
+    volumes:
+      - ./lpg-web/src:/app/src  # Mount source for live reload
     depends_on:
       api:
         condition: service_started
@@ -103,7 +105,7 @@ services:
     container_name: lpg-ngrok
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTH_TOKEN}
-    command: http api:8081 --log=stdout
+    command: http api:8080 --log=stdout
     ports:
       - "4040:4040"  # ngrok web interface
     depends_on:

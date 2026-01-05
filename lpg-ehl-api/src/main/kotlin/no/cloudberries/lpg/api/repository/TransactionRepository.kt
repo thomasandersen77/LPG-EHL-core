@@ -97,4 +97,20 @@ interface TransactionRepository : JpaRepository<Transaction, UUID> {
      * Find transactions by customer ID, ordered by timestamp descending
      */
     fun findByCustomerIdOrderByTimestampDesc(customerId: UUID): List<Transaction>
+    
+    /**
+     * Check if there are any unpaid transactions for a dispenser
+     */
+    fun existsByDispenserAddressAndPaymentStatus(
+        dispenserAddress: Int,
+        paymentStatus: String
+    ): Boolean
+    
+    /**
+     * Find latest unpaid transaction for a dispenser
+     */
+    fun findFirstByDispenserAddressAndPaymentStatusOrderByTimestampDesc(
+        dispenserAddress: Int,
+        paymentStatus: String
+    ): Transaction?
 }
