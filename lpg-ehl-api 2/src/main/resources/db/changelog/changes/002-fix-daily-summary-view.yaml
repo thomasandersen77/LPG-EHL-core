@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-fix-daily-summary-view
+      author: warp-agent
+      changes:
+        - dropView:
+            viewName: daily_summary
+        - createView:
+            viewName: daily_summary
+            replaceIfExists: true
+            selectQuery: |
+              SELECT 
+                DATE(timestamp) as summary_date,
+                dispenser_address,
+                COUNT(*) as transaction_count,
+                SUM(volume_deciliters) as total_volume_deciliters,
+                SUM(amount_ore) as total_amount_ore,
+                AVG(price_per_liter) as avg_price_per_liter
+              FROM transactions
+              GROUP BY DATE(timestamp), dispenser_address
+              ORDER BY summary_date DESC, dispenser_address

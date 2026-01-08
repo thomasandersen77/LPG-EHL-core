@@ -1,0 +1,40 @@
+# Test Profile Configuration
+spring:
+  application:
+    name: lpg-ehl-api-test
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+  
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+# Disable Azure for tests
+azure:
+  enabled: false
+
+# Test security
+security:
+  api-token: test-token-12345
+  cors:
+    allowed-origins: "*"
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# Logging
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg: DEBUG
+    org.springframework.security: DEBUG

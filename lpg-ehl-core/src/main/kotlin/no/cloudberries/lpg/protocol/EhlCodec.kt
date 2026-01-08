@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory
  * 
  * Encodes and decodes EHL protocol packets for RS-485 communication with dispensers.
  * Handles packet framing, checksum calculation/validation, and data marshalling.
+ * 
+ * Now supports configurable protocol variants via EhlProtocolConfig.
  */
 object EhlCodec {
     private val logger = LoggerFactory.getLogger(EhlCodec::class.java)
@@ -18,15 +20,20 @@ object EhlCodec {
      * Encode an EHL packet to raw bytes for transmission
      * 
      * @param packet The packet to encode
-     * @param fromController True if packet is from controller to dispenser (uses 0x10)
+     * @param fromController True if packet is from controller to dispenser
+     * @param config Protocol configuration (default: Norges Gass variant)
      * @return ByteArray ready for transmission over RS-485
      */
-    fun encode(packet: EhlPacket, fromController: Boolean = true): ByteArray {
+    fun encode(
+        packet: EhlPacket, 
+        fromController: Boolean = true,
+        config: EhlProtocolConfig = EhlProtocolConfig()
+    ): ByteArray {
         val result = ByteArray(packet.packetLength)
         var idx = 0
         
-        // STX - Choose correct direction
-        result[idx++] = if (fromController) EhlProtocol.STX_CONTROLLER else EhlProtocol.STX_DISPENSER
+        // STX - Choose correct direction based on config
+        result[idx++] = if (fromController) config.stxController else config.stxDispenser
         
         // Length
         result[idx++] = packet.packetLength.toByte()
@@ -43,10 +50,10 @@ object EhlCodec {
         }
         
         // Checksum
-        result[idx++] = packet.calculateChecksum(fromController)
+        result[idx++] = packet.calculateChecksum(fromController, config)
         
         // ETX
-        result[idx] = EhlProtocol.ETX
+        result[idx] = config.etx
         
         if (logger.isDebugEnabled) {
             logger.debug("Encoded: {}", result.toHexString())
@@ -59,18 +66,20 @@ object EhlCodec {
      * Decode raw bytes into an EHL packet
      * 
      * @param data Raw bytes received from RS-485
+     * @param config Protocol configuration (default: Norges Gass variant)
      * @return Parse result with either success or error information
      */
-    fun decode(data: ByteArray): EhlPacketParseResult {
+    fun decode(data: ByteArray, config: EhlProtocolConfig = EhlProtocolConfig()): EhlPacketParseResult {
         // Minimum length check
         if (data.size < EhlProtocol.MIN_PACKET_LENGTH) {
             return EhlPacketParseResult.Incomplete
         }
         
-        // Check STX - Accept both controller (0x10) and dispenser (0x20) STX values
+        // Check STX - Validate against config
         val stx = data[0]
-        if (stx != EhlProtocol.STX_CONTROLLER && stx != EhlProtocol.STX_DISPENSER) {
-            return EhlPacketParseResult.InvalidFormat("Invalid STX byte: 0x${"%02X".format(stx)} (expected 0x10 or 0x20)")
+        if (!config.isValidStx(stx)) {
+            val expected = "0x${"%02X".format(config.stxController)} or 0x${"%02X".format(config.stxDispenser)}"
+            return EhlPacketParseResult.InvalidFormat("Invalid STX byte: 0x${"%02X".format(stx)} (expected $expected)")
         }
         
         // SAFETY CHECK: Get length and validate bounds before proceeding
@@ -91,8 +100,10 @@ object EhlCodec {
         }
         
         // Check ETX
-        if (data[length - 1] != EhlProtocol.ETX) {
-            return EhlPacketParseResult.InvalidFormat("Invalid ETX byte: 0x${"%02X".format(data[length - 1])}")
+        if (data[length - 1] != config.etx) {
+            return EhlPacketParseResult.InvalidFormat(
+                "Invalid ETX byte: 0x${"%02X".format(data[length - 1])} (expected 0x${"%02X".format(config.etx)})"
+            )
         }
         
         // Extract fields
@@ -111,8 +122,8 @@ object EhlCodec {
         // Extract and verify checksum
         val receivedChecksum = data[length - 2]
         val packet = EhlPacket(address, command, payload)
-        val fromController = stx == EhlProtocol.STX_CONTROLLER
-        val calculatedChecksum = packet.calculateChecksum(fromController)
+        val fromController = stx == config.stxController
+        val calculatedChecksum = packet.calculateChecksum(fromController, config)
         
         // ROBUST CHECKSUM VALIDATION: Standard EHL checksum is XOR of all bytes after STX up to checksum
         if (receivedChecksum != calculatedChecksum) {

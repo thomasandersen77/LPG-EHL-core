@@ -23,15 +23,38 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 
 ## 📚 Documentation
 
-- **[IntelliJ IDEA Setup](INTELLIJ_SETUP.md)** - 🚀 Quick start for debugging in IntelliJ (Recommended for Development)
-- **[Executive Summary](docs/EXECUTIVE_SUMMARY.md)** - Quick overview for decision makers (cost, timeline, comparison)
-- **[Architecture Analysis](docs/ARCHITECTURE_ANALYSIS.md)** - Detailed technical comparison: Cloudberries vs WordPress/Node/MQTT
-- **[WARP.md](WARP.md)** - Complete technical documentation for development
-- **[Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)** - Feature roadmap and current status
+### 🚀 Getting Started
+- **[IntelliJ IDEA Setup](docs/development/INTELLIJ_SETUP.md)** - Quick start for debugging in IntelliJ (Recommended)
+- **[IntelliJ Full Stack](docs/development/INTELLIJ_FULL_STACK.md)** - Run entire system with one button
+- **[Demo Guide](docs/development/DEMO_GUIDE.md)** - Complete demo setup for presentations
+
+### 📋 Project Overview
+- **[WARP.md](docs/project-overview/WARP.md)** - Complete technical documentation for development
+- **[Changelog](docs/project-overview/CHANGELOG.md)** - All notable changes to the project
+- **[Status](docs/project-overview/STATUS.md)** - Current build and test status
+- **[Executive Summary](docs/EXECUTIVE_SUMMARY.md)** - Quick overview for decision makers
+
+### 🏗️ Architecture & Implementation
+- **[Architecture Analysis](docs/ARCHITECTURE_ANALYSIS.md)** - Detailed technical comparison
+- **[Ports & Adapters Plan](docs/implementation/IMPLEMENTATION_PLAN_PORTS_ADAPTERS.md)** - Clean architecture implementation
+- **[Comprehensive Report](docs/implementation/COMPREHENSIVE_IMPLEMENTATION_REPORT.md)** - Multi-station implementation
+- **[VB6 Protocol Complete](docs/implementation/VB6_PROTOCOL_IMPLEMENTATION_COMPLETE.md)** - VB6 compatibility details
+- **[Payment Pending Testing](docs/implementation/TESTING_PAYMENT_PENDING.md)** - Payment flow testing
+
+### 🚀 Deployment
+- **[Deployment Guide (Norwegian)](docs/deployment/DEPLOYMENT_NO.md)** - Deployment til Linux ARK-maskin
+- **[Docker Deploy](docs/deployment/DOCKER_DEPLOY.md)** - Docker Compose deployment guide
+- **[Monolith Deployment](docs/deployment/MONOLITH_DEPLOYMENT.md)** - Single JAR deployment
+- **[Render Deploy](docs/deployment/RENDER_DEPLOY.md)** - Cloud deployment to Render.com
+
+### 🔧 Development
+- **[Multi-Station Setup](docs/development/MULTI-STATION-SETUP.md)** - Run 3 Edge stations + Cloud simultaneously
 - **[API Documentation](lpg-ehl-api/README.md)** - REST API endpoints and configuration
 - **[Frontend Documentation](lpg-web/README.md)** - React frontend setup and usage
-- **[Cloud Deployment Quick Start](DEPLOYMENT_QUICKSTART.md)** - ⚡ Fast track to Render.com deployment
-- **[Render Deployment Guide](RENDER_DEPLOY.md)** - 📖 Comprehensive Render.com deployment guide
+
+### 📜 Legacy & History
+- **[Legacy Analysis](docs/legacy/LEGACY_ANALYSIS.md)** - VB6/Python legacy code analysis
+- **[ZIP Contents Manifest](docs/legacy/ZIP_CONTENTS_MANIFEST.md)** - Archive contents documentation
 
 ## 🏗️ Project Structure
 

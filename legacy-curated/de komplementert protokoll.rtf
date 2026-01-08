@@ -1,0 +1,765 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf0 \expnd0\expndtw0\kerning0
+' ==========================
+\fs29\fsmilli14667 \
+
+\fs28 ' pumpekontroll.frm (CODE)
+\fs29\fsmilli14667 \
+
+\fs28 ' ==========================
+\fs29\fsmilli14667 \
+
+\fs28 Option Explicit
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub baxi_OnDisplayText()
+\fs29\fsmilli14667 \
+
+\fs28 Label7.Caption = baxi.DisplayText
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub baxi_OnError()
+\fs29\fsmilli14667 \
+
+\fs28 Label5.Caption = baxi.LastError
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub baxi_OnLocalMode(ByVal Result As Integer, ByVal IssuerID As Integer)
+\fs29\fsmilli14667 \
+
+\fs28 Label4.Caption = Result
+\fs29\fsmilli14667 \
+
+\fs28 Select Case Result
+\fs29\fsmilli14667 \
+
+\fs28 Case 0: ok_to_opendisp = True
+\fs29\fsmilli14667 \
+
+\fs28 Case 1: ok_to_opendisp = False
+\fs29\fsmilli14667 \
+
+\fs28 Case 2: ok_to_opendisp = False
+\fs29\fsmilli14667 \
+
+\fs28 Case Else: ok_to_opendisp = False
+\fs29\fsmilli14667 \
+
+\fs28 End Select
+\fs29\fsmilli14667 \
+
+\fs28 Bank_answer = True
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub baxi_OnPrinterText()
+\fs29\fsmilli14667 \
+
+\fs28 com_print.Output = baxi.PrintText
+\fs29\fsmilli14667 \
+
+\fs28 com_print.Output = Chr(27) & Chr(112)
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub cmdbank_100_Click()
+\fs29\fsmilli14667 \
+
+\fs28 Bank_answer = False
+\fs29\fsmilli14667 \
+
+\fs28 baxi.TransferAmount_V2 "0000", &H30, 300, &H30, 0, &H30, 0, "LPG Autogas", ""
+\fs29\fsmilli14667 \
+
+\fs28 Do Until Bank_answer
+\fs29\fsmilli14667 \
+
+\fs28 DoEvents
+\fs29\fsmilli14667 \
+
+\fs28 Loop
+\fs29\fsmilli14667 \
+
+\fs28 If ok_to_opendisp Then
+\fs29\fsmilli14667 \
+
+\fs28 Else
+\fs29\fsmilli14667 \
+
+\fs28 MsgBox "IKKE OK Dispenser"
+\fs29\fsmilli14667 \
+
+\fs28 End If
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub cmdbank_200_Click()
+\fs29\fsmilli14667 \
+
+\fs28 Bank_answer = False
+\fs29\fsmilli14667 \
+
+\fs28 baxi.TransferAmount_V2 "0000", &H30, 200, &H30, 0, &H30, 0, "LPG Autogas", ""
+\fs29\fsmilli14667 \
+
+\fs28 Do Until Bank_answer
+\fs29\fsmilli14667 \
+
+\fs28 DoEvents
+\fs29\fsmilli14667 \
+
+\fs28 Loop
+\fs29\fsmilli14667 \
+
+\fs28 If ok_to_opendisp Then
+\fs29\fsmilli14667 \
+
+\fs28 MsgBox "OK dispenser"
+\fs29\fsmilli14667 \
+
+\fs28 Else
+\fs29\fsmilli14667 \
+
+\fs28 MsgBox "IKKE OK Dispenser"
+\fs29\fsmilli14667 \
+
+\fs28 End If
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub cmddisp_stop_Click()
+\fs29\fsmilli14667 \
+
+\fs28 y(1) = &H10
+\fs29\fsmilli14667 \
+
+\fs28 y(2) = &H6
+\fs29\fsmilli14667 \
+
+\fs28 y(3) = dispnr(0)
+\fs29\fsmilli14667 \
+
+\fs28 y(4) = &H69
+\fs29\fsmilli14667 \
+
+\fs28 y(5) = y(1) Xor y(2) Xor y(3) Xor y(4)
+\fs29\fsmilli14667 \
+
+\fs28 y(6) = &H36
+\fs29\fsmilli14667 \
+
+\fs28 comm_out 100, Chr(y(1)) + Chr(y(2)) + Chr(y(3)) + Chr(y(4)) + Chr(y(5)) + Chr(y(6))
+\fs29\fsmilli14667 \
+
+\fs28 commandtext = y(1) & ";" & y(2) & ";" & y(3) & ";" & y(4) & ";" & y(5) & ";" & y(6)
+\fs29\fsmilli14667 \
+
+\fs28 cmdDISPTX.AddItem commandtext
+\fs29\fsmilli14667 \
+
+\fs28 commandtext = ""
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub cmdstart_Click()
+\fs29\fsmilli14667 \
+
+\fs28 Dim prg_amount_litre As Integer
+\fs29\fsmilli14667 \
+
+\fs28 Dim prg_amount_kr As Integer
+\fs29\fsmilli14667 \
+
+\fs28 If IsNumeric(prg_amount.Text) Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 prg_amount_kr = Int(prg_amount.Text)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(1) = &H10
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(2) = &H7
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(3) = dispnr(0)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(4) = &HC3
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(5) = &H30
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(6) = y(1) Xor y(2) Xor y(3) Xor y(4) Xor y(5)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(7) = &H36
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 comm_out 50, Chr(y(1)) + Chr(y(2)) + Chr(y(3)) + Chr(y(4)) + Chr(y(5)) + Chr(y(6)) + Chr(y(7))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 commandtext = Now() & "-->" & y(1) & ";" & y(2) & ";" & y(3) & ";" & y(4) & ";" & y(5) & ";" & y(6) & ";" & y(7)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 cmdDISPTX.AddItem commandtext
+\fs29\fsmilli14667 \
+
+\fs28 End If
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 y(1) = &H10
+\fs29\fsmilli14667 \
+
+\fs28 y(2) = &H6
+\fs29\fsmilli14667 \
+
+\fs28 y(3) = dispnr(0)
+\fs29\fsmilli14667 \
+
+\fs28 y(4) = &H77
+\fs29\fsmilli14667 \
+
+\fs28 y(5) = y(1) Xor y(2) Xor y(3) Xor y(4)
+\fs29\fsmilli14667 \
+
+\fs28 y(6) = &H36
+\fs29\fsmilli14667 \
+
+\fs28 comm_out 100, Chr(y(1)) + Chr(y(2)) + Chr(y(3)) + Chr(y(4)) + Chr(y(5)) + Chr(y(6))
+\fs29\fsmilli14667 \
+
+\fs28 commandtext = y(1) & ";" & y(2) & ";" & y(3) & ";" & y(4) & ";" & y(5) & ";" & y(6)
+\fs29\fsmilli14667 \
+
+\fs28 cmdDISPTX.AddItem commandtext
+\fs29\fsmilli14667 \
+
+\fs28 commandtext = ""
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub Form_Load()
+\fs29\fsmilli14667 \
+
+\fs28 station_closed = True
+\fs29\fsmilli14667 \
+
+\fs28 cmdstart.Enabled = False
+\fs29\fsmilli14667 \
+
+\fs28 Stengt.Checked = True
+\fs29\fsmilli14667 \
+
+\fs28 tank_end = True
+\fs29\fsmilli14667 \
+
+\fs28 DISP_openfordelivery = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 i = 0
+\fs29\fsmilli14667 \
+
+\fs28 disptest_interval = 0
+\fs29\fsmilli14667 \
+
+\fs28 If Dir(App.Path & "\\server.ini", vbNormal) = "" Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 serverinnstillinger.Show (1)
+\fs29\fsmilli14667 \
+
+\fs28 Else
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 Open App.Path & "\\server.ini" For Input As #1
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 Input #1, textline
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 cfgline() = Split(textline, ";")
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 DBserver = cfgline(0)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 DBdb = cfgline(1)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 DBbrukernavn = cfgline(2)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 DBpassord = cfgline(3)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 Com_port = cfgline(4)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 Com_port_bank = cfgline(5)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 com_port_print = cfgline(6)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 Close #1
+\fs29\fsmilli14667 \
+
+\fs28 End If
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 If db_ok Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0 If cmdcom_on Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 rts = True
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 RST_disp.Open "Select * from dispensere", sqlconn, adOpenKeyset, adLockOptimistic
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 dispnr(0) = RST_disp!dispensernr + 32
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 i = 1
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 disp_init = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 Do Until disp_init = True Or i = 21
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 check_disp_com (dispnr(0))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 DoEvents
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 i = i + 1
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 Loop
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 If Not disp_init Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 MsgBox "Fikk ingen kommunikasjon med dispenser."
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 End
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 End If
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 dispprice(0) = Format(RST_disp!pris, "0.00")
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 disp_setprice dispnr(0), Replace(Format(dispprice(0), "00.00"), ",", "")
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 RST_disp.Close
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 Else
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0 MsgBox "Kan ikke \'e5pne kommunikasjon med dispensere.", vbOKOnly + vbCritical, "Kommunikasjonsfeil:"
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 End If
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 com_print.CommPort = com_port_print
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 com_print.PortOpen = True
+\fs29\fsmilli14667 \
+
+\fs28 End If
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub state_timer_Timer()
+\fs29\fsmilli14667 \
+
+\fs28 If MSComm1.PortOpen = False Then Exit Sub
+\fs29\fsmilli14667 \
+
+\fs28 If cmdstart.FontBold = True Then cmdstart.FontBold = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 y(1) = &H10
+\fs29\fsmilli14667 \
+
+\fs28 y(2) = &H6
+\fs29\fsmilli14667 \
+
+\fs28 y(3) = dispnr(0)
+\fs29\fsmilli14667 \
+
+\fs28 y(4) = &H4B
+\fs29\fsmilli14667 \
+
+\fs28 y(5) = y(1) Xor y(2) Xor y(3) Xor y(4)
+\fs29\fsmilli14667 \
+
+\fs28 y(6) = &H36
+\fs29\fsmilli14667 \
+
+\fs28 comm_out 100, Chr(y(1)) + Chr(y(2)) + Chr(y(3)) + Chr(y(4)) + Chr(y(5)) + Chr(y(6))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 y(1) = &H10
+\fs29\fsmilli14667 \
+
+\fs28 y(2) = &H6
+\fs29\fsmilli14667 \
+
+\fs28 y(3) = dispnr(0)
+\fs29\fsmilli14667 \
+
+\fs28 y(4) = &HC5
+\fs29\fsmilli14667 \
+
+\fs28 y(5) = y(1) Xor y(2) Xor y(3) Xor y(4)
+\fs29\fsmilli14667 \
+
+\fs28 y(6) = &H36
+\fs29\fsmilli14667 \
+
+\fs28 comm_out 100, Chr(y(1)) + Chr(y(2)) + Chr(y(3)) + Chr(y(4)) + Chr(y(5)) + Chr(y(6))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 If DISP_openfordelivery Or tank_vol >= tank_vol_last Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(1) = &H10
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(2) = &H6
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(3) = dispnr(0)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(4) = &H45
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(5) = y(1) Xor y(2) Xor y(3) Xor y(4)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(6) = &H36
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 comm_out 100, Chr(y(1)) + Chr(y(2)) + Chr(y(3)) + Chr(y(4)) + Chr(y(5)) + Chr(y(6))
+\fs29\fsmilli14667 \
+
+\fs28 End If
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 If disptest_interval = 10 Or disptest_interval = 0 Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(1) = &H10
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(2) = &H6
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(3) = dispnr(0)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(4) = &H6A
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(5) = y(1) Xor y(2) Xor y(3) Xor y(4)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 y(6) = &H36
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 comm_out 100, Chr(y(1)) + Chr(y(2)) + Chr(y(3)) + Chr(y(4)) + Chr(y(5)) + Chr(y(6))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 disptest_interval = 1
+\fs29\fsmilli14667 \
+
+\fs28 End If
+\fs29\fsmilli14667 \
+
+\fs28 disptest_interval = disptest_interval + 1
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 Private Sub MSComm1_OnComm()
+\fs29\fsmilli14667 \
+
+\fs28 Select Case MSComm1.CommEvent
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 Case comEvReceive
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 rts = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 If u > 15 Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 u = -1
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 commandtext_in = ""
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 End If
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 u = u + 1
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 charstr = MSComm1.Input
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 x(u) = Asc(charstr)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 commandtext_in = commandtext_in & x(u) & ";"
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 If x(u) = 54 And x(0) = 32 And x(1) = (u + 1) Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 chksum = 0
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 For i = 0 To u - 2
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 chksum = chksum Xor x(i)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 Next
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 If chksum = x(u - 1) Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 Select Case x(3)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 Case 69
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 tank_vol = CSng(Chr(x(8)) & Chr(x(7)) & Chr(x(6)) & "," & Chr(x(5)) & Chr(x(4)))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 If ((tank_vol_last = tank_vol) And trans_unaccounted = True) Then
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 ' ... DB write + print ...
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 y(1) = &H10: y(2) = &H6: y(3) = dispnr(0): y(4) = &H81
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 y(5) = y(1) Xor y(2) Xor y(3) Xor y(4)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 y(6) = &H36
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 comm_out 100, Chr(y(1)) + Chr(y(2)) + Chr(y(3)) + Chr(y(4)) + Chr(y(5)) + Chr(y(6))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 Else
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 tank_vol_last = tank_vol
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 tank_unitprice = dispprice(0)
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 tank_sum = tank_vol * tank_unitprice
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 End If
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 Case 75
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 state_string = decimaltobinn(x(4))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 If Mid(state_string, 6, 1) = "1" Then DISP_startbuttonpressed = True Else DISP_startbuttonpressed = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 If Mid(state_string, 7, 1) = "1" Then DISP_openfordelivery = True Else DISP_openfordelivery = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 If Mid(state_string, 5, 1) = "1" Then disp_automode = True Else disp_automode = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 ' ... new_tank logic ...
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 Case 92
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 DisPris.Text = Chr(x(7)) & Chr(x(6)) & "." & Chr(x(5)) & Chr(x(4))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 Case 106
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 If x(4) = 85 And x(5) = 170 Then disp_init = True Else disp_init = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 Case 197
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 state_string = decimaltobinn(x(4))
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 If Mid(state_string, 8, 1) = "1" Then trans_finished_powerfault = True Else trans_finished_powerfault = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 If Mid(state_string, 5, 1) = "1" Then trans_unaccounted = True Else trans_unaccounted = False
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 End Select
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 End If
+\fs29\fsmilli14667 \
+
+\fs28 \'a0
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 For u = 0 To 15
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 x(u) = 0
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 Next
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 u = -1
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0\'a0\'a0\'a0\'a0 commandtext_in = ""
+\fs29\fsmilli14667 \
+
+\fs28 \'a0\'a0\'a0 End If
+\fs29\fsmilli14667 \
+
+\fs28 End Select
+\fs29\fsmilli14667 \
+
+\fs28 rts = True
+\fs29\fsmilli14667 \
+
+\fs28 End Sub
+\fs29\fsmilli14667 \
+}

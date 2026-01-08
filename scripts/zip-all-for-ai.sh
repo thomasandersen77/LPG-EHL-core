@@ -40,7 +40,7 @@ echo "✓ VB6 legacy zipped ($(du -h norgesgass-legacy-for-ai.zip | cut -f1))"
 
 # Python PoC
 echo "📦 Zipping Python PoC..."
-zip -q -r python-legacy-for-ai.zip more_legacy/ehl_pumpekontroll_clone/ \
+zip -q -r python-legacy-for-ai.zip "more_legacy/Gammenl kode Python/ehl_pumpekontroll_clone/" \
     -x "*/__pycache__/*" "*/.pytest_cache/*" "*/venv/*"
 echo "✓ Python PoC zipped ($(du -h python-legacy-for-ai.zip | cut -f1))"
 

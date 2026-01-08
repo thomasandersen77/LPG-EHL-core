@@ -39,19 +39,22 @@ data class EhlPacket(
     
     /**
      * Calculate checksum (XOR of all bytes from STX to last data byte, excluding checksum and ETX)
-     * Uses controller STX (0x10) by default since most packets are controller->dispenser
+     * Uses STX from provided config to support different protocol variants.
      */
-    fun calculateChecksum(fromController: Boolean = true): Byte {
-        var checksum: Byte = if (fromController) EhlProtocol.STX_CONTROLLER else EhlProtocol.STX_DISPENSER
+    fun calculateChecksum(
+        fromController: Boolean = true,
+        config: EhlProtocolConfig = EhlProtocolConfig()
+    ): Byte {
+        var checksum: Byte = if (fromController) config.stxController else config.stxDispenser
         checksum = (checksum.toInt() xor packetLength).toByte()
         checksum = (checksum.toInt() xor address).toByte()
         checksum = (checksum.toInt() xor command.code).toByte()
         
         for (byte in data) {
-            checksum = (checksum.toInt() xor byte.toInt()).toByte()
+            checksum = (checksum.toInt() xor (byte.toInt() and 0xFF)).toByte()
         }
         
-        return checksum
+        return (checksum.toInt() and 0xFF).toByte()
     }
     
     override fun equals(other: Any?): Boolean {
