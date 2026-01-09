@@ -1,0 +1,13 @@
+Pumpekontroll = 27, 28, 720, 535, Z, 392, 68, 712, 526, C
+serverinnstillinger = 44, 58, 856, 543, , -65, 63, 687, 688, C
+Functions_defs = 215, 267, 535, 729, 
+Datareport1 = 220, 220, 869, 666, , 0, 0, 516, 549, CZ
+email = 0, 0, 0, 0, C
+dataserveronline = 0, 0, 700, 478, , 0, 0, 715, 630, C
+lpgnorge = -32, 72, 757, 470, , 22, 22, 934, 715, C
+frmlogs = 176, 176, 825, 622, , 220, 220, 920, 698, C
+Transaction = 198, 198, 898, 676, C
+Stasjonskredittkort = 132, 132, 694, 704, , 0, 0, 649, 446, C
+Tankinger_form = 22, 22, 761, 468, , 154, 154, 803, 600, C
+bankterminal_form = 0, 0, 0, 0, C, 264, 264, 987, 836, C
+testform = 0, 0, 759, 446, , 220, 220, 979, 666, C
