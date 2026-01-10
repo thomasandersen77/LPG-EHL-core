@@ -1,20 +1,23 @@
 package no.cloudberries.lpg.emulator
 
 import jakarta.annotation.PostConstruct
+import no.cloudberries.lpg.emulator.websocket.LogWebSocketHandler
 import org.springframework.context.annotation.Configuration
 
 /**
- * Configuration to wire the LogBuffer instance to the Logback appender.
- * This allows the custom appender to capture logs into the in-memory buffer.
+ * Configuration to wire LogBuffer and WebSocket to the Logback appender.
+ * This allows real-time streaming of logs to frontend clients.
  */
 @Configuration
 class LoggingConfiguration(
-    private val logBuffer: LogBuffer
+    private val logBuffer: LogBuffer,
+    private val logWebSocketHandler: LogWebSocketHandler
 ) {
     
     @PostConstruct
     fun setupLogBufferAppender() {
-        // Set static reference so Logback appender can access it
+        // Set static references so Logback appender can access them
         LogBufferAppender.logBuffer = logBuffer
+        LogBufferAppender.webSocketHandler = logWebSocketHandler
     }
 }

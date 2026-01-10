@@ -2,6 +2,7 @@ package no.cloudberries.lpg.emulator
 
 import kotlinx.coroutines.*
 import no.cloudberries.lpg.emulator.api.LpgApiClient
+import no.cloudberries.lpg.emulator.api.SaveTransactionRequest
 import no.cloudberries.lpg.emulator.service.TransactionSink
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -466,12 +467,191 @@ class EmulatorService(
     fun reset() = emulator.reset()
     
     /**
+     * Update the price per litre in the emulator.
+     * Only takes effect for FUTURE deliveries (not ongoing ones).
+     * 
+     * @param priceCents New price in cents (øre)
+     */
+    fun updatePrice(priceCents: Int) {
+        emulator.setPrice(priceCents)
+        logger.info("💰 Price updated via EmulatorService: ${priceCents / 100.0} NOK/L")
+    }
+    
+    /**
+     * Get current emulator price in cents.
+     */
+    fun getPriceCents(): Int = emulator.getPriceCents()
+    
+    /**
      * Settle pending transaction and reset dispenser to IDLE.
      * 
      * @param method Payment method ("CARD" or "CREDIT")
      * @return The settled transaction, or null if no transaction was pending
      */
     fun settle(method: String = "CARD") = emulator.settleAndReset(method)
+    
+    // ==========================================================================
+    // FRI PUMPE API - Direct pump control for field testing
+    // ==========================================================================
+    
+    // Coroutine scope for Fri Pumpe simulation
+    private val friPumpeScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var friPumpeSimulationJob: Job? = null
+    
+    // Protocol logger for WebSocket streaming
+    private val protocolLogger = org.slf4j.LoggerFactory.getLogger("no.cloudberries.lpg.protocol.EhlPacketStream")
+    
+    /**
+     * Get current pump status.
+     */
+    fun getPumpStatus(): EhlDispenserEmulator.PumpStatus = emulator.getPumpStatus()
+    
+    /**
+     * "Fri pumpe" - Unlock dispenser and start pumping.
+     * Used for field testing when no PLS/terminal is available.
+     * 
+     * @return Result with new state or error message
+     */
+    fun unblockPump(): Result<EhlDispenserEmulator.PumpStatus> {
+        logger.info("🔓 FRI PUMPE: unblockPump() called via API")
+        val result = emulator.directUnblock()
+        
+        // Start simulation loop if successful
+        result.onSuccess { status ->
+            if (status.state == "PUMPING") {
+                startFriPumpeSimulation()
+            }
+        }
+        
+        return result
+    }
+    
+    /**
+     * "Stopp pumpe" - Block dispenser and stop pumping.
+     * Used for field testing when no PLS/terminal is available.
+     * 
+     * @return Result with final state and transaction data
+     */
+    fun blockPump(): Result<EhlDispenserEmulator.PumpStatus> {
+        logger.info("🛑 FRI PUMPE: blockPump() called via API")
+        
+        // Stop simulation first
+        stopFriPumpeSimulation()
+        
+        val result = emulator.directBlock()
+        
+        // CRITICAL: Save transaction to PostgreSQL via HTTP API call
+        result.onSuccess { status ->
+            if (status.hasPendingTransaction) {
+                val completedTx = emulator.getPendingTransaction()
+                if (completedTx != null) {
+                    logger.info("💾 Persisting transaction ${completedTx.idempotencyKey} to PostgreSQL via API")
+                    
+                    // Create API request
+                    val request = SaveTransactionRequest(
+                        stationId = completedTx.stationId,
+                        edgeId = completedTx.edgeId,
+                        dispenserId = completedTx.dispenserId,
+                        dispenserAddress = completedTx.dispenserAddress,
+                        nozzleNumber = 1,
+                        volumeDeciliters = (completedTx.liters * 10).toInt(),
+                        amountOre = (completedTx.amountNok * 100).toInt(),
+                        pricePerLiter = completedTx.unitPrice.toInt(),
+                        productCode = "LPG",
+                        includesRoadTax = true
+                    )
+                    
+                    // Save to PostgreSQL via HTTP API (handles Azure sync automatically)
+                    val transactionId = lpgApiClient.saveTransaction(request)
+                    
+                    if (transactionId != null) {
+                        // Update the completedTx with database ID for later payment update
+                        completedTx.databaseId = transactionId
+                        logger.info("✅ Transaction saved to database via API: ID=$transactionId")
+                    } else {
+                        logger.error("❌ Failed to save transaction to database via API")
+                    }
+                    
+                    // Also enqueue to TransactionSink for any legacy consumers
+                    transactionSink.enqueue(completedTx)
+                }
+            }
+        }
+        
+        return result
+    }
+    
+    /**
+     * Start Fri Pumpe simulation - logs volume/amount every second AND per whole liter.
+     */
+    private fun startFriPumpeSimulation() {
+        // Cancel any existing simulation
+        friPumpeSimulationJob?.cancel()
+        
+        friPumpeSimulationJob = friPumpeScope.launch {
+            val price = pricePerLitreCents / 100.0
+            var updateCount = 0
+            var lastWholeLiter = 0  // Track last logged whole liter
+            
+            logger.info("┌" + "─".repeat(60) + "┐")
+            logger.info("│ ⛽ FRI PUMPE: LEVERING STARTET" + " ".repeat(28) + "│")
+            logger.info("│ Pris: %.2f kr/L | Flow: %.2f L/s".format(price, litresPerSecond).padEnd(59) + "│")
+            logger.info("└" + "─".repeat(60) + "┘")
+            
+            while (isActive) {
+                delay(1000) // Update every second
+                
+                if (!isActive) break
+                
+                // Get current status from emulator
+                val status = emulator.getPumpStatus()
+                
+                // Stop if no longer pumping
+                if (status.state != "PUMPING") {
+                    logger.info("⛽ Simulation ended - state changed to ${status.state}")
+                    break
+                }
+                
+                updateCount++
+                
+                // Check if we passed a new whole liter
+                val currentWholeLiter = status.volumeLitres.toInt()
+                if (currentWholeLiter > lastWholeLiter) {
+                    // Log each new liter milestone
+                    for (liter in (lastWholeLiter + 1)..currentWholeLiter) {
+                        val amountAtLiter = liter * price
+                        logger.info("🔔 LITER $liter: %.2f kr (totalt så langt)".format(amountAtLiter))
+                        protocolLogger.info("🔔 LITER_MILESTONE: $liter L | %.2f kr".format(amountAtLiter))
+                    }
+                    lastWholeLiter = currentWholeLiter
+                }
+                
+                // Log to console (Emulator channel)
+                logger.info("⛽ [#$updateCount] %.2f L | %.2f kr".format(status.volumeLitres, status.amountKr))
+                
+                // Log to Protocol channel (for WebSocket)
+                protocolLogger.info("📥 VOLUME: %.2f L | AMOUNT: %.2f kr | PRICE: %.2f kr/L".format(
+                    status.volumeLitres, status.amountKr, status.pricePerLitreKr
+                ))
+            }
+            
+            // Final status
+            val finalStatus = emulator.getPumpStatus()
+            logger.info("┌" + "─".repeat(60) + "┐")
+            logger.info("│ 🏁 FRI PUMPE: LEVERING STOPPET" + " ".repeat(27) + "│")
+            logger.info("│ Totalt: %.2f L @ %.2f kr".format(finalStatus.volumeLitres, finalStatus.amountKr).padEnd(59) + "│")
+            logger.info("│ Oppdateringer sendt: $updateCount".padEnd(59) + "│")
+            logger.info("└" + "─".repeat(60) + "┘")
+        }
+    }
+    
+    /**
+     * Stop Fri Pumpe simulation.
+     */
+    private fun stopFriPumpeSimulation() {
+        friPumpeSimulationJob?.cancel()
+        friPumpeSimulationJob = null
+    }
     
     /**
      * Settle pending transaction and broadcast reset to all Windows clients.
@@ -502,30 +682,20 @@ class EmulatorService(
         
         logger.info("✅ Transaction settled: ${settledTransaction.liters} L @ ${settledTransaction.amountNok} NOK")
         
-        // 2. Update payment status in database (wait for databaseId if needed)
-        if (settledTransaction.databaseId == null) {
-            logger.warn("⚠️ Transaction not yet saved to database, waiting up to 5 seconds...")
-            // Wait for async save to complete
-            var waited = 0
-            while (settledTransaction.databaseId == null && waited < 50) {
-                Thread.sleep(100)
-                waited++
-            }
-        }
-        
+        // 2. Update payment status in PostgreSQL via HTTP API
         if (settledTransaction.databaseId != null) {
-            logger.info("💾 Updating payment status in database for ID: ${settledTransaction.databaseId}")
+            logger.info("💾 Updating payment status via API for ID: ${settledTransaction.databaseId}")
             val updateSuccess = lpgApiClient.updatePaymentStatus(
-                transactionId = settledTransaction.databaseId!!,
+                transactionId = settledTransaction.databaseId.toString(),
                 paymentMethod = method
             )
             if (updateSuccess) {
-                logger.info("✅ Payment status updated in database")
+                logger.info("✅ Payment status updated via API: $method / PAID")
             } else {
-                logger.warn("⚠️ Failed to update payment status in database (transaction still settled locally)")
+                logger.warn("⚠️ Failed to update payment status via API for: ${settledTransaction.databaseId}")
             }
         } else {
-            logger.error("❌ Transaction database ID not available after waiting - payment status NOT updated")
+            logger.error("❌ Transaction database ID not available - payment status NOT updated")
         }
         
         // 3. Broadcast reset to all Windows clients

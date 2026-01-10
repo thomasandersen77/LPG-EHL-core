@@ -50,10 +50,12 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
 
         val bytes = EhlCodec.encode(packet)
         
-        // Reduce log noise - only debug level for normal packet flow
-        logger.debug(EhlPacketFormatter.formatPacketForLogging(packet, EhlPacketFormatter.Direction.SENDING))
-        if (logger.isTraceEnabled) {
-            logger.trace("Raw bytes (${bytes.size}): ${bytes.toHexString()}")
+        // RAW HEX logging for observability (INFO level to ensure visibility)
+        logger.info("📤 TX HEX: [${bytes.toHexString()}] -> ${packet.command}")
+        
+        // Detailed packet info at DEBUG level
+        if (logger.isDebugEnabled) {
+            logger.debug(EhlPacketFormatter.formatPacketForLogging(packet, EhlPacketFormatter.Direction.SENDING))
         }
         
         serialPort.write(bytes)
@@ -86,6 +88,9 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                 // Read more data from serial port
                 val newData = serialPort.read()
                 if (newData.isNotEmpty()) {
+                    // RAW HEX logging for observability (INFO level to ensure visibility)
+                    logger.info("📥 RX HEX: [${newData.toHexString()}]")
+                    
                     synchronized(bufferLock) {
                         receiveBuffer.addAll(newData.toList())
                         if (logger.isDebugEnabled) {
@@ -160,11 +165,15 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
             
             when (val result = EhlCodec.decode(bufferArray)) {
                 is EhlPacketParseResult.Success -> {
-                    // Reduce log noise - only debug level for normal packet flow
-                    logger.debug(EhlPacketFormatter.formatPacketForLogging(
-                        result.packet,
-                        EhlPacketFormatter.Direction.RECEIVING
-                    ))
+                    // Log parsed packet at INFO level for observability
+                    logger.info("📥 RX PARSED: ${result.packet.command} from addr ${result.packet.address}")
+                    
+                    if (logger.isDebugEnabled) {
+                        logger.debug(EhlPacketFormatter.formatPacketForLogging(
+                            result.packet,
+                            EhlPacketFormatter.Direction.RECEIVING
+                        ))
+                    }
                     
                     // Clear the parsed bytes from buffer
                     val packetLength = result.packet.packetLength

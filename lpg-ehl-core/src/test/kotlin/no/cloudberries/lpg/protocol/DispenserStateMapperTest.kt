@@ -21,24 +21,27 @@ class DispenserStateMapperTest {
         }
         
         @Test
-        fun `0x01 - Start switch active only should map to AUTHORIZED`() {
-            val payload = byteArrayOf(0x01)  // START_SWITCH_ACTIVE
+        fun `0x04 - Start button pressed should map to AUTHORIZED`() {
+            // VB6: DISP_startbuttonpressed = bit2 = 0x04
+            val payload = byteArrayOf(0x04)  // START_BUTTON_PRESSED
             val result = DispenserStateMapper.mapToDispenserStatus(payload)
             
             assertTrue(result is DispenserStatus.AUTHORIZED, "Expected AUTHORIZED, got $result")
         }
         
         @Test
-        fun `0x06 - Nozzle lifted + Delivery active should map to PUMPING`() {
-            val payload = byteArrayOf(0x06)  // NOZZLE_LIFTED | DELIVERY_IN_PROGRESS
+        fun `0x06 - Start button + Open for delivery should map to PUMPING`() {
+            // VB6: DISP_startbuttonpressed (0x04) + DISP_openfordelivery (0x02)
+            val payload = byteArrayOf(0x06)  // START_BUTTON_PRESSED | OPEN_FOR_DELIVERY
             val result = DispenserStateMapper.mapToDispenserStatus(payload)
             
             assertTrue(result is DispenserStatus.PUMPING, "Expected PUMPING, got $result")
         }
         
         @Test
-        fun `0x08 - Transaction complete should map to PAYMENT_PENDING`() {
-            val payload = byteArrayOf(0x08)  // TRANSACTION_COMPLETE
+        fun `0x08 - Automode should map to PAYMENT_PENDING`() {
+            // VB6: disp_automode = bit3 = 0x08 (indicates transaction complete)
+            val payload = byteArrayOf(0x08)  // AUTOMODE
             val result = DispenserStateMapper.mapToDispenserStatus(payload)
             
             assertTrue(result is DispenserStatus.PAYMENT_PENDING, "Expected PAYMENT_PENDING, got $result")
@@ -142,8 +145,8 @@ class DispenserStateMapperTest {
         
         @Test
         fun `Unknown bit combination should return UNKNOWN`() {
-            // Example: NOZZLE_LIFTED without DELIVERY_IN_PROGRESS
-            val payload = byteArrayOf(0x02)  // NOZZLE_LIFTED only
+            // VB6: OPEN_FOR_DELIVERY without START_BUTTON_PRESSED is invalid
+            val payload = byteArrayOf(0x02)  // OPEN_FOR_DELIVERY only
             val result = DispenserStateMapper.mapToDispenserStatus(payload)
             
             assertTrue(result is DispenserStatus.UNKNOWN, "Expected UNKNOWN for invalid bit combo")
@@ -166,27 +169,30 @@ class DispenserStateMapperTest {
         
         @Test
         fun `Complete fueling flow - IDLE to AUTHORIZED to PUMPING to PAYMENT_PENDING to IDLE`() {
+            // VB6-compatible state codes:
+            // IDLE = 0x00, AUTHORIZED = 0x04, PUMPING = 0x06, PAYMENT_PENDING = 0x08
+            
             // Step 1: IDLE (0x00)
             val idlePayload = byteArrayOf(0x00)
             val idleState = DispenserStateMapper.mapToDispenserStatus(idlePayload)
             assertTrue(idleState is DispenserStatus.IDLE)
             
-            // Step 2: AUTHORIZED (0x01 - START_SWITCH_ACTIVE)
-            val authorizedPayload = byteArrayOf(0x01)
+            // Step 2: AUTHORIZED (0x04 - START_BUTTON_PRESSED)
+            val authorizedPayload = byteArrayOf(0x04)
             val authorizedState = DispenserStateMapper.mapToDispenserStatus(authorizedPayload)
-            assertTrue(authorizedState is DispenserStatus.AUTHORIZED)
+            assertTrue(authorizedState is DispenserStatus.AUTHORIZED, "0x04 should be AUTHORIZED")
             assertTrue(DispenserStateMapper.isValidTransition(idleState, authorizedState))
             
-            // Step 3: PUMPING (0x06 - NOZZLE_LIFTED | DELIVERY_IN_PROGRESS)
+            // Step 3: PUMPING (0x06 - START_BUTTON_PRESSED | OPEN_FOR_DELIVERY)
             val pumpingPayload = byteArrayOf(0x06)
             val pumpingState = DispenserStateMapper.mapToDispenserStatus(pumpingPayload)
-            assertTrue(pumpingState is DispenserStatus.PUMPING)
+            assertTrue(pumpingState is DispenserStatus.PUMPING, "0x06 should be PUMPING")
             assertTrue(DispenserStateMapper.isValidTransition(authorizedState, pumpingState))
             
-            // Step 4: PAYMENT_PENDING (0x08 - TRANSACTION_COMPLETE)
+            // Step 4: PAYMENT_PENDING (0x08 - AUTOMODE)
             val paymentPendingPayload = byteArrayOf(0x08)
             val paymentPendingState = DispenserStateMapper.mapToDispenserStatus(paymentPendingPayload)
-            assertTrue(paymentPendingState is DispenserStatus.PAYMENT_PENDING)
+            assertTrue(paymentPendingState is DispenserStatus.PAYMENT_PENDING, "0x08 should be PAYMENT_PENDING")
             assertTrue(DispenserStateMapper.isValidTransition(pumpingState, paymentPendingState))
             
             // Step 5: Back to IDLE (0x00) after payment/reset
@@ -244,13 +250,15 @@ class DispenserStateMapperTest {
         
         @Test
         fun `Verify bit masks match VB6 legacy definitions`() {
-            // These are the exact values from the VB6 codebase
-            assertEquals(0x01, StatusBitMasks.START_SWITCH_ACTIVE, "START_SWITCH_ACTIVE mismatch")
-            assertEquals(0x02, StatusBitMasks.NOZZLE_LIFTED, "NOZZLE_LIFTED mismatch")
-            assertEquals(0x04, StatusBitMasks.DELIVERY_IN_PROGRESS, "DELIVERY_IN_PROGRESS mismatch")
-            assertEquals(0x08, StatusBitMasks.TRANSACTION_COMPLETE, "TRANSACTION_COMPLETE mismatch")
-            // 0x80 as signed byte is -128, but as unsigned int is 128
-            assertEquals(0x80.toByte().toInt() and 0xFF, StatusBitMasks.ERROR_FLAG.toInt() and 0xFF, "ERROR_FLAG mismatch")
+            // VB6 (pumpekontroll.frm lines 2734-2805):
+            // bit1 (0x02) = DISP_openfordelivery
+            // bit2 (0x04) = DISP_startbuttonpressed
+            // bit3 (0x08) = disp_automode
+            // bit7 (0x80) = error
+            assertEquals(0x02, StatusBitMasks.OPEN_FOR_DELIVERY, "OPEN_FOR_DELIVERY = bit1 = 0x02")
+            assertEquals(0x04, StatusBitMasks.START_BUTTON_PRESSED, "START_BUTTON_PRESSED = bit2 = 0x04")
+            assertEquals(0x08, StatusBitMasks.AUTOMODE, "AUTOMODE = bit3 = 0x08")
+            assertEquals(0x80, StatusBitMasks.ERROR_FLAG, "ERROR_FLAG = bit7 = 0x80")
         }
         
         @Test

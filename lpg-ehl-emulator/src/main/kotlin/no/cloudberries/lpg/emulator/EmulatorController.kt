@@ -118,4 +118,100 @@ class EmulatorController(
             ))
         }
     }
+    
+    // ==========================================================================
+    // FRI PUMPE API - Direct pump control for field testing
+    // ==========================================================================
+    
+    /**
+     * Get current pump status.
+     * 
+     * @param address Dispenser address (currently only 1 is supported)
+     */
+    @GetMapping("/pump/{address}/status")
+    fun getPumpStatus(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
+        val status = emulatorService.getPumpStatus()
+        return ResponseEntity.ok(mapOf(
+            "state" to status.state,
+            "address" to status.address,
+            "volumeLitres" to status.volumeLitres,
+            "amountKr" to status.amountKr,
+            "pricePerLitreKr" to status.pricePerLitreKr,
+            "nozzleLifted" to status.nozzleLifted,
+            "hasPendingTransaction" to status.hasPendingTransaction
+        ))
+    }
+    
+    /**
+     * "Fri pumpe" - Unlock dispenser and start pumping.
+     * Used for field testing when no PLS/terminal is available.
+     * 
+     * @param address Dispenser address (currently only 1 is supported)
+     */
+    @PostMapping("/pump/{address}/unblock")
+    fun unblockPump(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
+        logger.info("🔓 FRI PUMPE: Unblock request for address $address")
+        
+        val result = emulatorService.unblockPump()
+        
+        return result.fold(
+            onSuccess = { status ->
+                logger.info("✅ Pump unblocked: state=${status.state}")
+                ResponseEntity.ok(mapOf(
+                    "success" to true,
+                    "message" to "Pumpe frigitt - levering startet",
+                    "state" to status.state,
+                    "volumeLitres" to status.volumeLitres,
+                    "amountKr" to status.amountKr,
+                    "pricePerLitreKr" to status.pricePerLitreKr
+                ))
+            },
+            onFailure = { error ->
+                logger.warn("❌ Unblock failed: ${error.message}")
+                ResponseEntity.status(409).body(mapOf(
+                    "success" to false,
+                    "error" to "UNBLOCK_FAILED",
+                    "message" to (error.message ?: "Kunne ikke frigjøre pumpen")
+                ))
+            }
+        )
+    }
+    
+    /**
+     * "Stopp pumpe" - Block dispenser and stop pumping.
+     * Used for field testing when no PLS/terminal is available.
+     * 
+     * @param address Dispenser address (currently only 1 is supported)
+     */
+    @PostMapping("/pump/{address}/block")
+    fun blockPump(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
+        logger.info("🛑 FRI PUMPE: Block request for address $address")
+        
+        val result = emulatorService.blockPump()
+        
+        return result.fold(
+            onSuccess = { status ->
+                logger.info("✅ Pump blocked: state=${status.state}, volume=${status.volumeLitres}L")
+                ResponseEntity.ok(mapOf(
+                    "success" to true,
+                    "message" to if (status.hasPendingTransaction) 
+                        "Levering stoppet - venter på betaling" 
+                        else "Pumpe stoppet",
+                    "state" to status.state,
+                    "volumeLitres" to status.volumeLitres,
+                    "amountKr" to status.amountKr,
+                    "pricePerLitreKr" to status.pricePerLitreKr,
+                    "hasPendingTransaction" to status.hasPendingTransaction
+                ))
+            },
+            onFailure = { error ->
+                logger.warn("❌ Block failed: ${error.message}")
+                ResponseEntity.status(500).body(mapOf(
+                    "success" to false,
+                    "error" to "BLOCK_FAILED",
+                    "message" to (error.message ?: "Kunne ikke stoppe pumpen")
+                ))
+            }
+        )
+    }
 }

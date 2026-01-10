@@ -1,0 +1,48 @@
+# =============================================================================
+# LPG-EHL Edge System - systemd Unit File
+# =============================================================================
+# Installation:
+#   sudo cp lpg-ehl.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable lpg-ehl
+#   sudo systemctl start lpg-ehl
+#
+# Logs:
+#   journalctl -u lpg-ehl -f
+# =============================================================================
+
+[Unit]
+Description=LPG EHL Edge System - Dispenser Controller
+Documentation=https://github.com/cloudberries/lpg-ehl
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=lpg
+Group=lpg
+WorkingDirectory=/opt/lpg-ehl
+
+# Java executable (adjust path if needed)
+ExecStart=/usr/bin/java -jar /opt/lpg-ehl/lpg-ehl-edge.jar
+
+# Environment variables (minimal configuration)
+Environment=PORT=9001
+Environment=SPRING_PROFILES_ACTIVE=production
+Environment=EMULATOR_PORT=9000
+
+# Restart policy
+Restart=always
+RestartSec=10
+TimeoutStartSec=60
+
+# Resource limits
+LimitNOFILE=65536
+
+# Logging to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lpg-ehl
+
+[Install]
+WantedBy=multi-user.target

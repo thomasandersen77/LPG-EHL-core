@@ -42,19 +42,24 @@ class SecurityConfig(
                     // Public endpoints - no authentication required
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                    // All API v1 endpoints open for local demo testing - including PATCH
-                    .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/**").permitAll()
-                    .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/**").permitAll()
-                    .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/**").permitAll()
-                    .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/**").permitAll()
-                    .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/**").permitAll()
+                    // WebSocket endpoints - must be open for real-time updates
+                    .requestMatchers("/ws/**").permitAll()
+                    // All API v1 endpoints open for local demo testing
+                    .requestMatchers("/api/v1/**").permitAll()
+                    .requestMatchers("/api/**").permitAll() // Also allow /api/** for any sub-paths
                     .requestMatchers("/error").permitAll() // Allow error endpoint
                     // Static assets (CSS, JS, images, etc.)
-                    .requestMatchers("/assets/**", "/*.ico", "/*.png", "/*.svg").permitAll()
-                    // Protected actuator endpoints
+                    .requestMatchers("/assets/**", "/*.ico", "/*.png", "/*.svg", "/*.js", "/*.css").permitAll()
+                    // SPA routes - allow all non-API routes (SpaRedirectConfig handles forwarding to index.html)
+                    .requestMatchers("/", "/index.html").permitAll()
+                    .requestMatchers("/price-admin", "/price-admin/**").permitAll()
+                    .requestMatchers("/control", "/control/**").permitAll()
+                    .requestMatchers("/transactions", "/transactions/**").permitAll()
+                    .requestMatchers("/demo", "/demo/**").permitAll()
+                    // Protected actuator endpoints (except health)
                     .requestMatchers("/actuator/**").authenticated()
-                    .requestMatchers("/*").permitAll()
-                    .anyRequest().denyAll() // Deny everything else explicitly
+                    // Allow everything else for SPA fallback (local dev mode)
+                    .anyRequest().permitAll()
             }
 
         return http.build()

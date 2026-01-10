@@ -19,11 +19,23 @@ import kotlin.math.roundToInt
  */
 class DispenserSimulator(
     private val litresPerSecond: Double = 0.5,
-    private val pricePerLitreCents: Int = 1590  // 15.90 kr/l
+    pricePerLitreCents: Int = 1590  // 15.90 kr/l
 ) {
     private val logger = LoggerFactory.getLogger(DispenserSimulator::class.java)
     private val simRunning = AtomicBoolean(false)
     private var simJob: Job? = null
+    
+    // Mutable price that can be updated dynamically
+    @Volatile
+    var currentPricePerLitreCents: Int = pricePerLitreCents
+        private set
+    
+    /**
+     * Update the price per litre. Takes effect for future calculations.
+     */
+    fun updatePrice(pricePerLitreCents: Int) {
+        this.currentPricePerLitreCents = pricePerLitreCents
+    }
     
     /**
      * Start simulation for an active transaction.
@@ -42,7 +54,7 @@ class DispenserSimulator(
         }
         
         simRunning.set(true)
-        logger.info("Starting simulation: ${litresPerSecond} L/s, ${pricePerLitreCents/100.0} kr/L")
+        logger.info("Starting simulation: ${litresPerSecond} L/s, ${currentPricePerLitreCents/100.0} kr/L")
         
         simJob = CoroutineScope(Dispatchers.Default).launch {
             val startMs = activeTx.startMs
@@ -59,7 +71,7 @@ class DispenserSimulator(
                 
                 val elapsedSeconds = (System.currentTimeMillis() - startMs) / 1000.0
                 activeTx.volumeLitres = elapsedSeconds * litresPerSecond
-                activeTx.amountCents = (activeTx.volumeLitres * pricePerLitreCents).roundToInt()
+                activeTx.amountCents = (activeTx.volumeLitres * currentPricePerLitreCents).roundToInt()
                 
                 updateCount++
                 if (logger.isTraceEnabled && updateCount % 10 == 0) {

@@ -298,15 +298,57 @@ object EhlPacketBuilder {
 object EhlDataParser {
     
     /**
-     * Parse VOLUME response data
+     * Parse VOLUME response data - VB6-compatible format.
+     * 
+     * VB6 format (pumpekontroll.frm line 2700):
+     * ```vb
+     * tank_vol = CSng(Chr(x(8)) & Chr(x(7)) & Chr(x(6)) & "," & Chr(x(5)) & Chr(x(4)))
+     * ```
+     * 
+     * Format: 5 ASCII digit bytes in LSB-first order
+     * Example: 45.50 liters -> "04550" -> bytes ['0','5','5','4','0'] (LSB first)
+     * 
+     * @param data Raw data bytes from VOLUME response (5 ASCII bytes)
+     * @return Volume in liters as Double
+     * @throws IllegalArgumentException if data format is invalid
+     */
+    fun parseVolumeDataVb6(data: ByteArray): Double {
+        require(data.size == 5) { "VB6 VOLUME expects 5 ASCII bytes, got ${data.size}" }
+        
+        // LSB-first: data[0]=0.01L, data[1]=0.1L, data[2]=1L, data[3]=10L, data[4]=100L
+        val d0 = (data[0].toInt() and 0xFF).toChar()
+        val d1 = (data[1].toInt() and 0xFF).toChar()
+        val d2 = (data[2].toInt() and 0xFF).toChar()
+        val d3 = (data[3].toInt() and 0xFF).toChar()
+        val d4 = (data[4].toInt() and 0xFF).toChar()
+        
+        // Reconstruct number in correct order: hundreds, tens, ones, tenths, hundredths
+        val volumeString = "$d4$d3$d2$d1$d0"  // e.g., "04550" for 45.50 L
+        
+        require(volumeString.all { it.isDigit() }) { 
+            "Invalid VOLUME digits: '$volumeString' (bytes: ${data.map { "%02X".format(it) }})" 
+        }
+        
+        return volumeString.toInt() / 100.0  // 04550 -> 45.50
+    }
+    
+    /**
+     * Parse VOLUME response data - Legacy binary format.
+     * 
+     * @deprecated Use parseVolumeDataVb6() for VB6-compatible parsing
+     * 
      * Format: volume in deciliters (2 bytes, big-endian) + amount in øre (2 bytes, big-endian)
      * 
      * @param data Raw data bytes from VOLUME response
      * @return Pair of (volumeLitres, amountCents)
      * @throws IllegalArgumentException if data format is invalid
      */
+    @Deprecated(
+        message = "Use parseVolumeDataVb6() for VB6-compatible 5-byte ASCII format",
+        replaceWith = ReplaceWith("parseVolumeDataVb6(data)")
+    )
     fun parseVolumeData(data: ByteArray): Pair<Double, Int> {
-        require(data.size == 4) { "VOLUME data must be exactly 4 bytes" }
+        require(data.size == 4) { "Legacy VOLUME data must be exactly 4 bytes" }
         
         // Parse volume in deciliters (big-endian)
         val volumeDeciliters = ((data[0].toInt() and 0xFF) shl 8) or (data[1].toInt() and 0xFF)

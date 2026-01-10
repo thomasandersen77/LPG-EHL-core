@@ -63,6 +63,22 @@ class EhlDispenserEmulator(
     private var amountCents: Int = 0
     private var currentPricePerLitreCents: Int = pricePerLitreCents
     
+    /**
+     * Update the price per litre.
+     * Only takes effect for FUTURE deliveries (not ongoing ones).
+     * 
+     * @param newPriceCents New price in cents (øre)
+     */
+    fun setPrice(newPriceCents: Int) {
+        currentPricePerLitreCents = newPriceCents
+        logger.info("💰 Emulator price updated to ${newPriceCents / 100.0} NOK/L")
+    }
+    
+    /**
+     * Get current price per litre in cents.
+     */
+    fun getPriceCents(): Int = currentPricePerLitreCents
+    
     // Transaction freeze for payment pending
     @Volatile
     private var pendingTransaction: CompletedTransaction? = null
@@ -246,6 +262,218 @@ class EhlDispenserEmulator(
                 ))
             }
         }
+    }
+    
+    // ==========================================================================
+    // FRI PUMPE API - Direct control methods for field testing without PLS
+    // ==========================================================================
+    
+    /**
+     * Data class for pump status returned by API.
+     */
+    data class PumpStatus(
+        val state: String,
+        val address: Int,
+        val volumeLitres: Double,
+        val amountKr: Double,
+        val pricePerLitreKr: Double,
+        val nozzleLifted: Boolean,
+        val hasPendingTransaction: Boolean
+    )
+    
+    /**
+     * Get current pump status for API.
+     */
+    fun getPumpStatus(): PumpStatus {
+        if (state == DispenserState.PUMPING) {
+            updateDelivery()
+        }
+        return PumpStatus(
+            state = state.name,
+            address = address,
+            volumeLitres = volumeLitres,
+            amountKr = amountCents / 100.0,
+            pricePerLitreKr = currentPricePerLitreCents / 100.0,
+            nozzleLifted = nozzleLifted,
+            hasPendingTransaction = pendingTransaction != null
+        )
+    }
+    
+    // Protocol logger for WebSocket streaming
+    private val protocolLogger = LoggerFactory.getLogger("no.cloudberries.lpg.protocol.EhlPacketStream")
+    
+    /**
+     * Format bytes as hex string for protocol logging.
+     * Example output: [10 07 01 77 6F 36]
+     */
+    private fun ByteArray.toHexBrackets(): String {
+        return "[" + joinToString(" ") { "%02X".format(it) } + "]"
+    }
+    
+    /**
+     * Build a simulated TX packet for logging purposes.
+     * Creates realistic EHL packet bytes for visual debugging.
+     */
+    private fun buildSimulatedTxPacket(command: EhlCommand): ByteArray {
+        val packet = EhlPacket(address, command)
+        return EhlCodec.encode(packet, fromController = true)
+    }
+    
+    /**
+     * Build a simulated RX packet for logging purposes.
+     * Creates realistic EHL response bytes including current state data.
+     */
+    private fun buildSimulatedRxPacket(command: EhlCommand, data: ByteArray = ByteArray(0)): ByteArray {
+        val packet = EhlPacket(address, command, data)
+        return EhlCodec.encode(packet, fromController = false)
+    }
+    
+    /**
+     * "Fri pumpe" - Direct UNBLOCK without going through EHL protocol.
+     * Used for field testing when no PLS/terminal is available.
+     * 
+     * This method:
+     * 1. Checks for pending transactions (must be settled first)
+     * 2. Transitions to AUTHORIZED state
+     * 3. Simulates nozzle lift to start PUMPING
+     * 
+     * @return Result with new state or error message
+     */
+    fun directUnblock(): Result<PumpStatus> {
+        logger.info("┌" + "─".repeat(60) + "┐")
+        logger.info("│ 🔓 FRI PUMPE: UNBLOCK REQUEST (Direct API)" + " ".repeat(16) + "│")
+        logger.info("├" + "─".repeat(60) + "┤")
+        
+        // Build and log RAW HEX for the simulated UNBLOCK command
+        val txPacket = buildSimulatedTxPacket(EhlCommand.UNBLOCK)
+        protocolLogger.info("📤 TX ${txPacket.toHexBrackets()} -> UNBLOCK (0x77) to address #$address")
+        
+        // Check for pending transaction
+        if (pendingTransaction != null) {
+            logger.warn("│ ❌ REJECTED: Pending transaction exists" + " ".repeat(19) + "│")
+            logger.warn("│    Amount: %.2f NOK".format(pendingTransaction!!.amountNok).padEnd(59) + "│")
+            logger.info("└" + "─".repeat(60) + "┘")
+            return Result.failure(IllegalStateException("Må betale forrige transaksjon først (${pendingTransaction!!.amountNok} NOK)"))
+        }
+        
+        val previousState = state.name
+        
+        when (state) {
+            DispenserState.IDLE, DispenserState.STOPPED -> {
+                // Transition to AUTHORIZED then simulate nozzle lift
+                state = DispenserState.AUTHORIZED
+                productSelected = true
+                
+                // Simulate nozzle lift to start pumping immediately
+                nozzleLifted = true
+                state = DispenserState.PUMPING
+                startedAtMs = System.currentTimeMillis()
+                volumeLitres = 0.0
+                amountCents = 0
+                
+                logger.info("│ ✅ State: $previousState → PUMPING" + " ".repeat(maxOf(0, 59 - ("│ ✅ State: $previousState → PUMPING").length)) + "│")
+                logger.info("│ 🚀 Delivery started @ %.2f kr/L".format(currentPricePerLitreCents / 100.0).padEnd(59) + "│")
+            }
+            DispenserState.AUTHORIZED -> {
+                // Already authorized, just lift nozzle
+                nozzleLifted = true
+                state = DispenserState.PUMPING
+                startedAtMs = System.currentTimeMillis()
+                volumeLitres = 0.0
+                amountCents = 0
+                
+                logger.info("│ ✅ State: AUTHORIZED → PUMPING" + " ".repeat(28) + "│")
+            }
+            DispenserState.PUMPING -> {
+                logger.info("│ ⚠️ Already pumping - no action needed" + " ".repeat(20) + "│")
+            }
+            DispenserState.PAYMENT_PENDING -> {
+                logger.warn("│ ❌ Cannot unblock - payment pending" + " ".repeat(23) + "│")
+                logger.info("└" + "─".repeat(60) + "┘")
+                return Result.failure(IllegalStateException("Betaling venter - kan ikke starte ny fylling"))
+            }
+            DispenserState.ERROR -> {
+                logger.warn("│ ❌ Cannot unblock - dispenser in ERROR state" + " ".repeat(13) + "│")
+                logger.info("└" + "─".repeat(60) + "┘")
+                return Result.failure(IllegalStateException("Dispenser i feilmodus"))
+            }
+        }
+        
+        logger.info("└" + "─".repeat(60) + "┘")
+        
+        // Build and log RAW HEX for the simulated STATE response
+        val stateData = byteArrayOf(buildStatusByte())
+        val rxPacket = buildSimulatedRxPacket(EhlCommand.STATE, stateData)
+        protocolLogger.info("📥 RX ${rxPacket.toHexBrackets()} <- STATE=${state.name} from address #$address")
+        
+        return Result.success(getPumpStatus())
+    }
+    
+    /**
+     * "Stopp pumpe" - Direct BLOCK without going through EHL protocol.
+     * Used for field testing when no PLS/terminal is available.
+     * 
+     * This method:
+     * 1. Stops any ongoing delivery
+     * 2. Calculates final volume and amount
+     * 3. Freezes transaction for payment
+     * 
+     * @return Result with final state and transaction data
+     */
+    fun directBlock(): Result<PumpStatus> {
+        logger.info("┌" + "─".repeat(60) + "┐")
+        logger.info("│ 🛑 FRI PUMPE: BLOCK REQUEST (Direct API)" + " ".repeat(18) + "│")
+        logger.info("├" + "─".repeat(60) + "┤")
+        
+        // Build and log RAW HEX for the simulated BLOCK command
+        val txPacket = buildSimulatedTxPacket(EhlCommand.BLOCK)
+        protocolLogger.info("📤 TX ${txPacket.toHexBrackets()} -> BLOCK (0x69) to address #$address")
+        
+        val previousState = state.name
+        
+        when (state) {
+            DispenserState.PUMPING -> {
+                updateDelivery() // Calculate final volume/amount
+                nozzleLifted = false
+                
+                if (volumeLitres > 0.0) {
+                    freezeTransaction()
+                    state = DispenserState.PAYMENT_PENDING
+                    
+                    logger.info("│ ✅ State: PUMPING → PAYMENT_PENDING" + " ".repeat(24) + "│")
+                    logger.info("│ 🏁 Final: %.2f L @ %.2f kr".format(volumeLitres, amountCents / 100.0).padEnd(59) + "│")
+                    logger.info("│ 💳 Awaiting payment settlement" + " ".repeat(28) + "│")
+                } else {
+                    state = DispenserState.IDLE
+                    logger.info("│ ✅ State: PUMPING → IDLE (no fuel dispensed)" + " ".repeat(14) + "│")
+                }
+            }
+            DispenserState.AUTHORIZED -> {
+                state = DispenserState.IDLE
+                productSelected = false
+                nozzleLifted = false
+                logger.info("│ ✅ State: AUTHORIZED → IDLE (cancelled)" + " ".repeat(18) + "│")
+            }
+            DispenserState.IDLE, DispenserState.STOPPED -> {
+                logger.info("│ ⚠️ Already stopped - no action needed" + " ".repeat(20) + "│")
+            }
+            DispenserState.PAYMENT_PENDING -> {
+                logger.info("│ ⚠️ Payment pending - already blocked" + " ".repeat(21) + "│")
+            }
+            DispenserState.ERROR -> {
+                state = DispenserState.IDLE
+                logger.info("│ 🔄 Error cleared, state → IDLE" + " ".repeat(28) + "│")
+            }
+        }
+        
+        logger.info("└" + "─".repeat(60) + "┘")
+        
+        // Build and log RAW HEX for the simulated STATE response with volume/amount data
+        val stateData = byteArrayOf(buildStatusByte())
+        val rxPacket = buildSimulatedRxPacket(EhlCommand.STATE, stateData)
+        protocolLogger.info("📥 RX ${rxPacket.toHexBrackets()} <- STATE=${state.name} | VOL=${"%.2f".format(volumeLitres)}L | AMT=${"%.2f".format(amountCents/100.0)}kr")
+        
+        return Result.success(getPumpStatus())
     }
     
     /**

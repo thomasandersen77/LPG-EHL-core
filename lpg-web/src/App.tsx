@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { HomePage } from './pages/HomePage';
 import { DispenserSimulator } from './components/DispenserSimulator';
+import { ControlPanel } from './components/ControlPanel';
 import { ProtocolTester } from './components/ProtocolTester';
+import { WireComplianceTester } from './components/WireComplianceTester';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { CreditAccountsPage } from './pages/CreditAccountsPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -46,8 +48,10 @@ function AppContent() {
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="simulator" element={<DispenserSimulator />} />
+          <Route path="control" element={<ControlPanel />} />
           <Route path="fueling" element={<FuelingPage />} />
           {isLab && <Route path="protocol-tester" element={<ProtocolTester />} />}
+          {isLab && <Route path="wire-tester" element={<WireComplianceTester />} />}
           <Route path="transactions" element={<TransactionsPage />} />
           <Route path="credit" element={<CreditAccountsPage />} />
           <Route path="reports" element={<ReportsPage />} />

@@ -45,8 +45,22 @@ else
     echo "  Dependencies already installed (skipping npm install)"
 fi
 
+# Temporarily move .env.local to ensure production build uses window.location.origin
+# (The React code has fallbacks that use same-origin when env vars are not set)
+if [ -f ".env.local" ]; then
+    echo "  Moving .env.local aside for production build..."
+    mv .env.local .env.local.bak
+    ENV_LOCAL_MOVED=true
+fi
+
 echo "  Running production build..."
 npm run build
+
+# Restore .env.local
+if [ "$ENV_LOCAL_MOVED" = true ]; then
+    echo "  Restoring .env.local..."
+    mv .env.local.bak .env.local
+fi
 
 # Verify build output
 if [ ! -d "dist" ]; then
