@@ -32,9 +32,11 @@ Spring Boot REST API for LPG dispenser transaction management and Azure sync.
 
 ### Local Development
 
-1. **Start services (PostgreSQL + Azurite + WireMock)**
+1. **Start services (PostgreSQL + Azurite)**
+
+   Run from the repo root:
    ```bash
-   docker-compose -f docker-compose-local.yaml up
+   docker-compose -f docker-compose.postgres.yaml up -d
    ```
 
 2. **Run application**

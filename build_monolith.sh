@@ -81,19 +81,19 @@ echo "  Target: $STATIC_DIR/"
 cp -r lpg-web/dist/* "$STATIC_DIR/"
 
 # Verify copy
-FILE_COUNT=$(find "$STATIC_DIR" -type f | wc -l | xargs)
+FILE_COUNT=$(find "$STATIC_DIR" -type f | wc -l | tr -d ' ')
 echo -e "  ${GREEN}✓${NC} Copied $FILE_COUNT files"
 echo ""
 
 # Step 4: Build Spring Boot Fat JAR
 echo -e "${GREEN}[4/5]${NC} Building Spring Boot monolith JAR..."
-cd lpg-ehl-api
+cd "$SCRIPT_DIR"
 
-echo "  Running Maven package (skipping tests for faster build)..."
-../mvnw clean package -DskipTests
+echo "  Running Maven package via parent reactor (skipping tests for faster build)..."
+./mvnw -pl lpg-ehl-api -am clean package -DskipTests
 
 # Find the built JAR
-JAR_FILE=$(find target -name "lpg-ehl-api-*.jar" -not -name "*-plain.jar" | head -1)
+JAR_FILE=$(find "$SCRIPT_DIR/lpg-ehl-api/target" -name "lpg-ehl-api-*.jar" -not -name "*-plain.jar" | head -1)
 
 if [ -z "$JAR_FILE" ]; then
     echo -e "${RED}ERROR: JAR file not found in target/${NC}"
@@ -114,7 +114,7 @@ mkdir -p "$RELEASE_DIR"
 RELEASE_JAR="$RELEASE_DIR/lpg-ehl-monolith.jar"
 
 # Copy JAR to release with better naming (using full path)
-cp "lpg-ehl-api/$JAR_FILE" "$RELEASE_JAR"
+cp "$JAR_FILE" "$RELEASE_JAR"
 
 # Make JAR executable (already set in pom.xml, but ensure permissions)
 chmod +x "$RELEASE_JAR"
