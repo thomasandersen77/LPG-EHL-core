@@ -1,6 +1,7 @@
 package no.cloudberries.lpg.communication
 
 import com.fazecast.jSerialComm.SerialPort
+import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import java.io.IOException
 
@@ -8,10 +9,10 @@ import java.io.IOException
  * Manages serial port connections for RS-485 communication with LPG dispensers.
  * Handles opening, closing, and configuration of serial ports.
  * 
- * Implements SerialPortIO interface for production use with real serial ports.
+ * Implements SerialTransport interface for production use with real serial ports.
  * Implements HardwareWatchdogCapable interface for watchdog functionality.
  */
-open class  SerialPortManager(private val config: SerialPortConfig) : SerialPortIO, HardwareWatchdogCapable {
+open class  SerialPortManager(private val config: SerialPortConfig) : SerialTransport, HardwareWatchdogCapable {
     private val logger = LoggerFactory.getLogger(SerialPortManager::class.java)
     private var serialPort: SerialPort? = null
     private val lock = Any()
@@ -122,7 +123,7 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialPort
      * @return Bytes read, or empty array if no data available
      * @throws IOException if not connected or read fails
      */
-    override fun read(maxBytes: Int): ByteArray {
+    override fun readAvailable(maxBytes: Int): ByteArray {
         synchronized(lock) {
             val port = serialPort ?: throw IOException("Serial port not connected")
             

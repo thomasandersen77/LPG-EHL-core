@@ -2,6 +2,7 @@ package no.cloudberries.lpg.communication
 
 import kotlinx.coroutines.*
 import no.cloudberries.lpg.protocol.*
+import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeoutException
@@ -10,10 +11,10 @@ import java.util.concurrent.TimeoutException
  * Communicates with LPG dispensers using the EHL protocol over RS-485 serial connection.
  * Handles packet transmission, reception, buffering, and timeout management.
  * 
- * Uses SerialPortIO interface for serial communication, allowing both real serial ports
+ * Uses SerialTransport interface for serial communication, allowing both real serial ports
  * and in-memory implementations for testing.
  */
-class EhlCommunicator(private val serialPort: SerialPortIO) {
+class EhlCommunicator(private val transport: SerialTransport) {
     private val logger = LoggerFactory.getLogger(EhlCommunicator::class.java)
     private val receiveBuffer = mutableListOf<Byte>()
     private val bufferLock = Any()
@@ -44,7 +45,7 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
      * @throws IOException if send fails
      */
     fun send(packet: EhlPacket) {
-        if (!serialPort.isConnected) {
+        if (!transport.isConnected) {
             throw IOException("Serial port not connected")
         }
 
@@ -58,8 +59,8 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
             logger.debug(EhlPacketFormatter.formatPacketForLogging(packet, EhlPacketFormatter.Direction.SENDING))
         }
         
-        serialPort.write(bytes)
-        serialPort.flush()
+        transport.write(bytes)
+        transport.flush()
     }
 
     /**
@@ -86,7 +87,7 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                 }
 
                 // Read more data from serial port
-                val newData = serialPort.read()
+                val newData = transport.readAvailable()
                 if (newData.isNotEmpty()) {
                     // RAW HEX logging for observability (INFO level to ensure visibility)
                     logger.info("📥 RX HEX: [${newData.toHexString()}]")

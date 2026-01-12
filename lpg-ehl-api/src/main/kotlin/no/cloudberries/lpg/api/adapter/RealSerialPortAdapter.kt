@@ -1,7 +1,7 @@
 package no.cloudberries.lpg.api.adapter
 
 import no.cloudberries.lpg.communication.SerialPortConfig
-import no.cloudberries.lpg.communication.SerialPortIO
+import no.cloudberries.lpg.transport.SerialTransport
 import no.cloudberries.lpg.communication.SerialPortManager
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -37,7 +37,7 @@ class RealSerialPortAdapter(
     
     @Value("\${ehl.serial.baud-rate:9600}")
     private val baudRate: Int
-) : SerialPortIO {
+) : SerialTransport {
     
     private val logger = LoggerFactory.getLogger(RealSerialPortAdapter::class.java)
     
@@ -102,8 +102,8 @@ class RealSerialPortAdapter(
         return serialPortManager.write(data)
     }
     
-    override fun read(maxBytes: Int): ByteArray {
-        return serialPortManager.read(maxBytes)
+    override fun readAvailable(maxBytes: Int): ByteArray {
+        return serialPortManager.readAvailable(maxBytes)
     }
     
     override fun flush() {
@@ -116,7 +116,7 @@ class RealSerialPortAdapter(
         // Read and discard any pending data
         var discarded = 0
         while (true) {
-            val data = read(256)
+            val data = readAvailable(256)
             if (data.isEmpty()) break
             discarded += data.size
         }

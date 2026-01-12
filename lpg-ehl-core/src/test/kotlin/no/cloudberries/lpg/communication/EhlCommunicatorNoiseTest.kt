@@ -5,6 +5,7 @@ import kotlinx.coroutines.withTimeout
 import no.cloudberries.lpg.protocol.EhlPacket
 import no.cloudberries.lpg.protocol.EhlCodec
 import no.cloudberries.lpg.protocol.EhlCommand
+import no.cloudberries.lpg.transport.SerialTransport
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -34,9 +35,9 @@ class EhlCommunicatorNoiseTest {
     }
     
     /**
-     * In-memory implementation of SerialPortIO for testing.
+     * In-memory implementation of SerialTransport for testing.
      */
-    private class InMemorySerialPort(private val inputData: ByteArray) : SerialPortIO {
+    private class InMemorySerialPort(private val inputData: ByteArray) : SerialTransport {
         private var inputStream = ByteArrayInputStream(inputData)
         private val outputStream = ByteArrayOutputStream()
         private var connected = false
@@ -59,7 +60,7 @@ class EhlCommunicatorNoiseTest {
             return data.size
         }
         
-        override fun read(maxBytes: Int): ByteArray {
+        override fun readAvailable(maxBytes: Int): ByteArray {
             // Better simulation: limit read chunks to prevent getting all data at once
             val chunkSize = minOf(maxBytes, 32) // Simulate realistic chunk sizes
             val remainingBytes = inputData.size - readPosition

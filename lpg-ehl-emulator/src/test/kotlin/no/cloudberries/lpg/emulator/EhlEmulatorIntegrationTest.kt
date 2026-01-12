@@ -5,6 +5,7 @@ import kotlinx.coroutines.runBlocking
 import no.cloudberries.lpg.communication.EhlCommunicator
 import no.cloudberries.lpg.protocol.EhlCommand
 import no.cloudberries.lpg.protocol.EhlPacket
+import no.cloudberries.lpg.transport.SerialTransport
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -35,6 +36,7 @@ class EhlEmulatorIntegrationTest {
 
     private lateinit var emulator: EhlDispenserEmulator
     private lateinit var port: InMemorySerialPort
+    private lateinit var transport: SerialTransport
     private lateinit var comm: EhlCommunicator
     
     // VB6-compatible bit masks (duplicated here to avoid module dependency issues)
@@ -57,7 +59,8 @@ class EhlEmulatorIntegrationTest {
             litresPerSecond = 1.0        // 1 liter per second
         )
         port = InMemorySerialPort(emulator)
-        comm = EhlCommunicator(port)
+        transport = port
+        comm = EhlCommunicator(transport)
         port.connect()
     }
 

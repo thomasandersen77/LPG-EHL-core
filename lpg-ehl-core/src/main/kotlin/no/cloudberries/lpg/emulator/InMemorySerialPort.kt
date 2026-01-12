@@ -1,6 +1,6 @@
 package no.cloudberries.lpg.emulator
 
-import no.cloudberries.lpg.communication.SerialPortIO
+import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 class InMemorySerialPort(
     private val emulator: EhlDispenserEmulator,
     private val simulatedLatencyMs: Long = 20
-) : SerialPortIO {
+) : SerialTransport {
     
     private val logger = LoggerFactory.getLogger(InMemorySerialPort::class.java)
     private val toEmulator = ConcurrentLinkedQueue<Byte>()
@@ -73,7 +73,7 @@ class InMemorySerialPort(
         return data.size
     }
     
-    override fun read(maxBytes: Int): ByteArray {
+    override fun readAvailable(maxBytes: Int): ByteArray {
         check(connected) { "Port ikke tilkoblet" }
         
         if (fromEmulator.isEmpty()) return ByteArray(0)

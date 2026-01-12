@@ -1,6 +1,6 @@
 package no.cloudberries.lpg.api.adapter
 
-import no.cloudberries.lpg.communication.SerialPortIO
+import no.cloudberries.lpg.transport.SerialTransport
 import no.cloudberries.lpg.emulator.EhlDispenserEmulator
 import no.cloudberries.lpg.emulator.InMemorySerialPort
 import org.slf4j.LoggerFactory
@@ -45,7 +45,7 @@ class EmulatorSerialPortAdapter(
     
     @Value("\${ehl.emulator.latency-ms:20}")
     private val latencyMs: Long
-) : SerialPortIO {
+) : SerialTransport {
     
     private val logger = LoggerFactory.getLogger(EmulatorSerialPortAdapter::class.java)
     
@@ -88,8 +88,8 @@ class EmulatorSerialPortAdapter(
         return inMemoryPort.write(data)
     }
     
-    override fun read(maxBytes: Int): ByteArray {
-        return inMemoryPort.read(maxBytes)
+    override fun readAvailable(maxBytes: Int): ByteArray {
+        return inMemoryPort.readAvailable(maxBytes)
     }
     
     override fun flush() {
