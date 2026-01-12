@@ -59,61 +59,35 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 ## 🏗️ Project Structure
 
 ```
-lpg-ehl/
-├── pom.xml                        # Parent POM with dependency management
-├── Makefile                       # Common development tasks
-├── docker-compose.yml             # Production deployment
-├── docker-compose-local.yaml      # Local development with emulator
-├── init-db.sql                    # Database schema
-├── .env.example                   # Environment configuration template
-├── scripts/
-│   └── backup.sh                  # Automatic database backup
-├── wiremock/                      # WireMock stubs for testing
-│   ├── mappings/                  # Mock API definitions
-│   └── __files/                   # Mock response files
-├── lpg-ehl-core/                  # Core protocol implementation
-│   ├── pom.xml
-│   └── src/
-│       ├── main/kotlin/no/cloudberries/lpg/
-│       │   ├── protocol/              # EHL packet encoding/decoding
-│       │   ├── communication/         # Serial port communication
-│       │   └── transaction/           # Transaction state machine
-│       └── test/kotlin/               # Unit tests (50 tests)
-├── lpg-ehl-emulator/              # Testing emulator
-│   ├── pom.xml
-│   └── src/
-│       ├── main/kotlin/no/cloudberries/lpg/emulator/
-│       │   ├── EhlDispenserEmulator.kt    # Dispenser state machine
-│       │   └── InMemorySerialPort.kt      # In-memory serial port
-│       └── test/kotlin/                   # Integration tests (11 tests)
-└── lpg-ehl-api/                   # Spring Boot REST API
-    ├── README.md                      # API-specific documentation
-    ├── pom.xml
-    └── src/
-        ├── main/kotlin/no/cloudberries/lpg/api/
-        │   ├── controller/                # REST endpoints
-        │   ├── service/                   # Business logic + Azure sync
-        │   ├── repository/                # JPA repositories
-        │   ├── model/                     # JPA entities
-        │   ├── dto/                       # Response DTOs
-        │   └── config/                    # Security, Database, Azure
-        └── test/kotlin/                   # Integration tests (Testcontainers)
+LPG-EHL-core/
+├── pom.xml                          # Parent POM (multi-module Maven)
+├── build_monolith.sh                # Builds a single runnable JAR (API + Web)
+├── docker-compose.postgres.yaml     # Local Postgres + Azurite (queue emulator)
+├── init-db.sql                      # Database schema (used by Liquibase)
+├── release/
+│   └── lpg-ehl-monolith.jar         # Monolith output from build_monolith.sh
+├── lpg-ehl-core/                    # Core protocol implementation
+├── lpg-ehl-emulator/                # Emulator for testing without hardware
+├── lpg-ehl-api/                     # Spring Boot REST API + Azure queue sync
+└── lpg-web/                         # React frontend (bundled into the monolith)
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- **Java 21** (Temurin 21.0.7)
-- **Maven 3.9+**
-- **SDKMAN** (recommended)
+- **Java 21** (Temurin recommended)
+- **Node.js 18+** (needed to build the bundled React frontend)
+- **Docker + Docker Compose** (local PostgreSQL + Azurite)
+- **Maven 3.9+** (or just use `./mvnw`)
+- **SDKMAN** (optional, recommended)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
    git clone git@github.com:thomasandersen77/LPG-EHL-core.git
-   cd lpg-ehl
+   cd LPG-EHL-core
    ```
 
 2. **Install SDKMAN** (if not already installed)
@@ -190,20 +164,26 @@ This project implements a complete **Edge-to-Cloud** architecture for LPG statio
 
 ### Running the Full Simulation (Local)
 
-You can run both the **Pump System** and the **Cloud Admin System** simultaneously on your machine using Docker Compose.
+You can run the **Edge system (this repo)** locally with PostgreSQL + Azurite (queue emulator).
+The **Cloud Admin System (MinLPG)** lives in a separate repo and can be run separately if you need end-to-end messaging.
 
-1. **Start Pump System (Edge)**:
+1. **Start local dependencies (PostgreSQL + Azurite)**
    ```bash
-   # Starts API (8080), Emulator (9000), Postgres (5432), and Azurite (10001)
-   docker-compose -f docker-compose-local.yaml up
+   # Remove -d if you want logs in the foreground
+   docker-compose -f docker-compose.postgres.yaml up -d
    ```
 
-2. **Start Admin System (Cloud)**:
-   Navigate to the `MinLPG` project folder and start its stack.
+2. **Build the monolith JAR (API + Web UI)**
    ```bash
-   # Starts Backend (8081), Frontend (3001), and Postgres (5433)
-   cd ../MinLPG
-   docker-compose up
+   ./build_monolith.sh
+   ```
+
+3. **Run the monolith**
+
+   This uses the `local` profile by default (see `lpg-ehl-api/src/main/resources/application.yaml`).
+
+   ```bash
+   java -jar release/lpg-ehl-monolith.jar
    ```
 
 ### Simulation Tools
@@ -222,10 +202,10 @@ We provide scripts to simulate real-world usage:
   ```
 
 ### Access Points
-- **Pump API**: http://localhost:8080
-- **Pump Frontend**: http://localhost:3001 (LPG-EHL Web UI)
-- **Cloud Admin**: http://localhost:3000 (MinLPG System - separate project)
-- **Azurite Queue**: http://localhost:10001
+- **Monolith UI (Web)**: http://localhost:8080
+- **Monolith API**: http://localhost:8080/api/v1/
+- **Swagger UI**: http://localhost:8080/swagger-ui.html
+- **Azurite Queue service**: http://localhost:10001
 
 ### Production Deployment (Pump Linux Machine)
 
