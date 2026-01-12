@@ -25,6 +25,9 @@ class LogBufferAppender : AppenderBase<ILoggingEvent>() {
         val loggerName = eventObject.loggerName
         val message = eventObject.formattedMessage ?: return
         
+        // Silently skip if beans not initialized yet (during Spring startup)
+        // This is expected during early application bootstrap
+        
         // Append to in-memory buffer (for polling API)
         logBuffer?.append(
             level = level,
