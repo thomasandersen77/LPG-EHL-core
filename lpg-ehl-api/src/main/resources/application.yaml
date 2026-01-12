@@ -125,7 +125,7 @@ server:
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
   emulator:
-    enabled: ${EHL_EMULATOR_ENABLED:false}  # DEFAULT: LAB MODE (sikkert)
+    enabled: ${EHL_EMULATOR_ENABLED:true}  # DEFAULT: LAB MODE (sikkert)
     dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
     price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
     latency-ms: ${EHL_LATENCY_MS:20}  # Simulert serial port latency

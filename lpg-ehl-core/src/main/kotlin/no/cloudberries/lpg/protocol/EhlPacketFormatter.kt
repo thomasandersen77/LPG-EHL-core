@@ -66,12 +66,11 @@ object EhlPacketFormatter {
     }
     
     private fun formatVolumeData(data: ByteArray): String {
-        if (data.size != 4) return "Invalid data size: ${data.size}"
+        if (data.size != 5) return "Invalid data size: ${data.size} (expected 5 ASCII digits LSB-first)"
         
         return try {
-            val (litres, cents) = EhlDataParser.parseVolumeData(data)
-            val kr = cents / 100.0
-            "Volume=%.2f L | Amount=%.2f kr (%d øre)".format(litres, kr, cents)
+            val litres = EhlDataParser.parseVolumeDataVb6(data)
+            "Volume=%.2f L".format(litres)
         } catch (e: Exception) {
             "Parse error: ${e.message}"
         }

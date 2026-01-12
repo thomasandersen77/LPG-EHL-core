@@ -23,6 +23,9 @@ class WireTraceService(
 ) {
     private val logger = LoggerFactory.getLogger(WireTraceService::class.java)
     
+    // Protocol configuration: Norges Gass variant (0x10/0x20/0x36)
+    private val protocolConfig = EhlProtocolConfig.norgesGass()
+    
     /**
      * Utfør en protokollkommando og returner wire trace data.
      * 
@@ -133,10 +136,13 @@ class WireTraceService(
         val txEtx = txBytes[txBytes.size - 1].toInt() and 0xFF
         val rxEtx = rxBytes[rxBytes.size - 1].toInt() and 0xFF
         
+        val expTxStx = protocolConfig.stxController.toInt() and 0xFF
+        val expRxStx = protocolConfig.stxDispenser.toInt() and 0xFF
+        val expEtx   = protocolConfig.etx.toInt() and 0xFF
         checks.add(ValidationCheck(
             name = "STX/ETX",
-            ok = txStx == 0x10 && rxStx == 0x20 && txEtx == 0x36 && rxEtx == 0x36,
-            details = "TX STX=0x${"%02X".format(txStx)}, RX STX=0x${"%02X".format(rxStx)}, ETX=0x${"%02X".format(txEtx)}/0x${"%02X".format(rxEtx)}"
+            ok = txStx == expTxStx && rxStx == expRxStx && txEtx == expEtx && rxEtx == expEtx,
+            details = "TX STX=0x${"%02X".format(txStx)} (exp 0x${"%02X".format(expTxStx)}), RX STX=0x${"%02X".format(rxStx)} (exp 0x${"%02X".format(expRxStx)}), ETX=0x${"%02X".format(txEtx)}/0x${"%02X".format(rxEtx)} (exp 0x${"%02X".format(expEtx)})"
         ))
         
         // Sjekk LEN
@@ -236,10 +242,11 @@ class WireTraceService(
     
     private fun calculateChecksum(bytes: ByteArray): Int {
         var xor = 0
-        for (i in 1 until bytes.size - 2) {
+        // VB6 XOR inkluderer STX og går til og med siste DATA-byte (eks klargjort CHK/ETX)
+        for (i in 0 until bytes.size - 2) {
             xor = xor xor (bytes[i].toInt() and 0xFF)
         }
-        return xor
+        return xor and 0xFF
     }
     
     private fun parsedData(command: EhlCommand, data: ByteArray): Map<String, Any> {
