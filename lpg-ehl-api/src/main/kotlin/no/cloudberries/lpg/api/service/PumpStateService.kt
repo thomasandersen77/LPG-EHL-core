@@ -2,7 +2,6 @@ package no.cloudberries.lpg.api.service
 
 import jakarta.annotation.PostConstruct
 import kotlinx.coroutines.*
-import no.cloudberries.lpg.api.repository.PriceHistoryRepository
 import no.cloudberries.lpg.api.websocket.LogWebSocketHandler
 import no.cloudberries.lpg.communication.EhlCommunicator
 import no.cloudberries.lpg.emulator.EhlDispenserEmulator
@@ -32,7 +31,7 @@ class PumpStateService(
     private val transactionService: TransactionService,
     private val ehlCommunicator: EhlCommunicator,
     private val dispenserEmulator: EhlDispenserEmulator?,  // Null i FIELD MODE
-    private val priceHistoryRepository: PriceHistoryRepository
+    private val priceService: PriceService
 ) {
     private val logger = LoggerFactory.getLogger(PumpStateService::class.java)
     private val protocolLogger = LoggerFactory.getLogger("no.cloudberries.lpg.protocol")
@@ -63,22 +62,16 @@ class PumpStateService(
      */
     @PostConstruct
     fun initializePriceFromDatabase() {
-        logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         logger.info("🌟 OPPSTART: Initialiserer pris...")
         
         try {
-            // Prøv å hente siste pris fra database
-            val dbPrice = priceHistoryRepository.findCurrentPrice("LPG", LocalDateTime.now())
+            // Hent gjeldende pris fra PriceService
+            val dbPrice = priceService.getCurrentPrice("LPG")
             
             if (dbPrice != null) {
                 val priceKr = dbPrice.pricePerLiter.toDouble()
                 currentPriceKr = priceKr
-                
-                // Synkroniser med emulator
-                dispenserEmulator?.let { emulator ->
-                    val priceOre = (priceKr * 100).toInt()
-                    emulator.setPrice(priceOre)
-                }
                 
                 logger.info("🏷️ STARTUP: Gjenopprettet pris $priceKr kr/L fra database")
                 logger.info("   Satt av: ${dbPrice.createdBy ?: "ukjent"}")
@@ -105,7 +98,7 @@ class PumpStateService(
             logWebSocketHandler.broadcastPriceUpdate(currentPriceKr)
         }
         
-        logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
     
     data class PumpState(

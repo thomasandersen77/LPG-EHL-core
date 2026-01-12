@@ -3,6 +3,9 @@ package no.cloudberries.lpg.api.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import no.cloudberries.lpg.api.model.Transaction
+import no.cloudberries.lpg.api.pls.MockPlsService
+import no.cloudberries.lpg.api.repository.RoadTaxSettingsRepository
+import no.cloudberries.lpg.api.repository.TransactionRepository
 import no.cloudberries.lpg.api.service.TransactionService
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
@@ -23,9 +26,9 @@ import java.time.LocalDateTime
 @Tag(name = "Demo Dispenser", description = "Demo endpoints for frontend testing (deprecated)")
 class DemoDispenserController(
     private val transactionService: TransactionService,
-    private val transactionRepository: no.cloudberries.lpg.api.repository.TransactionRepository,
-    private val plsService: no.cloudberries.lpg.api.pls.MockPlsService?,
-    private val roadTaxSettingsRepository: no.cloudberries.lpg.api.repository.RoadTaxSettingsRepository
+    private val transactionRepository: TransactionRepository,
+    private val plsService: MockPlsService?,
+    private val roadTaxSettingsRepository: RoadTaxSettingsRepository
 ) {
 
     // Simulated state

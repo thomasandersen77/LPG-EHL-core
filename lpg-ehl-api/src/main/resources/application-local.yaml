@@ -5,10 +5,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate  # Validate schema against entities, use Liquibase for changes
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
 
   liquibase:
     enabled: true
@@ -48,6 +48,6 @@ logging:
   level:
     root: INFO
     no.cloudberries.lpg: DEBUG
-    org.springframework.security: DEBUG
-    org.hibernate.SQL: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: INFO
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
