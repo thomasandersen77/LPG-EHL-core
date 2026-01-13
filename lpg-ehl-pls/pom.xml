@@ -19,6 +19,7 @@
         <dependency>
             <groupId>no.cloudberries.lpg</groupId>
             <artifactId>lpg-ehl-core</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
         <!-- jSerialComm for real serial port communication -->

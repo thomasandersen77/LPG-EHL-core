@@ -30,7 +30,6 @@ import jakarta.annotation.PostConstruct
  *     price-per-liter-cents: 1590
  * ```
  */
-@Component
 @ConditionalOnProperty(
     name = ["ehl.emulator.enabled"],
     havingValue = "true",

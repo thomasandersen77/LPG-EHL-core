@@ -26,7 +26,6 @@ import jakarta.annotation.PreDestroy
  *     baud-rate: 9600
  * ```
  */
-@Component
 @ConditionalOnProperty(
     name = ["ehl.emulator.enabled"],
     havingValue = "false"

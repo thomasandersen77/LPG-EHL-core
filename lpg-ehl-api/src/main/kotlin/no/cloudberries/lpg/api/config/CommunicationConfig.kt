@@ -46,37 +46,25 @@ class CommunicationConfig {
         logger.info("")
     }
     
-    /**
-     * EhlCommunicator - hovedprotokoll-laget.
-     * 
-     * Spring injiserer automatisk riktig SerialTransport-implementasjon:
-     * - EmulatorSerialPortAdapter (LAB MODE) eller
-     * - RealSerialPortAdapter (FIELD MODE)
-     * 
-     * basert på ehl.emulator.enabled property.
-     */
-    @Bean
-    fun ehlCommunicator(transport: SerialTransport): EhlCommunicator {
-        logger.info("🔧 Oppretter EhlCommunicator med ${transport::class.simpleName}")
-        
-        // Koble til serial port
-        if (!transport.isConnected) {
-            transport.connect()
-        }
-        
-        return EhlCommunicator(transport)
-    }
     
     /**
      * Eksponerer EhlDispenserEmulator kun i LAB MODE.
      * Brukes av ProtocolTestController for debugging.
      */
     @Bean
-    fun dispenserEmulator(transport: SerialTransport): EhlDispenserEmulator? {
-        return if (transport is EmulatorSerialPortAdapter) {
-            transport.getEmulator()
-        } else {
-            null  // Ingen emulator i FIELD MODE
-        }
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = ["ehl.emulator.enabled"],
+        havingValue = "true",
+        matchIfMissing = true
+    )
+    fun dispenserEmulator(
+        @Value("\${ehl.emulator.dispenser-address:1}") dispenserAddress: Int,
+        @Value("\${ehl.emulator.price-per-liter-cents:1590}") pricePerLiterCents: Int
+    ): EhlDispenserEmulator {
+        logger.info("🧪 Creating EhlDispenserEmulator (address=$dispenserAddress, price=$pricePerLiterCents)")
+        return EhlDispenserEmulator(
+            address = dispenserAddress,
+            pricePerLitreCents = pricePerLiterCents
+        )
     }
 }

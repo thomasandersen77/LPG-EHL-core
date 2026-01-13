@@ -2,7 +2,7 @@
 # zip-modules-for-ai.sh - Export each module as separate zip for AI analysis
 # 
 # Usage: ./scripts/zip-modules-for-ai.sh
-# Output: Four separate zip files (core, api, emulator, web)
+# Output: Six separate zip files (core, api, emulator, pls, cli, web)
 
 set -e
 
@@ -49,8 +49,10 @@ zip_module() {
 
 # Zip each module
 zip_module "lpg-ehl-core"
-zip_module "lpg-ehl-api"
 zip_module "lpg-ehl-emulator"
+zip_module "lpg-ehl-pls"
+zip_module "lpg-ehl-api"
+zip_module "lpg-ehl-cli"
 zip_module "lpg-web"
 
 echo ""
@@ -58,5 +60,12 @@ echo "📋 Created archives:"
 ls -lh lpg-ehl-*-${TIMESTAMP}.zip | awk '{print "   " $9 " (" $5 ")"}'
 
 echo ""
-echo "✅ Done! Four separate module archives created."
+echo "✅ Done! Six module archives created:"
+echo "   • lpg-ehl-core      - EHL protocol implementation (Kotlin)"
+echo "   • lpg-ehl-emulator  - Virtual dispenser for testing (Kotlin)"
+echo "   • lpg-ehl-pls       - Physical Layer Support for real serial ports (Kotlin)"
+echo "   • lpg-ehl-api       - REST API + Spring Boot (Kotlin)"
+echo "   • lpg-ehl-cli       - Command Line Interface with Spring Shell (Kotlin)"
+echo "   • lpg-web           - React frontend (TypeScript)"
+echo ""
 echo "⚡ Each contains only source code, configs, and docs - no build artifacts or dependencies."

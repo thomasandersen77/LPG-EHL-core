@@ -37,6 +37,9 @@ class WireTraceService(
     fun executeCommand(command: EhlCommand, address: Int, timeoutMs: Long = 3000): WireTraceResult {
         logger.info("📡 Wire Test: ${command.name} til adresse $address")
         
+        // CRITICAL: Clear buffer before test to avoid receiving old packets
+        communicator.clearBuffer()
+        
         // Bygg TX-pakke
         val txPacket = EhlPacket(address, command, ByteArray(0))
         val txBytes = EhlCodec.encode(txPacket, fromController = true)

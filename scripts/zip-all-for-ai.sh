@@ -32,6 +32,20 @@ zip -q -r lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src \
     -x "*/target/*" "*/.idea/*"
 echo "✓ Emulator module zipped ($(du -h lpg-ehl-emulator-for-ai.zip | cut -f1))"
 
+# PLS module (Physical Layer Support)
+echo "📦 Zipping PLS module..."
+zip -q -r lpg-ehl-pls-for-ai.zip lpg-ehl-pls/src \
+    lpg-ehl-pls/pom.xml \
+    -x "*/target/*" "*/.idea/*"
+echo "✓ PLS module zipped ($(du -h lpg-ehl-pls-for-ai.zip | cut -f1))"
+
+# CLI module (Spring Shell)
+echo "📦 Zipping CLI module..."
+zip -q -r lpg-ehl-cli-for-ai.zip lpg-ehl-cli/src \
+    lpg-ehl-cli/pom.xml \
+    -x "*/target/*" "*/.idea/*"
+echo "✓ CLI module zipped ($(du -h lpg-ehl-cli-for-ai.zip | cut -f1))"
+
 # VB6 Legacy Code
 echo "📦 Zipping VB6 legacy code..."
 zip -q -r norgesgass-legacy-for-ai.zip norgesgass_legacy/ \
@@ -64,8 +78,10 @@ ls -lh *-for-ai.zip | awk '{printf "   %s  %s\n", $5, $9}'
 echo ""
 echo "📤 Upload these files to AI (Claude, ChatGPT, Gemini) for analysis:"
 echo "   • lpg-ehl-core-for-ai.zip      - Core EHL protocol implementation"
+echo "   • lpg-ehl-emulator-for-ai.zip  - Virtual dispenser for testing"
+echo "   • lpg-ehl-pls-for-ai.zip       - Physical Layer Support (real serial)"
 echo "   • lpg-ehl-api-for-ai.zip       - REST API + Nets Cloud Connect"
-echo "   • lpg-ehl-emulator-for-ai.zip  - Testing emulator"
+echo "   • lpg-ehl-cli-for-ai.zip       - Command Line Interface (Spring Shell)"
 echo "   • norgesgass-legacy-for-ai.zip - Original VB6 code"
 echo "   • python-legacy-for-ai.zip     - Python PoC"
 echo "   • docs-for-ai.zip              - All documentation"
