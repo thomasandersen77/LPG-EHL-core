@@ -29,12 +29,17 @@ class RealSerialTransport(
     
     override fun connect(): Boolean {
         try {
-            // Find the serial port
-            val port = SerialPort.getCommPort(portName)
-            if (port == null) {
-                logger.error("Serial port $portName not found")
-                return false
+            // Check if port is in enumerated list (informational only)
+            val availablePorts = SerialPort.getCommPorts()
+            val portExists = availablePorts.any { it.systemPortName == portName || it.systemPortPath == portName }
+            
+            if (!portExists) {
+                logger.warn("Port $portName not in enumerated list. Available: ${availablePorts.joinToString { it.systemPortPath }}")
+                logger.warn("Attempting connection anyway (may be virtual/PTY device)...")
             }
+            
+            // Attempt to open the serial port (works for both real and virtual ports)
+            val port = SerialPort.getCommPort(portName)
             
             // Configure serial parameters: 9600 8N1
             port.baudRate = baudRate
