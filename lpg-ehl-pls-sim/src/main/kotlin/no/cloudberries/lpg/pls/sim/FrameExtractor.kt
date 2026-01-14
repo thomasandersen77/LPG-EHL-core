@@ -14,10 +14,14 @@ class FrameExtractor(
     private val log = LoggerFactory.getLogger(FrameExtractor::class.java)
     private val buffer = ByteArrayOutputStream()
     private var inFrame = false  // For STX/ETX mode
+    private var expectedLength = 0  // For EHL mode
 
     companion object {
         const val STX: Byte = 0x02
         const val ETX: Byte = 0x03
+        const val STX_CONTROLLER: Byte = 0x10  // EHL: PC -> Dispenser
+        const val STX_DISPENSER: Byte = 0x20   // EHL: Dispenser -> PC
+        const val ETX_EHL: Byte = 0x36         // EHL: End marker
         const val LF: Byte = 0x0A   // '\n'
         const val CR: Byte = 0x0D   // '\r'
     }
@@ -37,6 +41,38 @@ class FrameExtractor(
         
         for (b in bytes) {
             when (mode) {
+                FrameMode.EHL -> {
+                    buffer.write(b.toInt())
+                    
+                    // Looking for STX (0x10)
+                    if (buffer.size() == 1) {
+                        if (b != STX_CONTROLLER && b != STX_DISPENSER) {
+                            // Invalid STX - reset and skip
+                            buffer.reset()
+                            continue
+                        }
+                    }
+                    
+                    // Got LEN byte - store expected length
+                    if (buffer.size() == 2) {
+                        expectedLength = b.toInt() and 0xFF
+                        if (expectedLength < 6) {
+                            // Invalid length - reset
+                            log.warn("Invalid EHL length: {}", expectedLength)
+                            buffer.reset()
+                            expectedLength = 0
+                            continue
+                        }
+                    }
+                    
+                    // Check if we have complete frame
+                    if (expectedLength > 0 && buffer.size() == expectedLength) {
+                        val frame = buffer.toByteArray()
+                        buffer.reset()
+                        expectedLength = 0
+                        frames.add(frame)
+                    }
+                }
                 FrameMode.LINE -> {
                     if (b == LF) {
                         // Frame complete
@@ -88,6 +124,7 @@ class FrameExtractor(
     fun clear() {
         buffer.reset()
         inFrame = false
+        expectedLength = 0
     }
 }
 
