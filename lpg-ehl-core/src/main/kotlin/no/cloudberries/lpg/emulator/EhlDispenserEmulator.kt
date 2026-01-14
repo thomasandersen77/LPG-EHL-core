@@ -20,10 +20,15 @@ import kotlin.math.roundToInt
  */
 class EhlDispenserEmulator(
     private val address: Int = 1,
-    private val pricePerLitreCents: Int = 1590,
+    pricePerLitreCents: Int = 1590,
     private val litresPerSecond: Double = 0.5
 ) {
     private val logger = LoggerFactory.getLogger(EhlDispenserEmulator::class.java)
+    
+    // Mutable price - can be changed dynamically
+    @Volatile
+    var currentPricePerLitreCents: Int = pricePerLitreCents
+        private set
     
     private var state: EmulatorState = EmulatorState.IDLE
     private var activeTx: ActiveTransaction? = null
@@ -32,8 +37,23 @@ class EhlDispenserEmulator(
     
     init {
         require(address in 1..255) { "Address must be 1-255" }
-        logger.info("EHL Dispenser Emulator initialized: address=$address, price=${pricePerLitreCents/100.0} kr/L")
+        logger.info("EHL Dispenser Emulator initialized: address=$address, price=${currentPricePerLitreCents/100.0} kr/L")
     }
+    
+    /**
+     * Update the price per litre.
+     * Takes effect immediately for new transactions.
+     */
+    fun setPrice(pricePerLitreCents: Int) {
+        logger.info("💰 Pris oppdatert: ${this.currentPricePerLitreCents/100.0} kr/L → ${pricePerLitreCents/100.0} kr/L")
+        this.currentPricePerLitreCents = pricePerLitreCents
+        simulator.updatePrice(pricePerLitreCents)
+    }
+    
+    /**
+     * Get the current price per litre in kr.
+     */
+    fun getPricePerLitreKr(): Double = currentPricePerLitreCents / 100.0
     
     /**
      * Process bytes from controller and return response packets.
@@ -77,6 +97,7 @@ class EhlDispenserEmulator(
             EhlCommand.VOLUME -> listOf(buildVolumeResponse())
             EhlCommand.PRICE -> listOf(buildPriceResponse())
             EhlCommand.PRODUCT_SELECT -> handleProductSelect()
+            EhlCommand.LINETEST -> listOf(buildLinetestResponse())
             else -> {
                 logger.warn("Unsupported command: ${packet.command}")
                 listOf(buildErrorPacket(0x10)) // Unsupported command
@@ -152,7 +173,7 @@ class EhlDispenserEmulator(
                     id = "TX-${System.currentTimeMillis()}",
                     volumeLitres = active.volumeLitres,
                     amountCents = active.amountCents,
-                    unitPriceCents = pricePerLitreCents,
+                    unitPriceCents = currentPricePerLitreCents,
                     startedAt = active.startMs,
                     stoppedAt = stopMs
                 )
@@ -183,14 +204,18 @@ class EhlDispenserEmulator(
         if (state == EmulatorState.DELIVERING && activeTx != null) {
             val elapsedSeconds = (System.currentTimeMillis() - activeTx!!.startMs) / 1000.0
             activeTx!!.volumeLitres = elapsedSeconds * litresPerSecond
-            activeTx!!.amountCents = (activeTx!!.volumeLitres * pricePerLitreCents).roundToInt()
+            activeTx!!.amountCents = (activeTx!!.volumeLitres * currentPricePerLitreCents).roundToInt()
         }
         
+        // VB6-compatible state byte using bit flags:
+        // Bit 1 (0x02): OPEN_FOR_DELIVERY - nozzle lifted, fuel flowing
+        // Bit 2 (0x04): START_BUTTON_PRESSED - authorization active
+        // Bit 3 (0x08): AUTOMODE - transaction complete/pending
         val stateCode = when (state) {
-            EmulatorState.IDLE -> 0x00
-            EmulatorState.AUTHORIZED -> 0x01
-            EmulatorState.DELIVERING -> 0x02
-            EmulatorState.PAYMENT_PENDING -> 0x08  // State code 8
+            EmulatorState.IDLE -> 0x00                        // No flags
+            EmulatorState.AUTHORIZED -> 0x04                  // START_BUTTON_PRESSED
+            EmulatorState.DELIVERING -> 0x06                  // START_BUTTON_PRESSED + OPEN_FOR_DELIVERY
+            EmulatorState.PAYMENT_PENDING -> 0x08             // AUTOMODE (transaction complete)
         }
         
         val data = byteArrayOf(stateCode.toByte())
@@ -198,38 +223,50 @@ class EhlDispenserEmulator(
     }
     
     private fun buildVolumeResponse(): EhlPacket {
-        val (volDeci, amount) = when {
-            completedTx != null -> {
-                // Return frozen totals from completed transaction
-                val vol = (completedTx!!.volumeLitres * 10).roundToInt()
-                Pair(vol, completedTx!!.amountCents)
-            }
-            activeTx != null -> {
-                // Return current totals from active transaction
-                val vol = (activeTx!!.volumeLitres * 10).roundToInt()
-                Pair(vol, activeTx!!.amountCents)
-            }
-            else -> {
-                // No transaction - return zeros
-                Pair(0, 0)
-            }
+        // Get volume in liters
+        val volumeLitres = when {
+            completedTx != null -> completedTx!!.volumeLitres
+            activeTx != null -> activeTx!!.volumeLitres
+            else -> 0.0
         }
         
-        val data = ByteArray(4)
-        data[0] = ((volDeci shr 8) and 0xFF).toByte()
-        data[1] = (volDeci and 0xFF).toByte()
-        data[2] = ((amount shr 8) and 0xFF).toByte()
-        data[3] = (amount and 0xFF).toByte()
+        // VB6 format: 5 ASCII bytes LSB-first
+        // Example: 45.50 L -> 4550 centilitres -> "04550" -> bytes ['0','5','5','4','0']
+        val volumeCentilitres = (volumeLitres * 100).roundToInt().coerceIn(0, 99999)
+        val volumeString = "%05d".format(volumeCentilitres)  // "04550"
         
+        val data = ByteArray(5)
+        for (i in 0..4) {
+            // LSB-first: reverse the string order
+            data[i] = volumeString[4 - i].code.toByte()
+        }
+        
+        logger.debug("VOLUME response: $volumeLitres L -> '$volumeString' -> ${data.map { "%02X".format(it) }}")
         return EhlPacket(address, EhlCommand.VOLUME, data)
     }
     
     private fun buildPriceResponse(): EhlPacket {
-        // Return current price
-        val data = ByteArray(2)
-        data[0] = ((pricePerLitreCents shr 8) and 0xFF).toByte()
-        data[1] = (pricePerLitreCents and 0xFF).toByte()
+        // VB6 format: 4 ASCII bytes LSB-first
+        // Example: 15.90 kr/L -> 1590 øre -> "1590" -> bytes ['0','9','5','1']
+        // VB6 reads: dispris.Caption = Chr(x(7)) & Chr(x(6)) & "." & Chr(x(5)) & Chr(x(4))
+        val priceString = "%04d".format(currentPricePerLitreCents.coerceIn(0, 9999))  // "1590"
+        
+        val data = ByteArray(4)
+        for (i in 0..3) {
+            // LSB-first: reverse the string order
+            data[i] = priceString[3 - i].code.toByte()
+        }
+        
+        logger.debug("PRICE response: $currentPricePerLitreCents øre -> '$priceString' -> ${data.map { "%02X".format(it) }}")
         return EhlPacket(address, EhlCommand.PRICE, data)
+    }
+    
+    private fun buildLinetestResponse(): EhlPacket {
+        // VB6 format: magic bytes 0x55 0xAA to confirm line is working
+        // VB6 fra_dispenser.bas: y(5) = &H55, y(6) = &HAA
+        val data = byteArrayOf(0x55, 0xAA.toByte())
+        logger.debug("LINETEST response: 0x55 0xAA")
+        return EhlPacket(address, EhlCommand.LINETEST, data)
     }
     
     private fun buildErrorPacket(code: Int): EhlPacket {

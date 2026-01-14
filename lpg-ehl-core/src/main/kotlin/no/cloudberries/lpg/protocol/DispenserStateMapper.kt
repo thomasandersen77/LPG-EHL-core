@@ -6,30 +6,29 @@ import org.slf4j.LoggerFactory
  * Domain State Mapper - Translates raw EHL protocol bytes to domain DispenserStatus.
  * 
  * ## Responsibility:
- * - Parse the payload from 0x4B (STATE_POLL) responses
- * - Apply bit-mask logic to extract hardware flags
+ * - Parse the payload from 0x4B (STATE) responses
+ * - Apply VB6-compatible bit-mask logic to extract hardware flags
  * - Map to clean domain states (IDLE, AUTHORIZED, PUMPING, STOPPED, ERROR)
  * 
  * ## Protocol Contract:
- * Input: Byte array from STATE_POLL (0x4B) response
+ * Input: Byte array from STATE (0x4B) response
  * Output: DispenserStatus sealed interface instance
  * 
- * ## Bit Mapping (from VB6 Legacy Analysis):
- * ```
- * Bit 0 (0x01): Start Switch Active - Pump ready for authorization
- * Bit 1 (0x02): Nozzle Lifted - Physical nozzle removed from holster
- * Bit 2 (0x04): Delivery Active - Fuel flow in progress
- * Bit 3 (0x08): Transaction Complete - Delivery finished, data available
- * Bit 7 (0x80): Error Flag - Hardware fault or error condition
+ * ## VB6 Bit Mapping (pumpekontroll.frm lines 2734-2805):
+ * ```vb
+ * state_string = decimaltobinn(x(4))
+ * If Mid(state_string, 5, 1) = "1" Then disp_automode = True           ' bit3 = 0x08
+ * If Mid(state_string, 6, 1) = "1" Then DISP_startbuttonpressed = True ' bit2 = 0x04
+ * If Mid(state_string, 7, 1) = "1" Then DISP_openfordelivery = True    ' bit1 = 0x02
  * ```
  * 
- * ## State Decision Logic:
+ * ## VB6-Compatible State Decision Logic:
  * ```
- * ERROR_FLAG set             → ERROR
- * TRANSACTION_COMPLETE set   → STOPPED
- * DELIVERY_ACTIVE set        → PUMPING
- * START_SWITCH && !NOZZLE    → AUTHORIZED
- * None of above              → IDLE
+ * ERROR_FLAG (0x80) set                              → ERROR
+ * AUTOMODE (0x08) set                                → PAYMENT_PENDING (trans complete)
+ * START_BUTTON (0x04) && OPEN_FOR_DELIVERY (0x02)   → PUMPING
+ * START_BUTTON (0x04) && !OPEN_FOR_DELIVERY         → AUTHORIZED
+ * !START_BUTTON && !OPEN_FOR_DELIVERY               → IDLE
  * ```
  */
 object DispenserStateMapper {
@@ -38,26 +37,27 @@ object DispenserStateMapper {
     /**
      * Map raw protocol bytes to domain DispenserStatus.
      * 
-     * @param payload Byte array from 0x4B (STATE_POLL) response
+     * VB6-compatible implementation based on pumpekontroll.frm.
+     * 
+     * @param payload Byte array from 0x4B (STATE) response
      * @return DispenserStatus - the interpreted domain state
      * 
      * @throws IllegalArgumentException if payload is empty
      */
     fun mapToDispenserStatus(payload: ByteArray): DispenserStatus {
         if (payload.isEmpty()) {
-            logger.warn("Empty payload for STATE_POLL response - returning UNKNOWN")
+            logger.warn("Empty payload for STATE response - returning UNKNOWN")
             return DispenserStatus.UNKNOWN(0x00)
         }
         
         // First byte contains the status flags
         val statusByte = payload[0]
         
-        // Extract bit flags for clarity (no magic numbers in logic)
-        val hasErrorFlag = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.ERROR_FLAG)
-        val isTransactionComplete = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.TRANSACTION_COMPLETE)
-        val isDeliveryActive = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.DELIVERY_IN_PROGRESS)
-        val isNozzleLifted = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.NOZZLE_LIFTED)
-        val isStartSwitchActive = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.START_SWITCH_ACTIVE)
+        // Extract VB6-compatible bit flags
+        val hasError = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.ERROR_FLAG)
+        val automode = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.AUTOMODE)
+        val startButtonPressed = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.START_BUTTON_PRESSED)
+        val openForDelivery = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.OPEN_FOR_DELIVERY)
         
         // Log bit state for debugging (trace level)
         if (logger.isTraceEnabled) {
@@ -65,43 +65,45 @@ object DispenserStateMapper {
             logger.trace("Status byte 0x${"%02X".format(statusByte)}: $bits")
         }
         
-        // Decision tree - order matters (most specific first)
+        // VB6-compatible decision tree - order matters!
         return when {
             // Priority 1: Error state always takes precedence
-            hasErrorFlag -> {
+            hasError -> {
                 val errorCode = if (payload.size > 1) payload[1].toInt() else 0
                 logger.debug("Error state detected: code=$errorCode")
                 DispenserStatus.ERROR(errorCode)
             }
             
-            // Priority 2: Transaction complete (stopped state)
-            // Note: This represents the PAYMENT_PENDING state (state code 8)
-            // where totals are frozen and require reset before next transaction
-            isTransactionComplete -> {
-                logger.debug("Transaction complete - PAYMENT_PENDING state")
+            // Priority 2: Automode bit indicates transaction state
+            // VB6: When trans_unaccounted or trans_finished, automode bit is often set
+            // This represents PAYMENT_PENDING state where totals are frozen
+            automode && !startButtonPressed && !openForDelivery -> {
+                logger.debug("Automode set, no activity - PAYMENT_PENDING state")
                 DispenserStatus.PAYMENT_PENDING
             }
             
             // Priority 3: Active delivery (pumping)
-            isDeliveryActive && isNozzleLifted -> {
-                logger.debug("Delivery active with nozzle lifted - PUMPING state")
+            // VB6: DISP_startbuttonpressed AND DISP_openfordelivery
+            startButtonPressed && openForDelivery -> {
+                logger.debug("Start button + open for delivery - PUMPING state")
                 DispenserStatus.PUMPING
             }
             
             // Priority 4: Authorized but not yet pumping
-            // This occurs after PRODUCT_SELECT + UNBLOCK but before nozzle lift
-            isStartSwitchActive && !isNozzleLifted && !isDeliveryActive -> {
-                logger.debug("Start switch active, nozzle holstered - AUTHORIZED state")
+            // VB6: DISP_startbuttonpressed AND NOT DISP_openfordelivery
+            startButtonPressed && !openForDelivery -> {
+                logger.debug("Start button pressed, waiting for delivery - AUTHORIZED state")
                 DispenserStatus.AUTHORIZED
             }
             
             // Priority 5: Idle - default state when nothing is happening
-            !isStartSwitchActive && !isNozzleLifted && !isDeliveryActive -> {
+            // VB6: NOT DISP_startbuttonpressed AND NOT DISP_openfordelivery
+            !startButtonPressed && !openForDelivery -> {
                 logger.debug("All flags clear - IDLE state")
                 DispenserStatus.IDLE
             }
             
-            // Fallback: Unknown bit combination
+            // Fallback: Unknown bit combination (e.g., openForDelivery without startButton)
             else -> {
                 logger.warn("Unknown bit combination in status byte: 0x${"%02X".format(statusByte)}")
                 DispenserStatus.UNKNOWN(statusByte)

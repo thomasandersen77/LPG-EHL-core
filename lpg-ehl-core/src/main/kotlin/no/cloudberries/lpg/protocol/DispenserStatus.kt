@@ -71,21 +71,47 @@ sealed interface DispenserStatus {
 }
 
 /**
- * Status bit masks for parsing 0x4B (STATE_POLL) response payload.
+ * VB6-Compatible Status Bit Masks for parsing 0x4B (STATE) response payload.
  * 
- * Based on legacy VB6 analysis:
- * - Bit 0 (0x01): Start Switch Active / Ready to Fuel
- * - Bit 1 (0x02): Nozzle Lifted
- * - Bit 2 (0x04): Delivery in Progress
- * - Bit 3 (0x08): Transaction Complete
+ * Based on VB6 legacy code (pumpekontroll.frm lines 2734-2805):
+ * ```vb
+ * state_string = decimaltobinn(x(4))
+ * If Mid(state_string, 5, 1) = "1" Then disp_automode = True      ' bit3 = 0x08
+ * If Mid(state_string, 6, 1) = "1" Then DISP_startbuttonpressed = True  ' bit2 = 0x04
+ * If Mid(state_string, 7, 1) = "1" Then DISP_openfordelivery = True     ' bit1 = 0x02
+ * ```
+ * 
+ * VB6 Bit Mapping:
+ * - Bit 1 (0x02): Open for Delivery (DISP_openfordelivery)
+ * - Bit 2 (0x04): Start Button Pressed (DISP_startbuttonpressed) 
+ * - Bit 3 (0x08): Auto Mode (disp_automode)
  * - Bit 7 (0x80): Error Flag
  */
 object StatusBitMasks {
-    const val START_SWITCH_ACTIVE: Int = 0x01
-    const val NOZZLE_LIFTED: Int = 0x02
-    const val DELIVERY_IN_PROGRESS: Int = 0x04
-    const val TRANSACTION_COMPLETE: Int = 0x08
+    /** Bit 1: Dispenser is open for delivery / nozzle lifted */
+    const val OPEN_FOR_DELIVERY: Int = 0x02
+    
+    /** Bit 2: Start button has been pressed */
+    const val START_BUTTON_PRESSED: Int = 0x04
+    
+    /** Bit 3: Auto mode enabled */
+    const val AUTOMODE: Int = 0x08
+    
+    /** Bit 7: Error condition */
     const val ERROR_FLAG: Int = 0x80
+    
+    // Legacy aliases for backward compatibility
+    @Deprecated("Use START_BUTTON_PRESSED instead", ReplaceWith("START_BUTTON_PRESSED"))
+    const val START_SWITCH_ACTIVE: Int = START_BUTTON_PRESSED
+    
+    @Deprecated("Use OPEN_FOR_DELIVERY instead", ReplaceWith("OPEN_FOR_DELIVERY"))
+    const val NOZZLE_LIFTED: Int = OPEN_FOR_DELIVERY
+    
+    @Deprecated("Use AUTOMODE instead", ReplaceWith("AUTOMODE"))
+    const val DELIVERY_IN_PROGRESS: Int = AUTOMODE
+    
+    @Deprecated("Use AUTOMODE instead - VB6 uses automode bit for transaction state", ReplaceWith("AUTOMODE"))
+    const val TRANSACTION_COMPLETE: Int = AUTOMODE
     
     /**
      * Check if a specific bit is set in the status byte
@@ -95,14 +121,13 @@ object StatusBitMasks {
     }
     
     /**
-     * Extract multiple bits as a boolean map
+     * Extract VB6-compatible bits as a boolean map
      */
     fun extractBits(statusByte: Byte): Map<String, Boolean> {
         return mapOf(
-            "startSwitch" to isBitSet(statusByte, START_SWITCH_ACTIVE),
-            "nozzleLifted" to isBitSet(statusByte, NOZZLE_LIFTED),
-            "deliveryActive" to isBitSet(statusByte, DELIVERY_IN_PROGRESS),
-            "transactionComplete" to isBitSet(statusByte, TRANSACTION_COMPLETE),
+            "openForDelivery" to isBitSet(statusByte, OPEN_FOR_DELIVERY),
+            "startButtonPressed" to isBitSet(statusByte, START_BUTTON_PRESSED),
+            "automode" to isBitSet(statusByte, AUTOMODE),
             "error" to isBitSet(statusByte, ERROR_FLAG)
         )
     }

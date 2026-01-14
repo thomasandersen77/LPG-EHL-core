@@ -114,4 +114,94 @@ class TransactionService(
         
         return saved
     }
+    
+    // ============================================================
+    // PUMP LIFECYCLE METHODS
+    // ============================================================
+    
+    /**
+     * Create a new transaction when pump is unblocked (STARTED status).
+     * Called when FRI PUMPE is pressed.
+     */
+    @Transactional
+    fun createStartedTransaction(
+        dispenserAddress: Int,
+        pricePerLiterKr: Double
+    ): Transaction {
+        val transaction = Transaction(
+            dispenserAddress = dispenserAddress,
+            nozzleNumber = 1,
+            volumeDeciliters = 0,
+            amountOre = 0,
+            pricePerLiter = java.math.BigDecimal.valueOf(pricePerLiterKr),
+            paymentType = null,
+            paymentStatus = "STARTED",
+            productCode = "LPG",
+            includesRoadTax = true
+        )
+        
+        val saved = transactionRepository.save(transaction)
+        logger.info("⛽ Transaksjon opprettet: ID={}, dispenser={}, pris={} kr/L, status=STARTED", 
+            saved.transactionId, dispenserAddress, pricePerLiterKr)
+        
+        return saved
+    }
+    
+    /**
+     * Update transaction volume and amount during/after pumping.
+     * Called periodically and when pump is stopped.
+     */
+    @Transactional
+    fun updateTransactionVolume(
+        transactionId: UUID,
+        volumeLiters: Double,
+        amountKr: Double,
+        newStatus: String? = null
+    ): Transaction? {
+        val transaction = transactionRepository.findById(transactionId).orElse(null) ?: return null
+        
+        transaction.volumeDeciliters = (volumeLiters * 10).toInt()
+        transaction.amountOre = (amountKr * 100).toInt()
+        
+        if (newStatus != null) {
+            transaction.paymentStatus = newStatus
+        }
+        
+        val saved = transactionRepository.save(transaction)
+        
+        if (newStatus == "PENDING") {
+            logger.info("🛑 Transaksjon stoppet: ID={}, volum={} L, beløp={} kr, status=PENDING",
+                transactionId, volumeLiters, amountKr)
+        }
+        
+        return saved
+    }
+    
+    /**
+     * Mark transaction as paid.
+     * Called when SIMULER BETALING is pressed.
+     */
+    @Transactional
+    fun markTransactionPaid(
+        transactionId: UUID,
+        paymentMethod: String = "CARD"
+    ): Transaction? {
+        val transaction = transactionRepository.findById(transactionId).orElse(null) ?: return null
+        
+        transaction.paymentType = paymentMethod
+        transaction.paymentStatus = "PAID"
+        
+        val saved = transactionRepository.save(transaction)
+        
+        // Queue for Azure sync
+        transactionSyncService?.queueTransactionForSync(saved, "PAID")
+        
+        logger.info("💳 Transaksjon betalt: ID={}, volum={} L, beløp={} kr, metode={}",
+            transactionId, 
+            saved.volumeDeciliters / 10.0,
+            saved.amountOre / 100.0,
+            paymentMethod)
+        
+        return saved
+    }
 }

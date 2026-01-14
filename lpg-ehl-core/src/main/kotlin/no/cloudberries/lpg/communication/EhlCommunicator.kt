@@ -2,6 +2,7 @@ package no.cloudberries.lpg.communication
 
 import kotlinx.coroutines.*
 import no.cloudberries.lpg.protocol.*
+import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeoutException
@@ -10,10 +11,10 @@ import java.util.concurrent.TimeoutException
  * Communicates with LPG dispensers using the EHL protocol over RS-485 serial connection.
  * Handles packet transmission, reception, buffering, and timeout management.
  * 
- * Uses SerialPortIO interface for serial communication, allowing both real serial ports
+ * Uses SerialTransport interface for serial communication, allowing both real serial ports
  * and in-memory implementations for testing.
  */
-class EhlCommunicator(private val serialPort: SerialPortIO) {
+class EhlCommunicator(private val transport: SerialTransport) {
     private val logger = LoggerFactory.getLogger(EhlCommunicator::class.java)
     private val receiveBuffer = mutableListOf<Byte>()
     private val bufferLock = Any()
@@ -44,20 +45,22 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
      * @throws IOException if send fails
      */
     fun send(packet: EhlPacket) {
-        if (!serialPort.isConnected) {
+        if (!transport.isConnected) {
             throw IOException("Serial port not connected")
         }
 
         val bytes = EhlCodec.encode(packet)
         
-        // Reduce log noise - only debug level for normal packet flow
-        logger.debug(EhlPacketFormatter.formatPacketForLogging(packet, EhlPacketFormatter.Direction.SENDING))
-        if (logger.isTraceEnabled) {
-            logger.trace("Raw bytes (${bytes.size}): ${bytes.toHexString()}")
+        // RAW HEX logging for observability (INFO level to ensure visibility)
+        logger.info("📤 TX HEX: [${bytes.toHexString()}] -> ${packet.command}")
+        
+        // Detailed packet info at DEBUG level
+        if (logger.isDebugEnabled) {
+            logger.debug(EhlPacketFormatter.formatPacketForLogging(packet, EhlPacketFormatter.Direction.SENDING))
         }
         
-        serialPort.write(bytes)
-        serialPort.flush()
+        transport.write(bytes)
+        transport.flush()
     }
 
     /**
@@ -84,8 +87,11 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
                 }
 
                 // Read more data from serial port
-                val newData = serialPort.read()
+                val newData = transport.readAvailable()
                 if (newData.isNotEmpty()) {
+                    // RAW HEX logging for observability (INFO level to ensure visibility)
+                    logger.info("📥 RX HEX: [${newData.toHexString()}]")
+                    
                     synchronized(bufferLock) {
                         receiveBuffer.addAll(newData.toList())
                         if (logger.isDebugEnabled) {
@@ -160,11 +166,15 @@ class EhlCommunicator(private val serialPort: SerialPortIO) {
             
             when (val result = EhlCodec.decode(bufferArray)) {
                 is EhlPacketParseResult.Success -> {
-                    // Reduce log noise - only debug level for normal packet flow
-                    logger.debug(EhlPacketFormatter.formatPacketForLogging(
-                        result.packet,
-                        EhlPacketFormatter.Direction.RECEIVING
-                    ))
+                    // Log parsed packet at INFO level for observability
+                    logger.info("📥 RX PARSED: ${result.packet.command} from addr ${result.packet.address}")
+                    
+                    if (logger.isDebugEnabled) {
+                        logger.debug(EhlPacketFormatter.formatPacketForLogging(
+                            result.packet,
+                            EhlPacketFormatter.Direction.RECEIVING
+                        ))
+                    }
                     
                     // Clear the parsed bytes from buffer
                     val packetLength = result.packet.packetLength

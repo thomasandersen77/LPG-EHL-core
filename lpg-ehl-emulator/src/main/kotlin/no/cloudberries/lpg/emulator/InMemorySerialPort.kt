@@ -1,10 +1,10 @@
 package no.cloudberries.lpg.emulator
 
-import no.cloudberries.lpg.communication.SerialPortIO
+import no.cloudberries.lpg.transport.SerialTransport
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
- * In-memory implementation of SerialPortIO for testing with EHL emulator.
+ * In-memory implementation of SerialTransport for testing with EHL emulator.
  * 
  * This class provides a virtual serial port that communicates with an EhlDispenserEmulator
  * instead of a real hardware serial port. This allows testing the full EHL protocol stack
@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
  */
 class InMemorySerialPort(
     private val emulator: EhlDispenserEmulator
-) : SerialPortIO {
+) : SerialTransport {
 
     private val toEmulator = ConcurrentLinkedQueue<Byte>()
     private val fromEmulator = ConcurrentLinkedQueue<Byte>()
@@ -52,7 +52,7 @@ class InMemorySerialPort(
         return data.size
     }
 
-    override fun read(maxBytes: Int): ByteArray {
+    override fun readAvailable(maxBytes: Int): ByteArray {
         check(connected) { "Port not connected" }
 
         if (fromEmulator.isEmpty()) return ByteArray(0)

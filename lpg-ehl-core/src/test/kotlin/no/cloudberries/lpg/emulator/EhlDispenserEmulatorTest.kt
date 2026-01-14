@@ -278,8 +278,8 @@ class EhlDispenserEmulatorTest {
         communicator.receive()
         val stateAfterNewUnblock = communicator.receive()
         
-        // Should be in DELIVERING state
-        assertEquals(0x02.toByte(), stateAfterNewUnblock.data[0], "Should be DELIVERING")
+        // Should be in DELIVERING state (VB6: 0x06 = START_BUTTON_PRESSED | OPEN_FOR_DELIVERY)
+        assertEquals(0x06.toByte(), stateAfterNewUnblock.data[0], "Should be DELIVERING (0x06)")
         
         // Check volume starts from zero
         delay(200)
@@ -330,10 +330,44 @@ class EhlDispenserEmulatorTest {
         logger.info("✅ Atomic stop: all volume queries identical at $litres1 L")
     }
     
-    // Helper function to parse volume from VOLUME response
+    @Test
+    fun `LINETEST returns VB6-compatible magic bytes 0x55 0xAA`() = runBlocking {
+        logger.info("=== Test: LINETEST VB6 compatibility ===")
+        
+        // Send LINETEST command
+        communicator.send(EhlPacket(1, EhlCommand.LINETEST))
+        val response = communicator.receive()
+        
+        // Verify response command and magic bytes
+        assertEquals(EhlCommand.LINETEST, response.command, "Response should be LINETEST")
+        assertEquals(2, response.data.size, "LINETEST response should have 2 bytes")
+        assertEquals(0x55.toByte(), response.data[0], "First magic byte should be 0x55")
+        assertEquals(0xAA.toByte(), response.data[1], "Second magic byte should be 0xAA")
+        
+        // Use LinetestValidator to verify
+        val isValid = no.cloudberries.lpg.protocol.LinetestValidator.validateLinetestResponse(response.data)
+        assertTrue(isValid, "LinetestValidator should confirm valid response")
+        
+        logger.info("✅ LINETEST response: 0x55 0xAA - communication line verified")
+    }
+    
+    // Helper function to parse volume from VOLUME response (VB6 5-byte ASCII format)
     private fun parseVolume(data: ByteArray): Double {
-        if (data.size < 4) return 0.0
-        val volDeci = ((data[0].toInt() and 0xFF) shl 8) or (data[1].toInt() and 0xFF)
-        return volDeci / 10.0
+        if (data.size < 5) return 0.0
+        
+        // VB6 format: 5 ASCII bytes LSB-first
+        // Example: 45.50 L -> bytes ['0','5','5','4','0'] -> "04550" -> 45.50
+        val d0 = (data[0].toInt() and 0xFF).toChar()
+        val d1 = (data[1].toInt() and 0xFF).toChar()
+        val d2 = (data[2].toInt() and 0xFF).toChar()
+        val d3 = (data[3].toInt() and 0xFF).toChar()
+        val d4 = (data[4].toInt() and 0xFF).toChar()
+        
+        val volumeString = "$d4$d3$d2$d1$d0"
+        return try {
+            volumeString.toInt() / 100.0
+        } catch (e: NumberFormatException) {
+            0.0
+        }
     }
 }

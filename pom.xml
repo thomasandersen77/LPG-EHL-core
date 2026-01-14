@@ -18,10 +18,13 @@
         <module>lpg-ehl-core</module>
         <module>lpg-ehl-emulator</module>
         <module>lpg-ehl-api</module>
+        <module>lpg-ehl-pls</module>
+        <module>lpg-ehl-cli</module>
+        <module>lpg-ehl-pls-sim</module>
     </modules>
 
     <properties>
-        <kotlin.version>2.1.10</kotlin.version>
+        <kotlin.version>2.3.0</kotlin.version>
         <coroutines.version>1.8.0</coroutines.version>
         <spring-boot.version>3.2.1</spring-boot.version>
         <maven.compiler.source>21</maven.compiler.source>
@@ -122,6 +125,20 @@
         </dependencies>
     </dependencyManagement>
 
+    <dependencies>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib-jdk8</artifactId>
+            <version>${kotlin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-test</artifactId>
+            <version>${kotlin.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
     <build>
         <pluginManagement>
             <plugins>
@@ -179,5 +196,31 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-maven-plugin</artifactId>
+                <version>${kotlin.version}</version>
+                <executions>
+                    <execution>
+                        <id>compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>test-compile</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>test-compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <jvmTarget>${maven.compiler.target}</jvmTarget>
+                </configuration>
+            </plugin>
+        </plugins>
     </build>
 </project>

@@ -3,6 +3,7 @@ package no.cloudberries.lpg.api.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import no.cloudberries.lpg.api.pls.MockPlsService
+import no.cloudberries.lpg.api.repository.PriceHistoryRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseEntity
@@ -15,7 +16,8 @@ import java.time.LocalDateTime
 @Tag(name = "Prices", description = "Product pricing endpoints")
 class PriceController(
     @Value("\${lpg.price.per-liter:15.90}") private var defaultPricePerLiter: BigDecimal,
-    private val priceHistoryRepository: no.cloudberries.lpg.api.repository.PriceHistoryRepository
+    private val priceHistoryRepository: PriceHistoryRepository,
+    private val priceService: no.cloudberries.lpg.api.service.PriceService
 ) {
     @Autowired(required = false)
     private var plsService: MockPlsService? = null
@@ -87,23 +89,18 @@ class PriceController(
             return ResponseEntity.badRequest().build()
         }
         
-        logger.info("🐐 Price update request: {} kr/L", request.pricePerLiter)
+        logger.info("💰 Price update request: {} kr/L", request.pricePerLiter)
         
-        // Save to price history
-        val vatRate = BigDecimal("0.25") // 25% VAT in Norway
-        val priceHistory = no.cloudberries.lpg.api.model.PriceHistory(
+        // Use PriceService to update price everywhere
+        // (Database, Emulator, WebSocket, PumpStateService)
+        priceService.updatePrice(
             productCode = "LPG",
             productName = "LPG (Flytende petroleumsgass)",
             pricePerLiter = request.pricePerLiter,
-            vatRate = vatRate,
-            effectiveFrom = LocalDateTime.now(),
             createdBy = "admin" // TODO: Get from security context when auth is enabled
         )
         
-        val saved = priceHistoryRepository.save(priceHistory)
-        logger.info("✅ Price history saved: {}", saved)
-        
-        // Update in PLS if available, otherwise update local
+        // Update in PLS if available
         if (plsService != null) {
             plsService!!.updatePrice("LPG", request.pricePerLiter)
         } else {

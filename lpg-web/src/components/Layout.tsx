@@ -33,11 +33,17 @@ export function Layout() {
               <Link to="/" className={linkClass('/')}>
                 🏠 Hjem
               </Link>
+              <Link to="/control" className={linkClass('/control')}>
+                🔧 Kontroll
+              </Link>
               <Link to="/simulator" className={linkClass('/simulator')}>
                 ⛽ Simulator
               </Link>
               <Link to="/protocol-tester" className={linkClass('/protocol-tester')}>
                 🧪 Protokoll
+              </Link>
+              <Link to="/wire-tester" className={linkClass('/wire-tester')}>
+                🔬 VB6 Wire
               </Link>
               <Link to="/transactions" className={linkClass('/transactions')}>
                 📋 Transaksjoner

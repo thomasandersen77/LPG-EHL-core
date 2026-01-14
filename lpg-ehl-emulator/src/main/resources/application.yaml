@@ -1,9 +1,13 @@
 server:
-  port: ${PORT:8090}
+  port: ${PORT:9001}
 
 spring:
   application:
-    name: lpg-ehl-emulator
+    name: lpg-ehl-edge
+  # Static resources (React frontend)
+  web:
+    resources:
+      static-locations: classpath:/static/
 
 emulator:
   address: ${EMULATOR_ADDRESS:1}

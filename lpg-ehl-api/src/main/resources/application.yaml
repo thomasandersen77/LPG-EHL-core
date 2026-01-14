@@ -112,3 +112,23 @@ server:
   shutdown: graceful
   compression:
     enabled: true
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EHL PROTOCOL CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+# 
+# DUAL-MODE ARKITEKTUR:
+#   LAB MODE  (ehl.emulator.enabled=true)  -> Emulator, ingen fysisk hardware
+#   FIELD MODE (ehl.emulator.enabled=false) -> Ekte serial port til pumpe
+#
+# DEFAULT: LAB MODE (trygt for utvikling)
+# ═══════════════════════════════════════════════════════════════════════════════
+ehl:
+  emulator:
+    enabled: ${EHL_EMULATOR_ENABLED:true}  # DEFAULT: LAB MODE (sikkert)
+    dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
+    price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
+    latency-ms: ${EHL_LATENCY_MS:20}  # Simulert serial port latency
+  serial:
+    port: ${EHL_SERIAL_PORT:/dev/ttyS0}  # Kun brukt når enabled=false
+    baud-rate: ${EHL_BAUD_RATE:9600}

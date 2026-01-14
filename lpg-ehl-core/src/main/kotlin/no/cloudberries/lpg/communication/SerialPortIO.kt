@@ -46,4 +46,10 @@ interface SerialPortIO {
      * Flush any pending output.
      */
     fun flush()
+    
+    /**
+     * Clear all pending data in receive buffer.
+     * Used to reset state before sending new commands.
+     */
+    fun clearBuffer() {}
 }
