@@ -9,7 +9,7 @@ import com.fazecast.jSerialComm.SerialPort
  * @property baudRate Communication speed in bits per second (default: 9600 for EHL protocol)
  * @property dataBits Number of data bits (default: 8)
  * @property stopBits Number of stop bits (default: 1)
- * @property parity Parity checking mode (default: NONE)
+ * @property parity Parity checking mode (default: EVEN for 8E1 format)
  * @property readTimeout Read timeout in milliseconds (default: 1000ms)
  * @property writeTimeout Write timeout in milliseconds (default: 1000ms)
  */
@@ -18,7 +18,7 @@ data class SerialPortConfig(
     val baudRate: Int = 9600,
     val dataBits: Int = 8,
     val stopBits: Int = SerialPort.ONE_STOP_BIT,
-    val parity: Int = SerialPort.NO_PARITY,
+    val parity: Int = SerialPort.EVEN_PARITY,  // 8E1 format
     val readTimeout: Int = 1000,
     val writeTimeout: Int = 1000
 ) {
@@ -42,7 +42,7 @@ data class SerialPortConfig(
 
         /**
          * Create a configuration with default settings for EHL protocol.
-         * RS-485 typically uses 9600 baud, 8 data bits, 1 stop bit, no parity.
+         * RS-485 uses 9600 baud, 8 data bits, 1 stop bit, even parity (8E1).
          *
          * @param portName Serial port device name
          * @return Configuration with EHL defaults
@@ -53,7 +53,7 @@ data class SerialPortConfig(
                 baudRate = BAUD_9600,
                 dataBits = 8,
                 stopBits = SerialPort.ONE_STOP_BIT,
-                parity = SerialPort.NO_PARITY
+                parity = SerialPort.EVEN_PARITY  // 8E1 format
             )
         }
 

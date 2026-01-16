@@ -1,0 +1,114 @@
+spring:
+  application:
+    name: lpg-ehl-headless
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lpg_ehl}
+    username: ${DB_USER:lpg_user}
+    password: ${DB_PASSWORD:lpg_dev_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    default-schema: public
+    liquibase-schema: public
+    drop-first: false
+  
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+# Azure Storage Queue Configuration
+azure:
+  enabled: ${AZURE_ENABLED:true}
+  storage:
+    connection-string: ${AZURE_CONNECTION_STRING:UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://localhost:10001}
+    queue-name: ${AZURE_QUEUE_NAME:lpg-transactions}
+  sync:
+    interval-seconds: ${AZURE_SYNC_INTERVAL:300}
+    batch-size: ${AZURE_SYNC_BATCH_SIZE:10}
+    max-retries: ${AZURE_SYNC_MAX_RETRIES:3}
+
+# Nets Cloud Connect Configuration (SSL/TLS Socket)
+nets:
+  cloud-connect:
+    host: ${NETS_CLOUD_HOST:3.33.230.243}
+    port: ${NETS_CLOUD_PORT:6001}
+    connect-timeout-ms: ${NETS_CONNECT_TIMEOUT_MS:10000}
+    read-timeout-ms: ${NETS_READ_TIMEOUT_MS:30000}
+
+# Logging Configuration (headless-specific)
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg: INFO
+    no.cloudberries.lpg.headless: INFO
+    no.cloudberries.lpg.service: INFO
+    no.cloudberries.lpg.protocol: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE:/var/log/lpg-ehl/headless.log}
+    max-size: 10MB
+    max-history: 30
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EHL PROTOCOL CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+# 
+# DUAL-MODE ARKITEKTUR:
+#   LAB MODE  (ehl.emulator.enabled=true)  -> Emulator, ingen fysisk hardware
+#   FIELD MODE (ehl.emulator.enabled=false) -> Ekte serial port til pumpe
+#
+# HEADLESS DEFAULT: FIELD MODE (produksjon)
+# ═══════════════════════════════════════════════════════════════════════════════
+ehl:
+  emulator:
+    enabled: ${EHL_EMULATOR_ENABLED:false}  # DEFAULT: FIELD MODE for headless
+    dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
+    price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
+    latency-ms: ${EHL_LATENCY_MS:20}
+  serial:
+    port: ${EHL_SERIAL_PORT:/dev/ttyS0}  # Brukes når emulator er disabled
+    baud-rate: ${EHL_BAUD_RATE:9600}
+    data-bits: 8
+    parity: EVEN  # 8E1 (8 data bits, even parity, 1 stop bit)
+    stop-bits: 1
+
+# LPG Application Configuration
+lpg:
+  mode: ${LPG_MODE:FIELD}  # FIELD eller LAB
+  price:
+    per-liter: ${LPG_PRICE_PER_LITER:15.90}
+  station:
+    id: ${STATION_ID:STATION-001}
+    name: ${STATION_NAME:Test Station}
+
+# Shutdown Configuration
+spring.lifecycle:
+  timeout-per-shutdown-phase: 30s
