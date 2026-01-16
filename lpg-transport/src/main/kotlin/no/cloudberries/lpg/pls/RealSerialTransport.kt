@@ -13,12 +13,18 @@ import org.slf4j.LoggerFactory
  * KONFIGURASJON:
  * - ehl.serial.port (default: /dev/ttyS0)
  * - ehl.serial.baud-rate (default: 9600)
+ * - ehl.serial.data-bits (default: 8)
+ * - ehl.serial.parity (default: EVEN)
+ * - ehl.serial.stop-bits (default: 1)
  * 
- * Serial parametere: 9600 baud, 8N1, no parity
+ * Serial parametere: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
  */
 class RealSerialTransport(
     private val portName: String,
-    private val baudRate: Int = 9600
+    private val baudRate: Int = 9600,
+    private val dataBits: Int = 8,
+    private val parity: Int = SerialPort.EVEN_PARITY,
+    private val stopBits: Int = SerialPort.ONE_STOP_BIT
 ) : SerialTransport {
     
     private val logger = LoggerFactory.getLogger(RealSerialTransport::class.java)
@@ -41,11 +47,11 @@ class RealSerialTransport(
             // Attempt to open the serial port (works for both real and virtual ports)
             val port = SerialPort.getCommPort(portName)
             
-            // Configure serial parameters: 9600 8N1
+            // Configure serial parameters (default: 9600 8E1)
             port.baudRate = baudRate
-            port.numDataBits = 8
-            port.numStopBits = SerialPort.ONE_STOP_BIT
-            port.parity = SerialPort.NO_PARITY
+            port.numDataBits = dataBits
+            port.numStopBits = stopBits
+            port.parity = parity
             
             // Open port with timeout (3000ms for compatibility with socat)
             port.setComPortTimeouts(

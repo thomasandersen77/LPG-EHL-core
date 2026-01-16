@@ -69,15 +69,15 @@ echo "  📦 Modules: core, emulator, transport, service, webapp, headless, cli"
 echo ""
 
 if [ "$SKIP_TESTS" = true ]; then
-    echo "  Running: mvn clean install -DskipTests"
-    ./mvnw clean install -DskipTests
+    echo "  Running: mvn clean install -DskipTests (output suppressed)"
+    ./mvnw clean install -DskipTests -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
 else
-    echo "  Running: mvn clean install (with tests)"
-    ./mvnw clean install
+    echo "  Running: mvn clean install (with tests, output suppressed)"
+    ./mvnw clean install -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building|Tests run" || true
 fi
 
-if [ $? -ne 0 ]; then
-    echo -e "${RED}✗ ERROR: Maven build failed${NC}"
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    echo -e "${RED}✗ ERROR: Maven build failed - rerun without -q flag for details${NC}"
     exit 1
 fi
 
@@ -92,12 +92,12 @@ echo "  Includes: Service layer + REST API + React UI"
 echo ""
 
 if [ "$SKIP_TESTS" = true ]; then
-    ./mvnw package -pl lpg-ehl-webapp -am -DskipTests
+    ./mvnw package -pl lpg-ehl-webapp -am -DskipTests -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
 else
-    ./mvnw package -pl lpg-ehl-webapp -am
+    ./mvnw package -pl lpg-ehl-webapp -am -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
 fi
 
-if [ $? -ne 0 ]; then
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
     echo -e "${RED}✗ ERROR: WebApp packaging failed${NC}"
     exit 1
 fi
@@ -121,12 +121,12 @@ echo "  Perfect for: Production deployment, Docker, Systemd"
 echo ""
 
 if [ "$SKIP_TESTS" = true ]; then
-    ./mvnw package -pl lpg-ehl-app-headless -am -DskipTests
+    ./mvnw package -pl lpg-ehl-app-headless -am -DskipTests -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
 else
-    ./mvnw package -pl lpg-ehl-app-headless -am
+    ./mvnw package -pl lpg-ehl-app-headless -am -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
 fi
 
-if [ $? -ne 0 ]; then
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
     echo -e "${RED}✗ ERROR: Headless packaging failed${NC}"
     exit 1
 fi
@@ -150,12 +150,12 @@ echo "  Perfect for: Automation, scripting, diagnostics"
 echo ""
 
 if [ "$SKIP_TESTS" = true ]; then
-    ./mvnw package -pl lpg-ehl-cli -am -DskipTests
+    ./mvnw package -pl lpg-ehl-cli -am -DskipTests -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
 else
-    ./mvnw package -pl lpg-ehl-cli -am
+    ./mvnw package -pl lpg-ehl-cli -am -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
 fi
 
-if [ $? -ne 0 ]; then
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
     echo -e "${RED}✗ ERROR: CLI packaging failed${NC}"
     exit 1
 fi
@@ -264,13 +264,13 @@ echo -e "${BLUE}═════════════════════�
 echo ""
 echo -e "${GREEN}1. 🖥️  WebApp Mode (Full Web Application):${NC}"
 echo ""
-echo "   ${YELLOW}Development (LAB mode with emulator):${NC}"
+echo -e "   ${YELLOW}Development (LAB mode with emulator):${NC}"
 echo "     java -jar release/lpg-ehl-webapp.jar"
 echo ""
 echo "     Then open: http://localhost:8080"
 echo "     Swagger:   http://localhost:8080/swagger-ui.html"
 echo ""
-echo "   ${YELLOW}Production (FIELD mode with real hardware):${NC}"
+echo -e "   ${YELLOW}Production (FIELD mode with real hardware):${NC}"
 echo "     java -jar release/lpg-ehl-webapp.jar \\"
 echo "       --EHL_EMULATOR_ENABLED=false \\"
 echo "       --EHL_SERIAL_PORT=/dev/ttyUSB0 \\"
@@ -278,7 +278,7 @@ echo "       --DB_HOST=localhost \\"
 echo "       --DB_PASSWORD=<secret> \\"
 echo "       --AZURE_ENABLED=true"
 echo ""
-echo "   ${YELLOW}Configuration Options:${NC}"
+echo -e "   ${YELLOW}Configuration Options:${NC}"
 echo "     --EHL_EMULATOR_ENABLED=true/false  # Use emulator or real hardware"
 echo "     --EHL_SERIAL_PORT=/dev/ttyUSB0     # Serial port device"
 echo "     --DB_HOST=localhost                 # Database host"
@@ -290,10 +290,10 @@ echo -e "${BLUE}─────────────────────�
 echo ""
 echo -e "${GREEN}2. 🤖 Headless Mode (Background Service - NO WEB SERVER):${NC}"
 echo ""
-echo "   ${YELLOW}Development (LAB mode with emulator):${NC}"
+echo -e "   ${YELLOW}Development (LAB mode with emulator):${NC}"
 echo "     java -jar release/lpg-ehl-headless.jar"
 echo ""
-echo "   ${YELLOW}Production (FIELD mode - typical bensinstasjon deployment):${NC}"
+echo -e "   ${YELLOW}Production (FIELD mode - typical bensinstasjon deployment):${NC}"
 echo "     java -jar release/lpg-ehl-headless.jar \\"
 echo "       --EHL_EMULATOR_ENABLED=false \\"
 echo "       --EHL_SERIAL_PORT=/dev/ttyUSB0 \\"
@@ -301,7 +301,7 @@ echo "       --DB_HOST=localhost \\"
 echo "       --DB_PASSWORD=<secret> \\"
 echo "       --AZURE_ENABLED=true"
 echo ""
-echo "   ${YELLOW}Systemd Service (Linux production):${NC}"
+echo -e "   ${YELLOW}Systemd Service (Linux production):${NC}"
 echo "     # Copy JAR to server"
 echo "     scp release/lpg-ehl-headless.jar user@station:/opt/lpg-ehl/"
 echo ""
@@ -326,7 +326,7 @@ echo "     sudo systemctl enable lpg-ehl"
 echo "     sudo systemctl start lpg-ehl"
 echo "     sudo systemctl status lpg-ehl"
 echo ""
-echo "   ${YELLOW}Docker Deployment:${NC}"
+echo -e "   ${YELLOW}Docker Deployment:${NC}"
 echo "     docker run -d \\"
 echo "       --name lpg-ehl \\"
 echo "       --device=/dev/ttyUSB0 \\"
@@ -335,14 +335,14 @@ echo "       -e DB_HOST=postgres \\"
 echo "       -e AZURE_ENABLED=true \\"
 echo "       lpg-ehl-headless:latest"
 echo ""
-echo "   ${YELLOW}Configuration Options:${NC}"
+echo -e "   ${YELLOW}Configuration Options:${NC}"
 echo "     --EHL_EMULATOR_ENABLED=false       # FIELD mode by default"
 echo "     --EHL_SERIAL_PORT=/dev/ttyUSB0     # Serial port"
 echo "     --DB_HOST=localhost                 # Database"
 echo "     --AZURE_ENABLED=true                # Cloud sync"
 echo "     --LOG_FILE=/var/log/lpg-ehl/headless.log  # Log file"
 echo ""
-echo "   ${YELLOW}What It Does:${NC}"
+echo -e "   ${YELLOW}What It Does:${NC}"
 echo "     ✓ Monitors hardware via serial port"
 echo "     ✓ Saves transactions to database"
 echo "     ✓ Syncs to Azure automatically"
@@ -354,10 +354,10 @@ echo -e "${BLUE}─────────────────────�
 echo ""
 echo -e "${GREEN}3. ⚡ CLI Mode (Command Line Tools):${NC}"
 echo ""
-echo "   ${YELLOW}Interactive Shell:${NC}"
+echo -e "   ${YELLOW}Interactive Shell:${NC}"
 echo "     java -jar release/lpg-ehl-cli.jar"
 echo ""
-echo "   ${YELLOW}Example Commands:${NC}"
+echo -e "   ${YELLOW}Example Commands:${NC}"
 echo "     # Migrations"
 echo "     java -jar release/lpg-ehl-cli.jar migrate --target-version=1.5.0"
 echo ""
@@ -372,7 +372,7 @@ echo ""
 echo "     # Price updates"
 echo "     java -jar release/lpg-ehl-cli.jar price set --product=LPG --price=16.50"
 echo ""
-echo "   ${YELLOW}With Real Hardware:${NC}"
+echo -e "   ${YELLOW}With Real Hardware:${NC}"
 echo "     EHL_EMULATOR_ENABLED=false EHL_SERIAL_PORT=/dev/ttyUSB0 \\"
 echo "       java -jar release/lpg-ehl-cli.jar [command]"
 echo ""
@@ -380,19 +380,19 @@ echo -e "${BLUE}═════════════════════�
 echo ""
 echo -e "${YELLOW}DEPLOYMENT RECOMMENDATIONS:${NC}"
 echo ""
-echo "  ${GREEN}Production Bensinstasjon:${NC}"
+echo -e "  ${GREEN}Production Bensinstasjon:${NC}"
 echo "    • Use HEADLESS mode (lpg-ehl-headless.jar)"
 echo "    • Run as systemd service"
 echo "    • Set FIELD mode (EHL_EMULATOR_ENABLED=false)"
 echo "    • Configure serial port (/dev/ttyUSB0)"
 echo "    • Enable Azure sync"
 echo ""
-echo "  ${GREEN}Development & Testing:${NC}"
+echo -e "  ${GREEN}Development & Testing:${NC}"
 echo "    • Use WEBAPP mode (lpg-ehl-webapp.jar)"
 echo "    • LAB mode with emulator (default)"
 echo "    • Access web UI at http://localhost:8080"
 echo ""
-echo "  ${GREEN}Administration & Scripts:${NC}"
+echo -e "  ${GREEN}Administration & Scripts:${NC}"
 echo "    • Use CLI mode (lpg-ehl-cli.jar)"
 echo "    • Automate tasks with shell scripts"
 echo "    • Database migrations and batch ops"

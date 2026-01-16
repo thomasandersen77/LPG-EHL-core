@@ -30,12 +30,15 @@ ehl:
     stop-bits: 1
 ```
 
-## Serial Parametere
+## Serial Parametere (9600 8E1)
 
 - **Baud rate:** 9600
 - **Data bits:** 8
+- **Parity:** Even ✅
 - **Stop bits:** 1
-- **Parity:** Even (8E1)
+
+> **VIKTIG:** Alle parametere er nå konfigurerbare via environment variables eller application.yaml.
+> Se [SERIAL_CONTRACT.md](../docs/SERIAL_CONTRACT.md) for full dokumentasjon.
 
 ## Plattformer
 

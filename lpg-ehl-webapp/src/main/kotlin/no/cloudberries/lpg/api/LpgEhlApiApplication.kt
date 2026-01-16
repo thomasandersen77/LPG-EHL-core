@@ -34,8 +34,18 @@ import org.springframework.scheduling.annotation.EnableScheduling
         "no.cloudberries.lpg.transport"       // Serial port transport
     ]
 )
-@EntityScan("no.cloudberries.lpg.service.model")
-@EnableJpaRepositories("no.cloudberries.lpg.service.repository")
+@EntityScan(
+    basePackages = [
+        "no.cloudberries.lpg.service.model",
+        "no.cloudberries.lpg.service.credit"
+    ]
+)
+@EnableJpaRepositories(
+    basePackages = [
+        "no.cloudberries.lpg.service.repository",
+        "no.cloudberries.lpg.service.credit"
+    ]
+)
 @EnableScheduling
 class LpgEhlApiApplication
 

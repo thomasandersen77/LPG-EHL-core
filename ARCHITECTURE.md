@@ -83,7 +83,8 @@ graph TB
 | **Presentation** | Web controllers, WebSocket handlers, CLI commands | `lpg-ehl-webapp`, `lpg-ehl-cli` |
 | **Application** | Business services, use cases, orchestration | `lpg-ehl-service` |
 | **Domain** | Entities, value objects, domain logic | `lpg-ehl-service/model` |
-| **Infrastructure** | Database, hardware, external APIs | `lpg-ehl-service/repository`, `lpg-ehl-transport`, `lpg-ehl-core` |
+| **Core/Protocol** | EHL protocol codec, packet encoding/decoding | `lpg-ehl-core` |
+| **Infrastructure** | Database, hardware transport, external APIs | `lpg-ehl-service/repository`, `lpg-transport`, Azure, Nets |
 
 ---
 

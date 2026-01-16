@@ -1,4 +1,4 @@
-package no.cloudberries.lpg.api.payment
+package no.cloudberries.lpg.service.payment
 
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Primary

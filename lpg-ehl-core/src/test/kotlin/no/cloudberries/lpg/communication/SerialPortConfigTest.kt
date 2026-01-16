@@ -15,7 +15,7 @@ class SerialPortConfigTest {
         assertEquals(9600, config.baudRate)
         assertEquals(8, config.dataBits)
         assertEquals(SerialPort.ONE_STOP_BIT, config.stopBits)
-        assertEquals(SerialPort.NO_PARITY, config.parity)
+        assertEquals(SerialPort.EVEN_PARITY, config.parity)  // EHL uses 8E1 format
         assertEquals(1000, config.readTimeout)
         assertEquals(1000, config.writeTimeout)
     }
@@ -45,7 +45,7 @@ class SerialPortConfigTest {
         assertEquals(SerialPortConfig.BAUD_9600, config.baudRate)
         assertEquals(8, config.dataBits)
         assertEquals(SerialPort.ONE_STOP_BIT, config.stopBits)
-        assertEquals(SerialPort.NO_PARITY, config.parity)
+        assertEquals(SerialPort.EVEN_PARITY, config.parity)  // EHL uses 8E1 format
     }
 
     @Test

@@ -148,6 +148,11 @@ databaseChangeLog:
   - changeSet:
       id: 001-create-customers-table
       author: warp-agent
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: customers
       changes:
         - createTable:
             tableName: customers
@@ -170,14 +175,50 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
+                  name: email
+                  type: varchar(255)
+              - column:
+                  name: phone
+                  type: varchar(50)
+              - column:
+                  name: address_line1
+                  type: varchar(255)
+              - column:
+                  name: address_line2
+                  type: varchar(255)
+              - column:
+                  name: postal_code
+                  type: varchar(20)
+              - column:
+                  name: city
+                  type: varchar(100)
+              - column:
+                  name: active
+                  type: boolean
+                  defaultValue: true
+                  constraints:
+                    nullable: false
+              - column:
                   name: created_at
                   type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
                   constraints:
                     nullable: false
 
   - changeSet:
       id: 001-create-credit-accounts-table
       author: warp-agent
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: credit_accounts
       changes:
         - createTable:
             tableName: credit_accounts
@@ -196,17 +237,42 @@ databaseChangeLog:
                     foreignKeyName: fk_credit_customer
                     references: customers(id)
               - column:
-                  name: balance_nok
-                  type: decimal(10, 2)
-                  defaultValue: 0.00
+                  name: balance_cents
+                  type: int
+                  defaultValue: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: credit_limit_cents
+                  type: int
+                  defaultValue: 0
                   constraints:
                     nullable: false
               - column:
                   name: last_activity_at
                   type: timestamp
               - column:
+                  name: last_transaction_id
+                  type: uuid
+              - column:
+                  name: active
+                  type: boolean
+                  defaultValue: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: notes
+                  type: text
+              - column:
                   name: created_at
                   type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
                   constraints:
                     nullable: false
         - createIndex:

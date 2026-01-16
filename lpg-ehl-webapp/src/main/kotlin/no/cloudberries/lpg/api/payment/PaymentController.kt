@@ -1,5 +1,9 @@
 package no.cloudberries.lpg.api.payment
 
+import no.cloudberries.lpg.service.payment.Payment
+import no.cloudberries.lpg.service.payment.PaymentGateway
+import no.cloudberries.lpg.service.payment.PaymentMethod
+import no.cloudberries.lpg.service.payment.PaymentRequest
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
 

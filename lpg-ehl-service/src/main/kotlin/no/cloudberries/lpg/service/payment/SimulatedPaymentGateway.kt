@@ -9,7 +9,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 @Service
-@Profile("local", "dev")
+@Profile("local", "dev", "default")
 class SimulatedPaymentGateway : PaymentGateway {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -33,7 +33,7 @@ class SimulatedPaymentGateway : PaymentGateway {
                     metadata = request.metadata
                 )
             }
-            PaymentMethod.CARD, PaymentMethod.CREDIT -> {
+            PaymentMethod.CARD, PaymentMethod.CREDIT, PaymentMethod.VIPPS -> {
                 Payment(
                     amountCents = request.amountCents,
                     method = request.method,
@@ -47,7 +47,7 @@ class SimulatedPaymentGateway : PaymentGateway {
         payments[payment.id] = payment
         log.info("Simulated payment started: {}", payment)
 
-        // For CARD/CREDIT, we kick off a simple background simulation that
+        // For CARD/CREDIT/VIPPS, we kick off a simple background simulation that
         // will resolve the payment after cardProcessingDelay.
         if (payment.status == PaymentStatus.PENDING) {
             simulateAsyncResolution(payment.id)
