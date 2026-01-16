@@ -2,6 +2,7 @@ package no.cloudberries.lpg.api.client
 
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.net.URI
 import java.net.http.HttpClient
@@ -10,6 +11,11 @@ import java.net.http.HttpResponse
 import java.time.Duration
 
 @Component
+@ConditionalOnProperty(
+    name = ["ehl.emulator.enabled"],
+    havingValue = "true",
+    matchIfMissing = true
+)
 class EmulatorClient(
     @Value("\${emulator.base-url:http://localhost:8090}") private val baseUrl: String
 ) {

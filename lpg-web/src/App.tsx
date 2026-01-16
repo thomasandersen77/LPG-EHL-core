@@ -26,14 +26,30 @@ const queryClient = new QueryClient({
 });
 
 function LabModeBanner() {
-  const { isLab, description } = useAppMode();
+  const { hardwareMode, hardwareDescription } = useAppMode();
 
-  if (!isLab) return null;
+  if (hardwareMode !== 'LAB') return null;
 
   return (
     <div className="bg-yellow-500 text-yellow-900 px-4 py-3 text-center font-bold border-b-4 border-yellow-600">
-      ⚠️ LAB MODE - SIMULATED HARDWARE
-      <span className="ml-3 text-sm font-normal">{description}</span>
+      🧪 LAB MODE - SIMULATED HARDWARE
+      <span className="ml-3 text-sm font-normal">{hardwareDescription}</span>
+    </div>
+  );
+}
+
+function FieldModeBanner() {
+  const { hardwareMode, hardwareDescription, serialPort, baudRate } = useAppMode();
+
+  if (hardwareMode !== 'FIELD') return null;
+
+  return (
+    <div className="bg-red-600 text-white px-4 py-3 text-center font-bold border-b-4 border-red-800">
+      🏭 PRODUCTION MODE - REAL HARDWARE
+      <span className="ml-3 text-sm font-normal">
+        {hardwareDescription}
+        {serialPort && baudRate ? ` (${serialPort} @ ${baudRate} baud)` : ''}
+      </span>
     </div>
   );
 }
@@ -44,6 +60,7 @@ function AppContent() {
   return (
     <>
       <LabModeBanner />
+      <FieldModeBanner />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
