@@ -43,7 +43,7 @@ class FrameExtractor(
             when (mode) {
                 FrameMode.EHL -> {
                     buffer.write(b.toInt())
-                    
+
                     // Looking for STX (0x10)
                     if (buffer.size() == 1) {
                         if (b != STX_CONTROLLER && b != STX_DISPENSER) {
@@ -52,7 +52,7 @@ class FrameExtractor(
                             continue
                         }
                     }
-                    
+
                     // Got LEN byte - store expected length
                     if (buffer.size() == 2) {
                         expectedLength = b.toInt() and 0xFF
@@ -64,7 +64,7 @@ class FrameExtractor(
                             continue
                         }
                     }
-                    
+
                     // Check if we have complete frame
                     if (expectedLength > 0 && buffer.size() == expectedLength) {
                         val frame = buffer.toByteArray()

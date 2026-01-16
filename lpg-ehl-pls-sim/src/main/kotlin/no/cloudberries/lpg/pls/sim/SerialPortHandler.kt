@@ -125,15 +125,15 @@ class SerialPortHandler(
             if (logHex) {
                 log.info("EHL frame received: {}", frame.toHexString())
             }
-            
+
             val ehlFrame = EhlFrameCodec.decode(frame)
             if (ehlFrame == null) {
                 log.warn("Invalid EHL frame - ignoring")
                 return
             }
-            
+
             log.info("EHL command: 0x{} from addr 0x{}", ehlFrame.cmd.toHex(), ehlFrame.addr.toHex())
-            
+
             val result = state.processEhlCommand(ehlFrame)
             val response = when (result) {
                 is EhlCommandResult.OkAck -> {
@@ -146,29 +146,29 @@ class SerialPortHandler(
                     EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_VOLUME, result.data)
                 }
             }
-            
+
             sendResponse(response)
-            
+
         } else {
             // ASCII protocol (LINE or STX_ETX)
             val command = String(frame, Charsets.US_ASCII)
             log.info("Frame received: '{}'", command)
 
-            val result = state.processCommand(command)
-            
-            val response = when (result) {
-                is CommandResult.OK -> buildResponse("OK")
-                is CommandResult.ACK -> buildResponse("ACK")
-                is CommandResult.Status -> buildResponse(if (result.blocked) "BLOCKED" else "UNBLOCKED")
-                is CommandResult.Ignored -> null
-            }
+        val result = state.processCommand(command)
+
+        val response = when (result) {
+            is CommandResult.OK -> buildResponse("OK")
+            is CommandResult.ACK -> buildResponse("ACK")
+            is CommandResult.Status -> buildResponse(if (result.blocked) "BLOCKED" else "UNBLOCKED")
+            is CommandResult.Ignored -> null
+        }
 
             if (response != null) {
                 sendResponse(response)
             }
         }
     }
-    
+
     private fun Byte.toHex(): String = "%02X".format(this)
 
     /**

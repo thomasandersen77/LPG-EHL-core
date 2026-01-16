@@ -49,13 +49,13 @@ class PlsState {
             }
         }
     }
-    
+
     /**
      * Process EHL binary command frame.
      */
     fun processEhlCommand(frame: EhlFrame): EhlCommandResult {
         val cmd = frame.cmd
-        
+
         return when (cmd) {
             EhlFrameCodec.CMD_LINETEST -> {
                 log.debug("LINETEST from addr 0x{}", frame.addr.toHex())
@@ -89,7 +89,7 @@ class PlsState {
             }
         }
     }
-    
+
     private fun Byte.toHex(): String = "%02X".format(this)
 }
 
