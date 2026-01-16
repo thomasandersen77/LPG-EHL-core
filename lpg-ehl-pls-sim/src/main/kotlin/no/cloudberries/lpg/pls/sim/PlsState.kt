@@ -49,6 +49,48 @@ class PlsState {
             }
         }
     }
+
+    /**
+     * Process EHL binary command frame.
+     */
+    fun processEhlCommand(frame: EhlFrame): EhlCommandResult {
+        val cmd = frame.cmd
+
+        return when (cmd) {
+            EhlFrameCodec.CMD_LINETEST -> {
+                log.debug("LINETEST from addr 0x{}", frame.addr.toHex())
+                EhlCommandResult.OkAck(frame.addr)
+            }
+            EhlFrameCodec.CMD_STATE -> {
+                log.debug("STATE from addr 0x{}", frame.addr.toHex())
+                // Return STATE response with 1 byte: 0x30 = ready/idle state
+                EhlCommandResult.StateResponse(frame.addr, byteArrayOf(0x30))
+            }
+            EhlFrameCodec.CMD_VOLUME -> {
+                log.debug("VOLUME from addr 0x{}", frame.addr.toHex())
+                // Return VOLUME response with 4 bytes of zeros (no volume delivered)
+                EhlCommandResult.VolumeResponse(frame.addr, byteArrayOf(0x30, 0x30, 0x30, 0x30))
+            }
+            EhlFrameCodec.CMD_BLOCK -> {
+                setBlocked(1, true)
+                EhlCommandResult.OkAck(frame.addr)
+            }
+            EhlFrameCodec.CMD_UNBLOCK -> {
+                setBlocked(1, false)
+                EhlCommandResult.OkAck(frame.addr)
+            }
+            EhlFrameCodec.CMD_STOP -> {
+                setBlocked(1, true)
+                EhlCommandResult.OkAck(frame.addr)
+            }
+            else -> {
+                log.debug("Unknown EHL command: 0x{}", cmd.toHex())
+                EhlCommandResult.OkAck(frame.addr)  // Generic ACK
+            }
+        }
+    }
+
+    private fun Byte.toHex(): String = "%02X".format(this)
 }
 
 sealed class CommandResult {
@@ -56,4 +98,38 @@ sealed class CommandResult {
     object ACK : CommandResult()
     object Ignored : CommandResult()
     data class Status(val blocked: Boolean) : CommandResult()
+}
+
+sealed class EhlCommandResult {
+    data class OkAck(val addr: Byte) : EhlCommandResult()
+    data class StateResponse(val addr: Byte, val data: ByteArray) : EhlCommandResult() {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as StateResponse
+            if (addr != other.addr) return false
+            if (!data.contentEquals(other.data)) return false
+            return true
+        }
+        override fun hashCode(): Int {
+            var result = addr.toInt()
+            result = 31 * result + data.contentHashCode()
+            return result
+        }
+    }
+    data class VolumeResponse(val addr: Byte, val data: ByteArray) : EhlCommandResult() {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as VolumeResponse
+            if (addr != other.addr) return false
+            if (!data.contentEquals(other.data)) return false
+            return true
+        }
+        override fun hashCode(): Int {
+            var result = addr.toInt()
+            result = 31 * result + data.contentHashCode()
+            return result
+        }
+    }
 }

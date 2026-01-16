@@ -30,6 +30,7 @@ data class CliArgs(
                         val modeStr = arg.substringAfter("--mode=").lowercase()
                         mode = when (modeStr) {
                             "stxetx" -> FrameMode.STX_ETX
+                            "ehl" -> FrameMode.EHL
                             "line" -> FrameMode.LINE
                             else -> FrameMode.LINE
                         }
@@ -64,7 +65,7 @@ data class CliArgs(
                 |
                 |Options:
                 |  --baud=<baud>       Baud rate (default: 9600)
-                |  --mode=<mode>       Frame mode: 'line' or 'stxetx' (default: line)
+                |  --mode=<mode>       Frame mode: 'line', 'stxetx', or 'ehl' (default: line)
                 |  --chunk=<bool>      Enable chunked responses (default: false)
                 |  --latencyMs=<ms>    Add latency jitter to read loop (default: 0)
                 |  --logHex=<bool>     Log raw bytes as hex (default: false)
@@ -80,5 +81,6 @@ data class CliArgs(
 
 enum class FrameMode {
     LINE,       // Frame terminated by '\n'
-    STX_ETX     // Frame: STX(0x02) ... ETX(0x03)
+    STX_ETX,    // Frame: STX(0x02) ... ETX(0x03)
+    EHL         // Frame: STX(0x10/0x20) LEN ADDR CMD [DATA...] CHK ETX(0x36)
 }

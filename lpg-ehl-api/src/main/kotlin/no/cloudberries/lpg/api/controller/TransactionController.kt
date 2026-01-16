@@ -17,6 +17,7 @@ import no.cloudberries.lpg.api.model.Transaction
 import no.cloudberries.lpg.api.service.TransactionService
 import java.math.BigDecimal
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -28,9 +29,10 @@ import java.util.*
 @Tag(name = "Transactions", description = "Transaction management endpoints")
 // @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 class TransactionController(
-    private val transactionService: TransactionService,
-    private val emulatorClient: EmulatorClient
+    private val transactionService: TransactionService
 ) {
+    @Autowired(required = false)
+    private var emulatorClient: EmulatorClient? = null
     private val logger = LoggerFactory.getLogger(TransactionController::class.java)
 
     @GetMapping
@@ -169,13 +171,17 @@ class TransactionController(
         
         logger.info("✅ Payment status updated for transaction $id")
         
-        // Notify emulator to reset dispenser and broadcast to Windows
-        logger.info("📢 Notifying emulator to settle dispenser #${updated.dispenserAddress}")
-        val settled = emulatorClient.settleDispenser(updated.dispenserAddress, paymentMethod)
-        if (settled) {
-            logger.info("✅ Emulator reset broadcast sent to Windows")
+        // Notify emulator to reset dispenser and broadcast to Windows (LAB MODE only)
+        if (emulatorClient != null) {
+            logger.info("📢 Notifying emulator to settle dispenser #${updated.dispenserAddress}")
+            val settled = emulatorClient!!.settleDispenser(updated.dispenserAddress, paymentMethod)
+            if (settled) {
+                logger.info("✅ Emulator reset broadcast sent to Windows")
+            } else {
+                logger.warn("⚠️ Failed to notify emulator (Windows may still show old values)")
+            }
         } else {
-            logger.warn("⚠️ Failed to notify emulator (Windows may still show old values)")
+            logger.info("🏭 FIELD MODE: Skipping emulator notification (not available)")
         }
         
         return ResponseEntity.ok(TransactionResponse.from(updated))

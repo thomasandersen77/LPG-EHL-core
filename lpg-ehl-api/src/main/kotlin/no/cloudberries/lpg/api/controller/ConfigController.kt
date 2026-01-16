@@ -13,13 +13,23 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1/config")
 @Tag(name = "Configuration", description = "Application configuration endpoints")
 class ConfigController(
-    private val environment: Environment
+    private val environment: Environment,
+    @Value("\${ehl.emulator.enabled:true}")
+    private val emulatorEnabled: Boolean
 ) {
 
     data class ModeResponse(
         val mode: String,
         val profiles: List<String>,
         val description: String
+    )
+
+    data class HardwareModeResponse(
+        val hardwareMode: String,  // "LAB" or "FIELD"
+        val isRealHardware: Boolean,
+        val description: String,
+        val serialPort: String?,
+        val baudRate: Int?
     )
 
     @GetMapping("/mode")
@@ -48,6 +58,36 @@ class ConfigController(
                 mode = mode,
                 profiles = activeProfiles,
                 description = description
+            )
+        )
+    }
+
+    @GetMapping("/hardware-mode")
+    @Operation(
+        summary = "Get hardware mode",
+        description = "Returns whether we're running with real hardware (FIELD) or emulated hardware (LAB)"
+    )
+    fun getHardwareMode(): ResponseEntity<HardwareModeResponse> {
+        val hardwareMode = if (emulatorEnabled) "LAB" else "FIELD"
+        val isRealHardware = !emulatorEnabled
+
+        val serialPort = if (!emulatorEnabled) environment.getProperty("ehl.serial.port") else null
+        val baudRateStr = environment.getProperty("ehl.serial.baud-rate")
+        val baudRate = baudRateStr?.toIntOrNull()
+
+        val description = when (hardwareMode) {
+            "FIELD" -> "REAL HARDWARE - Communicating via serial port"
+            "LAB" -> "SIMULATED HARDWARE - Using in-memory emulator"
+            else -> "Unknown hardware mode"
+        }
+
+        return ResponseEntity.ok(
+            HardwareModeResponse(
+                hardwareMode = hardwareMode,
+                isRealHardware = isRealHardware,
+                description = description,
+                serialPort = serialPort,
+                baudRate = baudRate
             )
         )
     }

@@ -47,11 +47,11 @@ class RealSerialTransport(
             port.numStopBits = SerialPort.ONE_STOP_BIT
             port.parity = SerialPort.NO_PARITY
             
-            // Open port with timeout
+            // Open port with timeout (3000ms for compatibility with socat)
             port.setComPortTimeouts(
                 SerialPort.TIMEOUT_READ_SEMI_BLOCKING,
-                100,  // Read timeout 100ms
-                0     // No write timeout
+                3000,  // Read timeout 3000ms (socat + simulator needs more time)
+                0      // No write timeout
             )
             
             if (!port.openPort()) {
