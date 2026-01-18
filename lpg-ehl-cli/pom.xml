@@ -31,7 +31,7 @@
         <!-- PLS module for FIELD MODE -->
         <dependency>
             <groupId>no.cloudberries.lpg</groupId>
-            <artifactId>lpg-ehl-pls</artifactId>
+            <artifactId>lpg-transport</artifactId>
             <version>${project.version}</version>
         </dependency>
 

@@ -125,7 +125,22 @@ graph TB
     style EHL fill:#99ff99
 ```
 
-### 2.2 Implementasjonsstatus (per 15. des 2025)
+### 2.2 Implementasjonsstatus (per 16. jan 2026)
+
+#### Arkitektur: Hexagonal/Modular Monolith
+
+**Module Structure (261 tester, 0 feil):**
+```
+lpg-ehl-service (240K)  ← Business logic + Liquibase DB migrasjoner
+       │
+       ├── lpg-ehl-core (304K)      # Protocol (NO Spring)
+       ├── lpg-transport (8K)       # Serial/TCP
+       └── lpg-ehl-emulator         # LAB mode simulator
+
+lpg-ehl-webapp (116M)   ← Web API + React (THIN WRAPPER)
+lpg-ehl-headless (66M)  ← Headless for Raspberry Pi
+lpg-ehl-cli (67M)       ← Spring Shell CLI
+```
 
 #### ✅ Fullstendig implementert
 
@@ -133,49 +148,56 @@ graph TB
 - ✅ EHL-protokoll (pakke-encoding/decoding, checksum)
 - ✅ Transaction state machine (9 states)
 - ✅ Serial port communication (RS-485)
-- ✅ 50 unit tests, 100% coverage på protokoll
+- ✅ 78+ unit tests, 100% coverage på protokoll
+
+**Service (lpg-ehl-service)**:
+- ✅ JPA Entities (Transaction, DispenserStatus, PriceHistory)
+- ✅ Spring Data repositories
+- ✅ TransactionService, PriceService, DiagnosticsService
+- ✅ CreditAccount + Customer entities
+- ✅ PaymentGateway interface + Mock/SimulatedPaymentGateway
+- ✅ Liquibase database migrations (eier av skjema)
+- ✅ 52+ unit tests
 
 **Emulator (lpg-ehl-emulator)**:
 - ✅ TCP-basert dispenser-emulator
 - ✅ Simulator for testing uten hardware
 - ✅ 11 integrasjonstester
 
-**API (lpg-ehl-api)**:
-- ✅ REST API med OpenAPI spec
-- ✅ Bearer token authentication
-- ✅ PostgreSQL persistence med JSONB
-- ✅ Azure Storage Queue sync med retry-logikk
-- ✅ Testcontainers-baserte integrasjonstester
-- ✅ Health checks, metrics, logging
-- ✅ Docker deployment (docker-compose)
+**Webapp (lpg-ehl-webapp)**:
+- ✅ REST Controllers (thin wrapper over service)
+- ✅ WebSocket handlers for real-time updates
+- ✅ Security + Web configuration
+- ✅ Embedded React frontend
+
+**Headless (lpg-ehl-app-headless)**:
+- ✅ Klar for Raspberry Pi / embedded deployment
+- ✅ Avhenger av service-modul (ingen web server)
+
+**CLI (lpg-ehl-cli)**:
+- ✅ Spring Shell med EHL-kommandoer
+- ✅ LAB mode og FIELD mode support
 
 **Frontend (lpg-web)**:
 - ✅ React 18 + TypeScript + Vite
 - ✅ Tailwind CSS styling
 - ✅ TanStack Query for data caching
 - ✅ Pumpe-simulator UI
-- ✅ Real-time status updates (500ms polling)
+- ✅ Real-time status updates
 
 #### 🚧 Under implementering
 
 **Payment Gateway**:
-- ✅ Interface definert
-- ✅ SimulatedPaymentGateway (CASH/CARD)
+- ✅ PaymentGateway interface (i service-modul)
+- ✅ MockPaymentGateway + SimulatedPaymentGateway (CASH/CARD/VIPPS)
 - 🚧 VippsPaymentGateway (venter på API-nøkler)
 - 🚧 Terminal integration (venter på hardware)
 
 **Credit Accounts**:
-- ✅ Database schema
-- ✅ Entity classes
-- 🚧 REST endpoints
+- ✅ Database schema (i service-modul)
+- ✅ Entity classes + repositories
+- ✅ REST endpoints
 - 🚧 Frontend pages
-
-**Extended Frontend**:
-- ✅ Pump simulator page
-- 🚧 Transactions page
-- 🚧 Credit accounts page
-- 🚧 Reports page
-- 🚧 Emulator debug page
 
 ### 2.3 Teknisk stack comparison
 

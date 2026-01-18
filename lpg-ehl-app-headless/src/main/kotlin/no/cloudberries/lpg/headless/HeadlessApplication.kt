@@ -1,0 +1,66 @@
+package no.cloudberries.lpg.headless
+
+import org.slf4j.LoggerFactory
+import org.springframework.boot.WebApplicationType
+import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.boot.autoconfigure.domain.EntityScan
+import org.springframework.boot.runApplication
+import org.springframework.context.annotation.ComponentScan
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories
+import org.springframework.scheduling.annotation.EnableScheduling
+
+/**
+ * Headless LPG EHL Application
+ * 
+ * Dette er en Spring Boot-applikasjon uten web-server (WebApplicationType.NONE).
+ * Den kan kjøres på maskiner uten skjerm for å:
+ * - Kommunisere med LPG-dispensere via seriell port
+ * - Lagre transaksjoner i PostgreSQL database
+ * - Synkronisere data til Azure
+ * - Kjøre schedulerte oppgaver (polling, watchdog, etc.)
+ * 
+ * Bruksområder:
+ * - Produksjonsmiljø på bensinstasjon (headless server/Raspberry Pi)
+ * - Docker containers
+ * - Systemd services på Linux
+ * 
+ * Kjøring:
+ * ```
+ * java -jar lpg-ehl-app-headless.jar
+ * ```
+ */
+@SpringBootApplication
+@ComponentScan(
+    basePackages = [
+        "no.cloudberries.lpg.headless",      // Headless-spesifikk kode
+        "no.cloudberries.lpg.service",        // Business logic fra service-modulen
+        "no.cloudberries.lpg.communication",  // EhlCommunicator fra core
+        "no.cloudberries.lpg.emulator",       // Emulator (optional, for LAB mode)
+        "no.cloudberries.lpg.transport"       // Serial port transport
+    ]
+)
+@EntityScan("no.cloudberries.lpg.service.model")
+@EnableJpaRepositories("no.cloudberries.lpg.service.repository")
+@EnableScheduling
+class HeadlessApplication
+
+fun main(args: Array<String>) {
+    val logger = LoggerFactory.getLogger(HeadlessApplication::class.java)
+    
+    logger.info("═══════════════════════════════════════════════════════════")
+    logger.info("   LPG EHL HEADLESS APPLICATION")
+    logger.info("   Mode: HEADLESS (No Web Server)")
+    logger.info("═══════════════════════════════════════════════════════════")
+    
+    val app = runApplication<HeadlessApplication>(*args) {
+        // Disable web server completely
+        setWebApplicationType(WebApplicationType.NONE)
+    }
+    
+    logger.info("✅ Headless application started successfully")
+    logger.info("📡 Listening for dispenser events...")
+    logger.info("💾 Database connection active")
+    logger.info("☁️  Azure sync service running")
+    logger.info("")
+    logger.info("Press Ctrl+C to stop")
+}

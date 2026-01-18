@@ -4,9 +4,16 @@ spring:
   main:
     banner-mode: off  # Disable Spring Boot banner for cleaner CLI
     web-application-type: none  # Disable web server
+  shell:
+    interactive:
+      enabled: true
+    command:
+      version:
+        enabled: false  # Disable default version command
+      help:
+        enabled: true
 
 # EHL Protocol Configuration
-# Identical to API configuration for consistency
 ehl:
   emulator:
     enabled: ${EHL_EMULATOR_ENABLED:true}  # DEFAULT: LAB MODE (safe for dev)
@@ -26,14 +33,3 @@ logging:
     no.cloudberries.lpg.communication: DEBUG
   pattern:
     console: "%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n"
-
-# Spring Shell Configuration
-spring:
-  shell:
-    interactive:
-      enabled: true
-    command:
-      version:
-        enabled: false  # Disable default version command
-      help:
-        enabled: true

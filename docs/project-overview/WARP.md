@@ -12,37 +12,64 @@ Moderne Kotlin-basert edge system for LPG-stasjoner. Erstatter legacy Windows Di
 2. **Python** (Eksperiment) - Proof-of-concept re-implementasjon av VB6-logikken
 3. **Kotlin** (Production) - Moderne, type-safe, cloud-native implementasjon
 
-### Hovedmoduler
+### Hovedmoduler (Hexagonal/Modular Monolith)
 
 ```
 lpg-ehl/
-├── lpg-ehl-core/           # Core protocol implementation (Kotlin)
+├── lpg-ehl-core/           # Protocol layer (NO Spring dependencies)
 │   ├── protocol/           # EHL packet encoding/decoding
 │   ├── transaction/        # Transaction state machine
 │   └── communication/      # Serial port abstraction
 │
-├── lpg-ehl-api/            # Spring Boot REST API
-│   ├── payment/            # Payment integration (Cloud Connect)
-│   ├── integration/        # External API clients (Nets)
-│   └── controller/         # REST endpoints
+├── lpg-transport/          # Serial/TCP transport (NO business logic)
 │
-├── lpg-ehl-emulator/       # Testing emulator (Spring Boot)
-│   └── Simulates dispenser hardware
+├── lpg-ehl-service/        # Business logic + Database (Spring Data JPA)
+│   ├── model/              # JPA Entities (Transaction, DispenserStatus...)
+│   ├── repository/         # Spring Data repositories
+│   ├── service/            # TransactionService, PriceService, AzureSyncService
+│   ├── credit/             # Customer, CreditAccount entities + repos
+│   ├── payment/            # PaymentGateway interface + Mock/Simulated
+│   └── resources/db/       # Liquibase migrations (owned by service)
+│
+├── lpg-ehl-emulator/       # LAB mode dispenser simulator
+│
+├── lpg-ehl-webapp/         # Web API + React frontend (THIN WRAPPER)
+│   ├── controller/         # REST Controllers only
+│   ├── websocket/          # WebSocket handlers
+│   └── config/             # Security, Web config
+│
+├── lpg-ehl-app-headless/   # Headless production (no web server)
+│   └── For Raspberry Pi / embedded deployment
+│
+├── lpg-ehl-cli/            # Spring Shell CLI for testing
+│   └── Interactive dispenser commands
+│
+├── lpg-web/                # React frontend source (builds to webapp)
 │
 ├── _archived/              # Archived implementations
-│   ├── baxi-protocol/      # Direct TCP/ECR protocol (pre-Cloud Connect)
-│   └── rest-api-attempt/   # Incorrect REST API approach (2025-01-02)
 │
 ├── norgesgass_legacy/      # VB6 legacy code (reference only)
-│   ├── pumpekontroll.frm   # Original UI + logic
-│   └── fra_dispenser.bas   # EHL protocol implementation
 │
 └── more_legacy/            # Python re-implementation (reference)
-    └── ehl_pumpekontroll_clone/
-        ├── protocol.py     # EHL framing
-        ├── model.py        # State management
-        └── poller.py       # Polling loop
 ```
+
+### Module Dependencies
+```
+lpg-ehl-webapp ──┬──► lpg-ehl-service ──┬──► lpg-ehl-core (protocol)
+                 │                      ├──► lpg-transport (serial/TCP)
+ lpg-ehl-headless┘                      └──► lpg-ehl-emulator (LAB mode)
+
+lpg-ehl-cli ──► lpg-ehl-core + lpg-transport + lpg-ehl-emulator
+```
+
+### JAR Sizes
+| Module | Size | Purpose |
+|--------|------|----------|
+| lpg-ehl-core | 304K | Protocol (no Spring) |
+| lpg-ehl-service | 240K | Business logic + DB |
+| lpg-ehl-webapp | 116M | Full Web + React |
+| lpg-ehl-headless | 66M | Headless (Raspberry Pi) |
+| lpg-ehl-cli | 67M | Interactive Shell |
 
 ### Legacy Code Location
 

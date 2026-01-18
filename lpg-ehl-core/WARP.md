@@ -172,26 +172,88 @@ val communicator = EhlCommunicator(port)
 
 See [docs/EMULATOR.md](docs/EMULATOR.md) for complete documentation.
 
-## Multi-Module Architecture
+## Multi-Module Architecture (Hexagonal/Modular Monolith)
 
 ### Module Structure
 ```
 lpg-ehl/
-├── lpg-ehl-core/           # EHL protocol + Transaction logic (protocol layer)
-├── lpg-ehl-emulator/       # Standalone emulator (testing, port 9001)
-├── lpg-ehl-api/            # Production API + Edge service (port 8080)
-└── lpg-web/                # React frontend (embedded in API)
+├── lpg-ehl-core/           # Protocol layer (NO Spring dependencies)
+│   ├── protocol/           # EHL packet encoding/decoding
+│   ├── transaction/        # Transaction state machine
+│   └── communication/      # Serial port abstraction
+│
+├── lpg-transport/          # Serial/TCP transport (NO business logic)
+│
+├── lpg-ehl-service/        # Business logic + Database (Spring Data JPA)
+│   ├── model/              # JPA Entities (Transaction, DispenserStatus...)
+│   ├── repository/         # Spring Data repositories
+│   ├── service/            # TransactionService, PriceService, AzureSyncService
+│   ├── credit/             # Customer, CreditAccount entities + repos
+│   ├── payment/            # PaymentGateway interface + implementations
+│   └── resources/db/       # Liquibase migrations (owned by service module)
+│
+├── lpg-ehl-emulator/       # LAB mode dispenser simulator
+│
+├── lpg-ehl-webapp/         # Web API + React frontend (THIN WRAPPER)
+│   ├── controller/         # REST Controllers only
+│   ├── websocket/          # WebSocket handlers
+│   └── config/             # Security, Web config
+│
+├── lpg-ehl-app-headless/   # Headless production (no web server)
+│   └── Depends on service, runs without Tomcat
+│
+├── lpg-ehl-cli/            # Spring Shell CLI for testing
+│   └── Interactive dispenser commands
+│
+└── lpg-web/                # React frontend source (builds to webapp)
+```
+
+### Module Dependencies (Layered)
+```
+                    ┌─────────────────┐
+                    │   lpg-ehl-cli   │  (Spring Shell)
+                    └────────┬────────┘
+                             │
+┌─────────────────┐  ┌───────┴───────┐  ┌─────────────────┐
+│ lpg-ehl-webapp  │  │lpg-ehl-headless│  │                 │
+│ (Web + React)   │  │   (No Web)     │  │                 │
+└────────┬────────┘  └───────┬────────┘  │                 │
+         │                   │           │                 │
+         └─────────┬─────────┘           │                 │
+                   │                     │                 │
+           ┌───────▼───────┐             │                 │
+           │lpg-ehl-service│◄────────────┘                 │
+           │(Business Logic)│                              │
+           │ + Liquibase DB │                              │
+           └───────┬────────┘                              │
+                   │                                       │
+    ┌──────────────┼──────────────┐                        │
+    │              │              │                        │
+┌───▼───┐   ┌──────▼──────┐  ┌────▼─────┐                  │
+│  core │   │lpg-transport│  │lpg-ehl-  │                  │
+│(proto)│   │ (Serial/TCP)│  │ emulator │                  │
+└───────┘   └─────────────┘  └──────────┘                  │
 ```
 
 ### Port Configuration
-- **lpg-ehl-api**: Port 8080 (production API)
-- **lpg-ehl-emulator**: Port 9001 (test GUI + mock dispenser)
-- **EHL Protocol TCP**: Port 9000 (serial-over-TCP for emulator)
+- **lpg-ehl-webapp**: Port 8080 (production Web API + React)
+- **lpg-ehl-emulator**: Port 9001 (LAB mode test GUI)
+- **EHL Protocol TCP**: Port 9000 (serial-over-TCP)
 
 ### Database
 - **PostgreSQL**: Port 5432
-- **Liquibase migrations**: `lpg-ehl-api/src/main/resources/db/changelog/`
-- **Key tables**: `transactions`, `price_history`, `dispenser_status`
+- **Liquibase migrations**: `lpg-ehl-service/src/main/resources/db/changelog/`
+- **Key tables**: `transactions`, `price_history`, `dispenser_status`, `customers`, `credit_accounts`
+
+### JAR Sizes (Production)
+| Module | Size | Purpose |
+|--------|------|----------|
+| lpg-ehl-core | 304K | Protocol (no Spring) |
+| lpg-transport | 8K | Serial/TCP transport |
+| lpg-ehl-service | 240K | Business logic + DB |
+| lpg-ehl-webapp | 116M | Full Web API + React |
+| lpg-ehl-headless | 66M | Headless (Raspberry Pi) |
+| lpg-ehl-cli | 67M | Interactive Shell |
 
 ## WebSocket Real-Time Logging
 

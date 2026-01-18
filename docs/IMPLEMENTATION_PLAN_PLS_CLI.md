@@ -199,7 +199,7 @@ import org.slf4j.LoggerFactory
  * - ehl.serial.port (default: /dev/ttyS0)
  * - ehl.serial.baud-rate (default: 9600)
  * 
- * Serial parametere: 9600 baud, 8N1, no parity
+ * Serial parametere: 9600 baud, 8E1, even parity
  */
 class RealSerialTransport(
     private val portName: String,
@@ -221,11 +221,11 @@ class RealSerialTransport(
                 return false
             }
             
-            // Configure serial parameters: 9600 8N1
+            // Configure serial parameters: 9600 8E1
             port.baudRate = baudRate
             port.numDataBits = 8
             port.numStopBits = SerialPort.ONE_STOP_BIT
-            port.parity = SerialPort.NO_PARITY
+            port.parity = SerialPort.EVEN_PARITY
             
             // Open port with timeout
             port.setComPortTimeouts(
@@ -361,7 +361,7 @@ ehl:
 - **Baud rate:** 9600
 - **Data bits:** 8
 - **Stop bits:** 1
-- **Parity:** None (8N1)
+- **Parity:** Even (8E1)
 
 ## Plattformer
 
@@ -1369,7 +1369,7 @@ Implementasjon av `SerialTransport` interface med jSerialComm.
 - `ehl.serial.port`: Serial port device (default: /dev/ttyS0)
 - `ehl.serial.baud-rate`: Baud rate (default: 9600)
 
-**Serial parametere:** 9600 8N1, no parity
+**Serial parametere:** 9600 8E1, even parity
 ```
 
 ### 7.2 Lag ny ARCHITECTURE.md
