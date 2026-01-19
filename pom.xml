@@ -33,7 +33,7 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <slf4j.version>2.0.13</slf4j.version>
-        <logback.version>1.5.19</logback.version>
+        <!-- logback.version managed by Spring Boot BOM -->
         <junit.version>5.10.2</junit.version>
         <jserialcomm.version>2.10.4</jserialcomm.version>
         <azure-storage.version>12.24.0</azure-storage.version>
@@ -88,16 +88,7 @@
                 <artifactId>slf4j-api</artifactId>
                 <version>${slf4j.version}</version>
             </dependency>
-            <dependency>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-core</artifactId>
-                <version>${logback.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-classic</artifactId>
-                <version>${logback.version}</version>
-            </dependency>
+            <!-- Logback version managed by Spring Boot BOM - do not override -->
 
             <!-- Testing -->
             <dependency>

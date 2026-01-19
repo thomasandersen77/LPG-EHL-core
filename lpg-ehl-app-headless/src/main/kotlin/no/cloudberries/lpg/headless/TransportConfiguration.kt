@@ -44,14 +44,17 @@ class TransportConfiguration {
     /**
      * LAB MODE: In-memory serial port with emulator.
      * Used for development and testing when no physical hardware is available.
+     * Activated when lpg.mode=LAB
      */
     @Bean
     @ConditionalOnProperty(
-        name = ["ehl.emulator.enabled"], 
-        havingValue = "true"
+        prefix = "lpg",
+        name = ["mode"], 
+        havingValue = "LAB"
     )
     fun labModeTransport(
-        emulator: EhlDispenserEmulator,
+        @Value("\${ehl.emulator.dispenser-address:1}") dispenserAddress: Int,
+        @Value("\${ehl.emulator.price-per-liter-cents:1590}") pricePerLiterCents: Int,
         @Value("\${ehl.emulator.latency-ms:20}") latencyMs: Long
     ): SerialTransport {
         logger.info("════════════════════════════════════════════════════════")
@@ -59,16 +62,27 @@ class TransportConfiguration {
         logger.info("════════════════════════════════════════════════════════")
         logger.info("Transport: InMemorySerialPort")
         logger.info("Backend: EhlDispenserEmulator")
+        logger.info("Dispenser Address: $dispenserAddress")
+        logger.info("Price: ${pricePerLiterCents / 100.0} kr/L")
         logger.info("Latency: ${latencyMs}ms (simulated)")
         logger.info("Hardware: NOT REQUIRED")
         logger.info("════════════════════════════════════════════════════════")
         
-        return InMemorySerialPort(emulator, latencyMs)
+        val emulator = EhlDispenserEmulator(
+            address = dispenserAddress,
+            pricePerLitreCents = pricePerLiterCents
+        )
+        
+        val transport = InMemorySerialPort(emulator, latencyMs)
+        transport.connect()
+        
+        return transport
     }
     
     /**
      * FIELD MODE: Real serial port for production hardware.
      * DEFAULT MODE for headless deployment.
+     * Activated when lpg.mode=FIELD (or not specified)
      * 
      * Supports full RS-485/RS-232 configuration:
      * - COM port / device path
@@ -79,8 +93,9 @@ class TransportConfiguration {
      */
     @Bean
     @ConditionalOnProperty(
-        name = ["ehl.emulator.enabled"], 
-        havingValue = "false",
+        prefix = "lpg",
+        name = ["mode"], 
+        havingValue = "FIELD",
         matchIfMissing = true  // Default to FIELD mode for headless
     )
     fun fieldModeTransport(
@@ -122,25 +137,11 @@ class TransportConfiguration {
     
     /**
      * EHL Communicator - Uses whichever transport is configured.
-     * Auto-connects on startup.
+     * Transport is already connected by the mode-specific bean.
      */
     @Bean
     fun ehlCommunicator(transport: SerialTransport): EhlCommunicator {
         logger.info("Creating EhlCommunicator with ${transport.javaClass.simpleName}")
-        
-        val communicator = EhlCommunicator(transport)
-        
-        // Connect transport
-        if (!transport.isConnected) {
-            val connected = transport.connect()
-            if (connected) {
-                logger.info("✅ Transport connected successfully")
-            } else {
-                logger.error("❌ Failed to connect transport")
-                throw IllegalStateException("Failed to connect serial transport to $transport")
-            }
-        }
-        
-        return communicator
+        return EhlCommunicator(transport)
     }
 }

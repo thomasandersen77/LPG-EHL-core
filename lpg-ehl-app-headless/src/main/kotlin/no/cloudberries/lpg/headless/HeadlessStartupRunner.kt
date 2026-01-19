@@ -1,5 +1,7 @@
 package no.cloudberries.lpg.headless
 
+import kotlinx.coroutines.runBlocking
+import no.cloudberries.lpg.communication.EhlCommunicator
 import no.cloudberries.lpg.protocol.EhlCommand
 import no.cloudberries.lpg.protocol.EhlPacket
 import no.cloudberries.lpg.service.pump.DispenserService
@@ -25,11 +27,13 @@ import org.springframework.stereotype.Component
  */
 @Component
 class HeadlessStartupRunner(
+    private val ehlCommunicator: EhlCommunicator,
     private val dispenserService: DispenserService,
     @Autowired(required = false) private val pumpStateService: PumpStateService?,
     @Autowired(required = false) private val hardwareWatchdogService: HardwareWatchdogService?,
     @Autowired(required = false) private val azureQueueReaderService: AzureQueueReaderService?,
-    @Value("\${lpg.mode:FIELD}") private val mode: String
+    @Value("\${lpg.mode:LAB}") private val mode: String,
+    @Value("\${lpg.dispenser.address:1}") private val dispenserAddress: Int
 ) : CommandLineRunner {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -68,6 +72,7 @@ class HeadlessStartupRunner(
     private fun initializeHardware() {
         logger.info("🔌 Initializing hardware communication...")
         logger.info("   Mode: $mode")
+        logger.info("   Dispenser Address: $dispenserAddress")
         
         try {
             if (mode == "LAB") {
@@ -76,12 +81,27 @@ class HeadlessStartupRunner(
                 logger.info("   🏭 FIELD MODE: Using real hardware")
             }
             
-            // DispenserService vil automatisk koble til hardware via dependency injection
-            logger.info("   ✅ Hardware communication initialized")
+            // Test communication by sending a STATE query
+            logger.info("   📡 Testing communication with dispenser...")
+            val testPacket = EhlPacket(
+                address = dispenserAddress,
+                command = EhlCommand.STATE,
+                data = byteArrayOf()
+            )
+            
+            val response = runBlocking {
+                ehlCommunicator.sendAndReceive(testPacket, 2000)
+            }
+            
+            logger.info("   ✅ Communication test successful")
+            logger.info("   Response: address=${response.address}, command=${response.command.name}, data=${response.data.size} bytes")
+            
+            // Send response to DispenserService for processing
+            dispenserService.handlePacket(response)
             
         } catch (e: Exception) {
             logger.error("   ❌ Failed to initialize hardware: ${e.message}", e)
-            logger.warn("   ⚠️  Continuing without hardware connection")
+            logger.warn("   ⚠️  Continuing - polling service will retry")
         }
     }
     
