@@ -194,7 +194,7 @@ export function HomePage() {
             <li>• <strong>EHL Protocol:</strong> Komplett implementasjon av EHL for LPG-dispensere</li>
             <li>• <strong>Database persistence:</strong> Alle transaksjoner lagres i PostgreSQL</li>
             <li>• <strong>Azure sync:</strong> Automatisk synkronisering til sky (emulert lokalt)</li>
-            <li>• <strong>Simulert betaling:</strong> Test kortbetaling, kontant og stasjonskreditt</li>
+            <li>• <strong>Simulert betaling:</strong> Test kortbetaling og stasjonskreditt</li>
           </ul>
         </footer>
       </div>

@@ -34,7 +34,7 @@ class Transaction(
     var pricePerLiter: BigDecimal? = null,
 
     @Column(name = "payment_type")
-    var paymentType: String? = null, // CASH, CARD, CREDIT (null = awaiting payment)
+    var paymentType: String? = null, // CARD, CREDIT (null = awaiting payment)
 
     @Column(name = "payment_status")
     var paymentStatus: String = "PENDING", // PENDING, PAID

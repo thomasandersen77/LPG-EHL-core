@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-export type PaymentMethod = 'CASH' | 'CARD' | 'CREDIT';
+export type PaymentMethod = 'CARD' | 'CREDIT';
 export type PaymentStatus = 'PENDING' | 'APPROVED' | 'DECLINED' | 'CANCELLED';
 
 export interface PaymentRequest {

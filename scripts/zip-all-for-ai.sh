@@ -7,68 +7,91 @@ set -e
 echo "🤖 Creating AI analysis archives..."
 echo ""
 
+# Helper function to zip only if files exist
+safe_zip() {
+    local zip_name=$1
+    shift
+    local files_to_zip=()
+    local exclude_args=()
+    local in_exclude=false
+
+    for arg in "$@"; do
+        if [[ "$arg" == "-x" ]]; then
+            in_exclude=true
+            exclude_args+=("-x")
+            continue
+        fi
+
+        if $in_exclude; then
+            exclude_args+=("$arg")
+        else
+            if [[ -e "$arg" ]]; then
+                files_to_zip+=("$arg")
+            fi
+        fi
+    done
+
+    if [ ${#files_to_zip[@]} -gt 0 ]; then
+        zip -q -r "$zip_name" "${files_to_zip[@]}" "${exclude_args[@]}"
+        echo "✓ ${zip_name} zipped ($(du -h "$zip_name" | cut -f1))"
+    else
+        echo "⚠️  Skipping ${zip_name} (no matching files found)"
+    fi
+}
+
 # Core module (EHL protocol)
 echo "📦 Zipping core module..."
-zip -q -r lpg-ehl-core-for-ai.zip lpg-ehl-core/src \
+safe_zip lpg-ehl-core-for-ai.zip lpg-ehl-core/src \
     lpg-ehl-core/pom.xml \
     lpg-ehl-core/README.md \
     -x "*/target/*" "*/.idea/*" "*/node_modules/*"
-echo "✓ Core module zipped ($(du -h lpg-ehl-core-for-ai.zip | cut -f1))"
 
 # API module (Spring Boot REST API + Nets Cloud Connect)
 echo "📦 Zipping API module..."
-zip -q -r lpg-ehl-api-for-ai.zip lpg-ehl-api/src \
+safe_zip lpg-ehl-api-for-ai.zip lpg-ehl-api/src \
     lpg-ehl-api/pom.xml \
     lpg-ehl-api/README.md \
     lpg-ehl-api/.env.local.example \
     -x "*/target/*" "*/.idea/*" "*/node_modules/*"
-echo "✓ API module zipped ($(du -h lpg-ehl-api-for-ai.zip | cut -f1))"
 
 # Emulator module
 echo "📦 Zipping emulator module..."
-zip -q -r lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src \
+safe_zip lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src \
     lpg-ehl-emulator/pom.xml \
     lpg-ehl-emulator/README.md \
     -x "*/target/*" "*/.idea/*"
-echo "✓ Emulator module zipped ($(du -h lpg-ehl-emulator-for-ai.zip | cut -f1))"
 
 # PLS module (Physical Layer Support)
 echo "📦 Zipping PLS module..."
-zip -q -r lpg-ehl-pls-for-ai.zip lpg-ehl-pls/src \
+safe_zip lpg-ehl-pls-for-ai.zip lpg-ehl-pls/src \
     lpg-ehl-pls/pom.xml \
     -x "*/target/*" "*/.idea/*"
-echo "✓ PLS module zipped ($(du -h lpg-ehl-pls-for-ai.zip | cut -f1))"
 
 # CLI module (Spring Shell)
 echo "📦 Zipping CLI module..."
-zip -q -r lpg-ehl-cli-for-ai.zip lpg-ehl-cli/src \
+safe_zip lpg-ehl-cli-for-ai.zip lpg-ehl-cli/src \
     lpg-ehl-cli/pom.xml \
     -x "*/target/*" "*/.idea/*"
-echo "✓ CLI module zipped ($(du -h lpg-ehl-cli-for-ai.zip | cut -f1))"
 
 # VB6 Legacy Code
 echo "📦 Zipping VB6 legacy code..."
-zip -q -r norgesgass-legacy-for-ai.zip norgesgass_legacy/ \
+safe_zip norgesgass-legacy-for-ai.zip norgesgass_legacy/ \
     -x "*/bin/*" "*/obj/*" "*/.vs/*"
-echo "✓ VB6 legacy zipped ($(du -h norgesgass-legacy-for-ai.zip | cut -f1))"
 
 # Python PoC
 echo "📦 Zipping Python PoC..."
-zip -q -r python-legacy-for-ai.zip "more_legacy/Gammenl kode Python/ehl_pumpekontroll_clone/" \
+safe_zip python-legacy-for-ai.zip "more_legacy/Gammenl kode Python/ehl_pumpekontroll_clone/" \
     -x "*/__pycache__/*" "*/.pytest_cache/*" "*/venv/*"
-echo "✓ Python PoC zipped ($(du -h python-legacy-for-ai.zip | cut -f1))"
 
 # Documentation
 echo "📦 Zipping documentation..."
-zip -q -r docs-for-ai.zip docs/ WARP.md README.md CHANGELOG.md \
+safe_zip docs-for-ai.zip docs/ WARP.md README.md CHANGELOG.md \
     LEGACY_ANALYSIS.md IMPLEMENTATION_ROADMAP.md
-echo "✓ Documentation zipped ($(du -h docs-for-ai.zip | cut -f1))"
 
 # Archived Baxi protocol
 echo "📦 Zipping archived Baxi protocol..."
-zip -q -r archived-baxi-for-ai.zip _archived/baxi-protocol/ \
+safe_zip archived-baxi-for-ai.zip _archived/baxi-protocol/ \
     -x "*/Terminal/images/*"
-echo "✓ Archived Baxi protocol zipped ($(du -h archived-baxi-for-ai.zip | cut -f1))"
 
 echo ""
 echo "✅ All archives created!"

@@ -23,7 +23,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories
         "no.cloudberries.lpg.service.repository",
         "no.cloudberries.lpg.service.credit",
         "no.cloudberries.lpg.service.azure",
-        "no.cloudberries.lpg.service.transaction"
+        "no.cloudberries.lpg.service.transaction",
+        "no.cloudberries.lpg.service.price",
+        "no.cloudberries.lpg.service.pump"
     ]
 )
 @EntityScan(
@@ -31,7 +33,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories
         "no.cloudberries.lpg.service.model",
         "no.cloudberries.lpg.service.credit",
         "no.cloudberries.lpg.service.azure",
-        "no.cloudberries.lpg.service.transaction"
+        "no.cloudberries.lpg.service.transaction",
+        "no.cloudberries.lpg.service.price",
+        "no.cloudberries.lpg.service.pump"
     ]
 )
 class ServiceConfiguration

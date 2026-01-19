@@ -1,5 +1,7 @@
 package no.cloudberries.lpg.service.pump
 
+import no.cloudberries.lpg.protocol.DispenserStateMapper
+import no.cloudberries.lpg.protocol.DispenserStatus
 import no.cloudberries.lpg.service.dto.DispenserStatusResponse
 import no.cloudberries.lpg.service.pump.DispenserStatusRepository
 import no.cloudberries.lpg.service.transaction.TransactionRepository
@@ -131,26 +133,29 @@ class DispenserService(
      * Handle VOLUME response packets to detect fuel flow and transaction progress
      */
     private fun handleVolumePacket(address: Int, packet: EhlPacket, currentState: DispenserStateInfo) {
-        if (packet.data.size < 4) {
-            logger.warn("VOLUME packet from dispenser $address has insufficient data (${packet.data.size} bytes)")
+        if (packet.data.size != 5) {
+            logger.warn("VOLUME packet from dispenser $address has invalid data size (expected 5 bytes, got ${packet.data.size})")
             return
         }
         
         try {
-            val (volumeLiters, amountCents) = EhlDataParser.parseVolumeData(packet.data)
+            val volumeLiters = EhlDataParser.parseVolumeDataVb6(packet.data)
             val volumeDeciliters = (volumeLiters * 10).toInt()
             
+            // Always get the LATEST state from the map (may have been updated by handleStatePacket)
+            val latestState = dispenserStates.getOrDefault(address, currentState)
+            
             // Detect volume increase (fuel flowing)
-            if (volumeDeciliters > currentState.lastVolumeDeciliters && currentState.state == DispenserState.STARTED) {
+            if (volumeDeciliters > latestState.lastVolumeDeciliters && latestState.state == DispenserState.STARTED) {
                 logger.info("Dispenser $address: Fuel flow detected, transitioning to FILLING")
-                handleStateTransition(address, currentState, DispenserState.FILLING)
-                dispenserStates[address] = currentState.copy(
+                handleStateTransition(address, latestState, DispenserState.FILLING)
+                dispenserStates[address] = latestState.copy(
                     state = DispenserState.FILLING,
                     lastVolumeDeciliters = volumeDeciliters
                 )
             } else if (volumeDeciliters > 0) {
                 // Update volume without state change
-                dispenserStates[address] = currentState.copy(lastVolumeDeciliters = volumeDeciliters)
+                dispenserStates[address] = latestState.copy(lastVolumeDeciliters = volumeDeciliters)
             }
             
         } catch (e: Exception) {
@@ -397,7 +402,7 @@ class DispenserService(
      * @param pumpId Dispenser address
      * @return DispenserStatus - current domain state
      */
-    fun getCurrentStatus(pumpId: Int): no.cloudberries.lpg.protocol.DispenserStatus {
+    fun getCurrentStatus(pumpId: Int): DispenserStatus {
         // Send STATE query and parse response
         val statePacket = EhlPacket(
             address = pumpId,
@@ -407,10 +412,10 @@ class DispenserService(
         
         val response = sendCommandAndWaitForResponse(statePacket, 2000)
         return if (response != null) {
-            no.cloudberries.lpg.protocol.DispenserStateMapper.mapFromPacket(response)
+            DispenserStateMapper.mapFromPacket(response)
         } else {
             logger.warn("No response from pump $pumpId for STATE query")
-            no.cloudberries.lpg.protocol.DispenserStatus.UNKNOWN(0x00)
+            DispenserStatus.UNKNOWN(0x00)
         }
     }
     
@@ -448,16 +453,16 @@ class DispenserService(
         )
         
         val response = sendCommandAndWaitForResponse(volumePacket, 2000)
-        return if (response != null && response.data.size >= 4) {
+        return if (response != null && response.data.size == 5) {
             try {
-                val (volumeLiters, _) = EhlDataParser.parseVolumeData(response.data)
+                val volumeLiters = EhlDataParser.parseVolumeDataVb6(response.data)
                 volumeLiters.toFloat()
             } catch (e: Exception) {
                 logger.error("Failed to parse volume from pump $pumpId: ${e.message}")
                 0.0f
             }
         } else {
-            logger.warn("No valid volume response from pump $pumpId")
+            logger.warn("No valid volume response from pump $pumpId (expected 5 bytes, got ${response?.data?.size ?: 0})")
             0.0f
         }
     }

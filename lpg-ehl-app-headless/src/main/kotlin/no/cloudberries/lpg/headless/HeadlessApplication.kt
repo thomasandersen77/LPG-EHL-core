@@ -1,7 +1,6 @@
 package no.cloudberries.lpg.headless
 
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.getBean
 import org.springframework.boot.WebApplicationType
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
@@ -72,13 +71,11 @@ fun main(args: Array<String>) {
     logger.info("   Mode: HEADLESS (No Web Server)")
     logger.info("═══════════════════════════════════════════════════════════")
     
-    val app = runApplication<HeadlessApplication>(*args)
-    app.getBean<HeadlessStartupRunner>().run()
+    // Run as headless Spring Boot application (no web server)
+    runApplication<HeadlessApplication>(*args) {
+        setWebApplicationType(WebApplicationType.NONE)
+    }
     
-    logger.info("✅ Headless application started successfully")
-    logger.info("📡 Listening for dispenser events...")
-    logger.info("💾 Database connection active")
-    logger.info("☁️  Azure sync service running")
-    logger.info("")
-    logger.info("Press Ctrl+C to stop")
+    // Note: HeadlessStartupRunner executes automatically via CommandLineRunner
+    // Scheduled tasks (@Scheduled) keep the application alive
 }

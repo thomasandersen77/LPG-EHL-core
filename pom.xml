@@ -26,7 +26,7 @@
     </modules>
 
     <properties>
-        <kotlin.version>2.3.0</kotlin.version>
+        <kotlin.version>1.9.22</kotlin.version>
         <coroutines.version>1.8.0</coroutines.version>
         <spring-boot.version>3.2.1</spring-boot.version>
         <maven.compiler.source>21</maven.compiler.source>
@@ -167,6 +167,8 @@
                     </executions>
                     <configuration>
                         <jvmTarget>21</jvmTarget>
+                        <languageVersion>1.9</languageVersion>
+                        <apiVersion>1.9</apiVersion>
                     </configuration>
                 </plugin>
 
@@ -221,6 +223,12 @@
                 </executions>
                 <configuration>
                     <jvmTarget>${maven.compiler.target}</jvmTarget>
+                    <languageVersion>1.9</languageVersion>
+                    <apiVersion>1.9</apiVersion>
+                    <!-- Use in-process compilation to avoid Kotlin daemon issues -->
+                    <compilerPlugins>
+                        <plugin>spring</plugin>
+                    </compilerPlugins>
                 </configuration>
             </plugin>
         </plugins>

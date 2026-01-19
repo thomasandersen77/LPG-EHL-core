@@ -21,37 +21,20 @@ class SimulatedPaymentGateway : PaymentGateway {
     private val cardProcessingDelay: Duration = Duration.ofSeconds(2)
 
     override fun startPayment(request: PaymentRequest): Payment {
-        val payment = when (request.method) {
-            PaymentMethod.CASH -> {
-                // Cash is instantly "approved" in this simulation
-                Payment(
-                    amountCents = request.amountCents,
-                    method = request.method,
-                    status = PaymentStatus.APPROVED,
-                    reference = request.reference,
-                    completedAt = Instant.now(),
-                    metadata = request.metadata
-                )
-            }
-            PaymentMethod.CARD, PaymentMethod.CREDIT, PaymentMethod.VIPPS -> {
-                Payment(
-                    amountCents = request.amountCents,
-                    method = request.method,
-                    status = PaymentStatus.PENDING,
-                    reference = request.reference,
-                    metadata = request.metadata
-                )
-            }
-        }
+        // All payment methods (CARD, CREDIT, VIPPS) are processed asynchronously
+        val payment = Payment(
+            amountCents = request.amountCents,
+            method = request.method,
+            status = PaymentStatus.PENDING,
+            reference = request.reference,
+            metadata = request.metadata
+        )
 
         payments[payment.id] = payment
         log.info("Simulated payment started: {}", payment)
 
-        // For CARD/CREDIT/VIPPS, we kick off a simple background simulation that
-        // will resolve the payment after cardProcessingDelay.
-        if (payment.status == PaymentStatus.PENDING) {
-            simulateAsyncResolution(payment.id)
-        }
+        // Kick off background simulation that will resolve the payment after cardProcessingDelay
+        simulateAsyncResolution(payment.id)
 
         return payment
     }
