@@ -1,4 +1,4 @@
-package no.cloudberries.lpg.service
+package no.cloudberries.lpg.service.operations
 
 import no.cloudberries.lpg.protocol.EhlPacket
 

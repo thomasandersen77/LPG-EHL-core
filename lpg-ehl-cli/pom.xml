@@ -34,6 +34,13 @@
             <artifactId>lpg-transport</artifactId>
             <version>${project.version}</version>
         </dependency>
+        
+        <!-- Service module for business logic -->
+        <dependency>
+            <groupId>no.cloudberries.lpg</groupId>
+            <artifactId>lpg-ehl-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- Spring Boot -->
         <dependency>

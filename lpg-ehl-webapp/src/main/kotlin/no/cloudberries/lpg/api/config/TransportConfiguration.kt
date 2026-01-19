@@ -4,7 +4,7 @@ import no.cloudberries.lpg.communication.EhlCommunicator
 import no.cloudberries.lpg.emulator.EhlDispenserEmulator
 import no.cloudberries.lpg.emulator.InMemorySerialPort
 import no.cloudberries.lpg.pls.RealSerialTransport
-import no.cloudberries.lpg.service.EhlOperationsService
+import no.cloudberries.lpg.service.operations.EhlOperationsService
 import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value

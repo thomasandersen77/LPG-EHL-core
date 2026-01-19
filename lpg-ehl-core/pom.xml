@@ -42,12 +42,6 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Serial Communication -->
-        <dependency>
-            <groupId>com.fazecast</groupId>
-            <artifactId>jSerialComm</artifactId>
-        </dependency>
-
         <!-- Logging -->
         <dependency>
             <groupId>org.slf4j</groupId>
