@@ -1,6 +1,7 @@
 package no.cloudberries.lpg.service.service
 
 import no.cloudberries.lpg.communication.HardwareWatchdogCapable
+import no.cloudberries.lpg.service.system.HardwareWatchdogService
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow

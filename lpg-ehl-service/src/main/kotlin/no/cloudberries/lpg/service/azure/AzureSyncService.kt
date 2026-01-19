@@ -1,12 +1,12 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.azure
 
 import com.azure.core.util.BinaryData
 import com.azure.storage.queue.QueueClient
 import com.fasterxml.jackson.databind.ObjectMapper
 import no.cloudberries.lpg.service.dto.SyncStatusResponse
-import no.cloudberries.lpg.service.model.AzureSyncQueue
-import no.cloudberries.lpg.service.model.SyncStatus
-import no.cloudberries.lpg.service.repository.AzureSyncQueueRepository
+import no.cloudberries.lpg.service.azure.AzureSyncQueue
+import no.cloudberries.lpg.service.azure.SyncStatus
+import no.cloudberries.lpg.service.azure.AzureSyncQueueRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty

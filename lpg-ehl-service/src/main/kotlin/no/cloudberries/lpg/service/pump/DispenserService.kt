@@ -1,9 +1,9 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.pump
 
 import no.cloudberries.lpg.service.dto.DispenserStatusResponse
-import no.cloudberries.lpg.service.repository.DispenserStatusRepository
-import no.cloudberries.lpg.service.repository.TransactionRepository
-import no.cloudberries.lpg.service.model.Transaction
+import no.cloudberries.lpg.service.pump.DispenserStatusRepository
+import no.cloudberries.lpg.service.transaction.TransactionRepository
+import no.cloudberries.lpg.service.transaction.Transaction
 import no.cloudberries.lpg.protocol.EhlPacket
 import no.cloudberries.lpg.protocol.EhlCommand
 import no.cloudberries.lpg.protocol.EhlDataParser

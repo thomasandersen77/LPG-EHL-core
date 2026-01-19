@@ -9,8 +9,8 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import no.cloudberries.lpg.service.dto.AzureQueueByDateResponse
 import no.cloudberries.lpg.service.dto.AzureQueueMessageDto
 import no.cloudberries.lpg.service.dto.SyncStatusResponse
-import no.cloudberries.lpg.service.service.AzureQueueReaderService
-import no.cloudberries.lpg.service.service.AzureSyncService
+import no.cloudberries.lpg.service.azure.AzureQueueReaderService
+import no.cloudberries.lpg.service.azure.AzureSyncService
 import java.time.format.DateTimeFormatter
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.ResponseEntity

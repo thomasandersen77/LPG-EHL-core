@@ -1,4 +1,4 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.system
 
 import no.cloudberries.lpg.service.dto.DailySummaryResponse
 import no.cloudberries.lpg.service.dto.PeriodSummaryResponse

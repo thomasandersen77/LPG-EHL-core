@@ -3,7 +3,7 @@ package no.cloudberries.lpg.api.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import no.cloudberries.lpg.service.dto.TransactionResponse
-import no.cloudberries.lpg.service.service.TransactionService
+import no.cloudberries.lpg.service.transaction.TransactionService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.*

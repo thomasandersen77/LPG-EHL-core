@@ -1,8 +1,8 @@
 package no.cloudberries.lpg.credit
 
 import no.cloudberries.lpg.service.credit.*
-import no.cloudberries.lpg.service.model.Transaction
-import no.cloudberries.lpg.service.repository.TransactionRepository
+import no.cloudberries.lpg.service.transaction.Transaction
+import no.cloudberries.lpg.service.transaction.TransactionRepository
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.transaction.annotation.Transactional

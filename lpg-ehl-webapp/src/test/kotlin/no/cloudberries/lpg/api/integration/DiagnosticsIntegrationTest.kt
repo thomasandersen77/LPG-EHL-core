@@ -1,6 +1,6 @@
 package no.cloudberries.lpg.api.integration
 
-import no.cloudberries.lpg.service.service.DiagnosticsService
+import no.cloudberries.lpg.service.system.DiagnosticsService
 import no.cloudberries.lpg.protocol.EhlFault
 import no.cloudberries.lpg.protocol.EhlErrorLevel
 import org.junit.jupiter.api.Assertions.*

@@ -1,4 +1,4 @@
-package no.cloudberries.lpg.service.model
+package no.cloudberries.lpg.service.azure
 
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType
 import jakarta.persistence.*

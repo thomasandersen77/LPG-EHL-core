@@ -1,6 +1,6 @@
-package no.cloudberries.lpg.service.repository
+package no.cloudberries.lpg.service.price
 
-import no.cloudberries.lpg.service.model.PriceHistory
+import no.cloudberries.lpg.service.price.PriceHistory
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param

@@ -1,6 +1,7 @@
 package no.cloudberries.lpg.headless
 
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.getBean
 import org.springframework.boot.WebApplicationType
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
@@ -36,11 +37,30 @@ import org.springframework.scheduling.annotation.EnableScheduling
         "no.cloudberries.lpg.service",        // Business logic fra service-modulen
         "no.cloudberries.lpg.communication",  // EhlCommunicator fra core
         "no.cloudberries.lpg.emulator",       // Emulator (optional, for LAB mode)
-        "no.cloudberries.lpg.transport"       // Serial port transport
+        "no.cloudberries.lpg.transport",      // Serial port transport
+        "no.cloudberries.lpg.pls"             // RealSerialTransport
     ]
 )
-@EntityScan("no.cloudberries.lpg.service.model")
-@EnableJpaRepositories("no.cloudberries.lpg.service.repository")
+@EntityScan(
+    basePackages = [
+        "no.cloudberries.lpg.service.pump",
+        "no.cloudberries.lpg.service.transaction",
+        "no.cloudberries.lpg.service.azure",
+        "no.cloudberries.lpg.service.price",
+        "no.cloudberries.lpg.service.model",
+        "no.cloudberries.lpg.service.credit"
+    ]
+)
+@EnableJpaRepositories(
+    basePackages = [
+        "no.cloudberries.lpg.service.pump",
+        "no.cloudberries.lpg.service.transaction",
+        "no.cloudberries.lpg.service.azure",
+        "no.cloudberries.lpg.service.price",
+        "no.cloudberries.lpg.service.repository",
+        "no.cloudberries.lpg.service.credit"
+    ]
+)
 @EnableScheduling
 class HeadlessApplication
 
@@ -52,10 +72,8 @@ fun main(args: Array<String>) {
     logger.info("   Mode: HEADLESS (No Web Server)")
     logger.info("═══════════════════════════════════════════════════════════")
     
-    val app = runApplication<HeadlessApplication>(*args) {
-        // Disable web server completely
-        setWebApplicationType(WebApplicationType.NONE)
-    }
+    val app = runApplication<HeadlessApplication>(*args)
+    app.getBean<HeadlessStartupRunner>().run()
     
     logger.info("✅ Headless application started successfully")
     logger.info("📡 Listening for dispenser events...")

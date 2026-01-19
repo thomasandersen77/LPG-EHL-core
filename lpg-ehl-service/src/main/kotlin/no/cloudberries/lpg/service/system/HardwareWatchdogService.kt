@@ -1,4 +1,4 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.system
 
 import no.cloudberries.lpg.communication.HardwareWatchdogCapable
 import org.slf4j.LoggerFactory

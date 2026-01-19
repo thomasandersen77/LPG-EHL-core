@@ -1,9 +1,9 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.transaction
 
-import no.cloudberries.lpg.service.model.AzureSyncQueue
-import no.cloudberries.lpg.service.model.SyncStatus
-import no.cloudberries.lpg.service.model.Transaction
-import no.cloudberries.lpg.service.repository.AzureSyncQueueRepository
+import no.cloudberries.lpg.service.azure.AzureSyncQueue
+import no.cloudberries.lpg.service.azure.SyncStatus
+import no.cloudberries.lpg.service.transaction.Transaction
+import no.cloudberries.lpg.service.azure.AzureSyncQueueRepository
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service

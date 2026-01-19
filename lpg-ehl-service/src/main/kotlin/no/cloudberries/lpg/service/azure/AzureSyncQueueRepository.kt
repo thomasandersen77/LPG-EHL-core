@@ -1,7 +1,7 @@
-package no.cloudberries.lpg.service.repository
+package no.cloudberries.lpg.service.azure
 
-import no.cloudberries.lpg.service.model.AzureSyncQueue
-import no.cloudberries.lpg.service.model.SyncStatus
+import no.cloudberries.lpg.service.azure.AzureSyncQueue
+import no.cloudberries.lpg.service.azure.SyncStatus
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query

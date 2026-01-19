@@ -1,9 +1,9 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.transaction
 
 import no.cloudberries.lpg.service.dto.PageResponse
 import no.cloudberries.lpg.service.dto.TransactionResponse
-import no.cloudberries.lpg.service.model.Transaction
-import no.cloudberries.lpg.service.repository.TransactionRepository
+import no.cloudberries.lpg.service.transaction.Transaction
+import no.cloudberries.lpg.service.transaction.TransactionRepository
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort

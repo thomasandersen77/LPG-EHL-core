@@ -1,6 +1,6 @@
 package no.cloudberries.lpg.api.controller
 
-import no.cloudberries.lpg.service.service.PumpStateService
+import no.cloudberries.lpg.service.pump.PumpStateService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*

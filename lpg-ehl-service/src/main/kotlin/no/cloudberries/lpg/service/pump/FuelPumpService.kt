@@ -1,6 +1,8 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.pump
 
-import no.cloudberries.lpg.protocol.*
+import no.cloudberries.lpg.protocol.EhlCommand
+import no.cloudberries.lpg.protocol.EhlPacket
+import no.cloudberries.lpg.protocol.DispenserStatus as ProtocolDispenserStatus
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -51,7 +53,7 @@ class FuelPumpService(
         
         // Step 1: Verify pump is IDLE
         val currentStatus = dispenserService.getCurrentStatus(pumpId)
-        if (currentStatus !is DispenserStatus.IDLE) {
+        if (currentStatus !is ProtocolDispenserStatus.IDLE) {
             logger.warn("Cannot start fueling - pump $pumpId is not IDLE (current: $currentStatus)")
             return StartFuelingResult.PumpNotIdle(currentStatus)
         }
@@ -134,13 +136,13 @@ class FuelPumpService(
         logger.debug("Verifying pump $pumpId transitioned to AUTHORIZED")
         val verifiedStatus = waitForStateTransition(
             pumpId = pumpId,
-            expectedState = DispenserStatus.AUTHORIZED::class,
+            expectedState = ProtocolDispenserStatus.AUTHORIZED::class,
             maxAttempts = 10,
             delayMs = 500
         )
         
         return when (verifiedStatus) {
-            is DispenserStatus.AUTHORIZED -> {
+            is ProtocolDispenserStatus.AUTHORIZED -> {
                 logger.info("Pump $pumpId successfully authorized for fueling")
                 StartFuelingResult.Success
             }
@@ -167,7 +169,7 @@ class FuelPumpService(
         
         // Step 1: Verify pump is PUMPING
         val currentStatus = dispenserService.getCurrentStatus(pumpId)
-        if (currentStatus !is DispenserStatus.PUMPING) {
+        if (currentStatus !is ProtocolDispenserStatus.PUMPING) {
             logger.warn("Cannot stop fueling - pump $pumpId is not PUMPING (current: $currentStatus)")
             return StopFuelingResult.PumpNotPumping(currentStatus)
         }
@@ -194,13 +196,13 @@ class FuelPumpService(
         logger.debug("Verifying pump $pumpId transitioned to STOPPED")
         val verifiedStatus = waitForStateTransition(
             pumpId = pumpId,
-            expectedState = DispenserStatus.STOPPED::class,
+            expectedState = ProtocolDispenserStatus.STOPPED::class,
             maxAttempts = 10,
             delayMs = 500
         )
         
         return when (verifiedStatus) {
-            is DispenserStatus.STOPPED -> {
+            is ProtocolDispenserStatus.STOPPED -> {
                 // Step 4: Read final volume
                 val finalVolume = dispenserService.queryVolume(pumpId)
                 logger.info("Pump $pumpId successfully stopped. Final volume: $finalVolume liters")
@@ -217,17 +219,17 @@ class FuelPumpService(
      * Wait for a specific state transition by polling STATE command.
      * 
      * @param pumpId Dispenser address
-     * @param expectedState Expected state class (e.g., DispenserStatus.AUTHORIZED::class)
+     * @param expectedState Expected state class (e.g., ProtocolDispenserStatus.AUTHORIZED::class)
      * @param maxAttempts Maximum number of polling attempts
      * @param delayMs Delay between polling attempts in milliseconds
      * @return DispenserStatus - the final state (may not match expected)
      */
     private fun waitForStateTransition(
         pumpId: Int,
-        expectedState: kotlin.reflect.KClass<out DispenserStatus>,
+        expectedState: kotlin.reflect.KClass<out ProtocolDispenserStatus>,
         maxAttempts: Int,
         delayMs: Long
-    ): DispenserStatus {
+    ): ProtocolDispenserStatus {
         repeat(maxAttempts) { attempt ->
             val currentStatus = dispenserService.getCurrentStatus(pumpId)
             
@@ -251,9 +253,9 @@ class FuelPumpService(
  */
 sealed interface StartFuelingResult {
     data object Success : StartFuelingResult
-    data class PumpNotIdle(val currentStatus: DispenserStatus) : StartFuelingResult
+    data class PumpNotIdle(val currentStatus: ProtocolDispenserStatus) : StartFuelingResult
     data object NoResponse : StartFuelingResult
-    data class StateTransitionFailed(val currentStatus: DispenserStatus) : StartFuelingResult
+    data class StateTransitionFailed(val currentStatus: ProtocolDispenserStatus) : StartFuelingResult
 }
 
 /**
@@ -261,7 +263,7 @@ sealed interface StartFuelingResult {
  */
 sealed interface StopFuelingResult {
     data class Success(val finalVolumeLiters: Float) : StopFuelingResult
-    data class PumpNotPumping(val currentStatus: DispenserStatus) : StopFuelingResult
+    data class PumpNotPumping(val currentStatus: ProtocolDispenserStatus) : StopFuelingResult
     data object NoResponse : StopFuelingResult
-    data class StateTransitionFailed(val currentStatus: DispenserStatus) : StopFuelingResult
+    data class StateTransitionFailed(val currentStatus: ProtocolDispenserStatus) : StopFuelingResult
 }

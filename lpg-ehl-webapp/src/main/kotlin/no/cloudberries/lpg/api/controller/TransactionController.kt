@@ -13,8 +13,8 @@ import no.cloudberries.lpg.service.dto.CreateTransactionRequest
 import no.cloudberries.lpg.service.dto.ErrorResponse
 import no.cloudberries.lpg.service.dto.PageResponse
 import no.cloudberries.lpg.service.dto.TransactionResponse
-import no.cloudberries.lpg.service.model.Transaction
-import no.cloudberries.lpg.service.service.TransactionService
+import no.cloudberries.lpg.service.transaction.Transaction
+import no.cloudberries.lpg.service.transaction.TransactionService
 import java.math.BigDecimal
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired

@@ -1,4 +1,4 @@
-package no.cloudberries.lpg.service.model
+package no.cloudberries.lpg.service.pump
 
 import jakarta.persistence.*
 import java.math.BigDecimal

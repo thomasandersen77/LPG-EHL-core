@@ -1,9 +1,9 @@
 package no.cloudberries.lpg.headless
 
-import no.cloudberries.lpg.service.service.DispenserService
-import no.cloudberries.lpg.service.service.PumpStateService
-import no.cloudberries.lpg.service.service.HardwareWatchdogService
-import no.cloudberries.lpg.service.service.AzureQueueReaderService
+import no.cloudberries.lpg.service.pump.DispenserService
+import no.cloudberries.lpg.service.pump.PumpStateService
+import no.cloudberries.lpg.service.system.HardwareWatchdogService
+import no.cloudberries.lpg.service.azure.AzureQueueReaderService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value

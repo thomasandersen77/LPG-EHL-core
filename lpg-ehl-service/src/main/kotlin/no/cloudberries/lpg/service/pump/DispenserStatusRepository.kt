@@ -1,6 +1,6 @@
-package no.cloudberries.lpg.service.repository
+package no.cloudberries.lpg.service.pump
 
-import no.cloudberries.lpg.service.model.DispenserStatus
+import no.cloudberries.lpg.service.pump.DispenserStatus
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository

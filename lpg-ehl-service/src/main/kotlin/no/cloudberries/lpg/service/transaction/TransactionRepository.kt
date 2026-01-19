@@ -1,6 +1,6 @@
-package no.cloudberries.lpg.service.repository
+package no.cloudberries.lpg.service.transaction
 
-import no.cloudberries.lpg.service.model.Transaction
+import no.cloudberries.lpg.service.transaction.Transaction
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository

@@ -1,4 +1,4 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.azure
 
 import com.azure.storage.queue.QueueClient
 import com.azure.storage.queue.models.PeekedMessageItem

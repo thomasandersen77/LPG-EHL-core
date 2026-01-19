@@ -3,7 +3,7 @@ package no.cloudberries.lpg.api.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import no.cloudberries.lpg.api.pls.MockPlsService
-import no.cloudberries.lpg.service.repository.PriceHistoryRepository
+import no.cloudberries.lpg.service.price.PriceHistoryRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseEntity
@@ -17,7 +17,7 @@ import java.time.LocalDateTime
 class PriceController(
     @Value("\${lpg.price.per-liter:15.90}") private var defaultPricePerLiter: BigDecimal,
     private val priceHistoryRepository: PriceHistoryRepository,
-    private val priceService: no.cloudberries.lpg.service.service.PriceService
+    private val priceService: no.cloudberries.lpg.service.price.PriceService
 ) {
     @Autowired(required = false)
     private var plsService: MockPlsService? = null

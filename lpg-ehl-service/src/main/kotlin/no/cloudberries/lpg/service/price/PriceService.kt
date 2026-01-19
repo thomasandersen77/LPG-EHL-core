@@ -1,7 +1,7 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.price
 
-import no.cloudberries.lpg.service.model.PriceHistory
-import no.cloudberries.lpg.service.repository.PriceHistoryRepository
+import no.cloudberries.lpg.service.price.PriceHistory
+import no.cloudberries.lpg.service.price.PriceHistoryRepository
 import no.cloudberries.lpg.service.event.EventPublisher
 import no.cloudberries.lpg.emulator.EhlDispenserEmulator
 import org.slf4j.LoggerFactory

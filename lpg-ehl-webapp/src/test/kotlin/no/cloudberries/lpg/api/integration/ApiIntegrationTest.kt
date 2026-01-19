@@ -2,10 +2,10 @@ package no.cloudberries.lpg.api.integration
 
 import io.restassured.RestAssured
 import io.restassured.http.ContentType
-import no.cloudberries.lpg.service.model.DispenserStatus
-import no.cloudberries.lpg.service.model.Transaction
-import no.cloudberries.lpg.service.repository.DispenserStatusRepository
-import no.cloudberries.lpg.service.repository.TransactionRepository
+import no.cloudberries.lpg.service.pump.DispenserStatus
+import no.cloudberries.lpg.service.transaction.Transaction
+import no.cloudberries.lpg.service.pump.DispenserStatusRepository
+import no.cloudberries.lpg.service.transaction.TransactionRepository
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

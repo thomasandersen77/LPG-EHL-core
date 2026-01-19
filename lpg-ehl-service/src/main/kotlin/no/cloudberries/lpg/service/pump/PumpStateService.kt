@@ -1,12 +1,15 @@
-package no.cloudberries.lpg.service.service
+package no.cloudberries.lpg.service.pump
 
 import jakarta.annotation.PostConstruct
 import kotlinx.coroutines.*
-import no.cloudberries.lpg.service.event.EventPublisher
-import no.cloudberries.lpg.service.event.PumpStatusEvent
 import no.cloudberries.lpg.communication.EhlCommunicator
 import no.cloudberries.lpg.emulator.EhlDispenserEmulator
 import no.cloudberries.lpg.protocol.*
+import no.cloudberries.lpg.service.event.EventPublisher
+import no.cloudberries.lpg.service.event.PumpStatusEvent
+import no.cloudberries.lpg.service.price.PriceService
+import no.cloudberries.lpg.service.transaction.Transaction
+import no.cloudberries.lpg.service.transaction.TransactionService
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -344,7 +347,7 @@ class PumpStateService(
         } else {
             // Fallback: Create new transaction if no pending ID (shouldn't happen normally)
             try {
-                val transaction = no.cloudberries.lpg.service.model.Transaction(
+                val transaction = Transaction(
                     dispenserAddress = address,
                     nozzleNumber = 1,
                     volumeDeciliters = (state.volumeLitres * 10).roundToInt(),

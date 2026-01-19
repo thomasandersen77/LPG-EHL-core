@@ -95,3 +95,6 @@ backups/
 *.sql
 !init-db.sql
 *.sql.gz
+
+# AI export archives
+ai-exports/

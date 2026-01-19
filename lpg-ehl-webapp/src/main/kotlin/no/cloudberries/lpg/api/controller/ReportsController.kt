@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import no.cloudberries.lpg.service.dto.DailySummaryResponse
 import no.cloudberries.lpg.service.dto.PeriodSummaryResponse
-import no.cloudberries.lpg.service.service.ReportService
+import no.cloudberries.lpg.service.system.ReportService
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
