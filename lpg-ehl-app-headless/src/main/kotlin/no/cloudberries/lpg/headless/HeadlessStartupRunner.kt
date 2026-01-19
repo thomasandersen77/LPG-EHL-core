@@ -1,5 +1,7 @@
 package no.cloudberries.lpg.headless
 
+import no.cloudberries.lpg.protocol.EhlCommand
+import no.cloudberries.lpg.protocol.EhlPacket
 import no.cloudberries.lpg.service.pump.DispenserService
 import no.cloudberries.lpg.service.pump.PumpStateService
 import no.cloudberries.lpg.service.system.HardwareWatchdogService

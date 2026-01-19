@@ -1,10 +1,8 @@
 package no.cloudberries.lpg.api
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
-import org.springframework.boot.autoconfigure.domain.EntityScan
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.ComponentScan
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import org.springframework.scheduling.annotation.EnableScheduling
 
 /**
@@ -18,32 +16,24 @@ import org.springframework.scheduling.annotation.EnableScheduling
  * 
  * Komponenter hentes fra flere moduler:
  * - lpg-ehl-service: Business logic (services, repositories, models)
+ *   - JPA repositories and entities configured in ServiceConfiguration
  * - lpg-ehl-core: Protocol og kommunikasjon
  * - lpg-ehl-emulator: LAB mode simulator
  * - lpg-transport: Serial port kommunikasjon
+ * 
+ * NOTE: JPA repository and entity scanning for service module is configured
+ * in ServiceConfiguration (lpg-ehl-service module) and automatically picked up.
  */
 @SpringBootApplication
 @ComponentScan(
     basePackages = [
         "no.cloudberries.lpg.api",            // Web controllers og config
-        "no.cloudberries.lpg.service",        // Business logic fra service-modulen
+        "no.cloudberries.lpg.service",        // Business logic fra service-modulen (includes config)
         "no.cloudberries.lpg.payment",        // Payment controllers
         "no.cloudberries.lpg.credit",         // Credit controllers
-        "no.cloudberries.lpg.communication",  // EhlCommunicator fra core
+        "no.cloudberries.lpg.communication",  // EhlCommunicator fra transport
         "no.cloudberries.lpg.emulator",       // Emulator (LAB mode)
         "no.cloudberries.lpg.transport"       // Serial port transport
-    ]
-)
-@EntityScan(
-    basePackages = [
-        "no.cloudberries.lpg.service.model",
-        "no.cloudberries.lpg.service.credit"
-    ]
-)
-@EnableJpaRepositories(
-    basePackages = [
-        "no.cloudberries.lpg.service.repository",
-        "no.cloudberries.lpg.service.credit"
     ]
 )
 @EnableScheduling
