@@ -2,11 +2,11 @@ package no.cloudberries.lpg.api.controller
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
-import no.cloudberries.lpg.service.model.Transaction
+import no.cloudberries.lpg.service.transaction.Transaction
 import no.cloudberries.lpg.api.pls.MockPlsService
 import no.cloudberries.lpg.service.repository.RoadTaxSettingsRepository
-import no.cloudberries.lpg.service.repository.TransactionRepository
-import no.cloudberries.lpg.service.service.TransactionService
+import no.cloudberries.lpg.service.transaction.TransactionRepository
+import no.cloudberries.lpg.service.transaction.TransactionService
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
 import org.springframework.http.ResponseEntity

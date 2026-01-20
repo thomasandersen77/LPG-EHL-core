@@ -44,7 +44,7 @@ spring:
 
 # Azure Storage Queue Configuration
 azure:
-  enabled: ${AZURE_ENABLED:true}
+  enabled: ${AZURE_ENABLED:false}  # Default to false for LAB mode testing
   storage:
     connection-string: ${AZURE_CONNECTION_STRING:UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://localhost:10001}
     queue-name: ${AZURE_QUEUE_NAME:lpg-transactions}
@@ -86,6 +86,21 @@ logging:
 #   FIELD MODE (ehl.emulator.enabled=false) -> Ekte serial port til pumpe
 #
 # HEADLESS DEFAULT: FIELD MODE (produksjon)
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+# SERIAL PORT CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Port name examples:
+#   Linux:   /dev/ttyS0, /dev/ttyUSB0, /dev/ttyAMA0 (Raspberry Pi)
+#   macOS:   /dev/cu.usbserial-0001
+#   Windows: COM1, COM3, etc.
+#
+# Standard EHL Protocol: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
+#
+# Parity options: NONE, ODD, EVEN, MARK, SPACE
+# Stop bits options: 1, 2 (1.5 not commonly used)
+#
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
   emulator:
@@ -94,15 +109,24 @@ ehl:
     price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
     latency-ms: ${EHL_LATENCY_MS:20}
   serial:
-    port: ${EHL_SERIAL_PORT:/dev/ttyS0}  # Brukes når emulator er disabled
+    # Serial port device path
+    port: ${EHL_SERIAL_PORT:/dev/ttyS0}
+    # Baud rate (standard EHL: 9600)
     baud-rate: ${EHL_BAUD_RATE:9600}
-    data-bits: 8
-    parity: EVEN  # 8E1 (8 data bits, even parity, 1 stop bit)
-    stop-bits: 1
+    # Data bits (5, 6, 7, 8 - standard: 8)
+    data-bits: ${EHL_DATA_BITS:8}
+    # Parity: NONE, ODD, EVEN, MARK, SPACE (standard EHL: EVEN)
+    parity: ${EHL_PARITY:EVEN}
+    # Stop bits: 1 or 2 (standard: 1)
+    stop-bits: ${EHL_STOP_BITS:1}
 
 # LPG Application Configuration
 lpg:
-  mode: ${LPG_MODE:FIELD}  # FIELD eller LAB
+  mode: ${LPG_MODE:LAB}  # LAB (emulator) eller FIELD (ekte hardware) - default LAB for testing
+  dispenser:
+    address: ${LPG_DISPENSER_ADDRESS:1}  # Dispenser address to poll
+  polling:
+    interval-ms: ${LPG_POLLING_INTERVAL_MS:2000}  # Poll interval in milliseconds (default 2 seconds)
   price:
     per-liter: ${LPG_PRICE_PER_LITER:15.90}
   station:

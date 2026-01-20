@@ -4,7 +4,6 @@ import java.time.Instant
 import java.util.UUID
 
 enum class PaymentMethod {
-    CASH,
     CARD,
     CREDIT,
     VIPPS
@@ -38,7 +37,7 @@ data class Payment(
 interface PaymentGateway {
     /**
      * Start a new payment request. Implementations should create a new Payment
-     * with status = PENDING (or APPROVED for CASH) and return it.
+     * with status = PENDING and return it.
      */
     fun startPayment(request: PaymentRequest): Payment
 

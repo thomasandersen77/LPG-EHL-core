@@ -137,18 +137,12 @@ class TransactionWatchdogTest {
     }
     
     @Test
-    @DisplayName("Watchdog handles provider errors gracefully")
+    @DisplayName("Watchdog handles provider errors by triggering emergency stop")
     fun testHandlesProviderErrors() = runTest {
         val watchdog = TransactionWatchdog(pollInterval = Duration.ofMillis(50))
-        var errorCount = 0
-        var finalAmount = 0
         
         val volumeProvider = suspend {
-            if (errorCount++ < 3) {
-                throw RuntimeException("Simulated error")
-            }
-            finalAmount = 50000
-            Pair(50.0, finalAmount)  // Return valid data after errors
+            throw RuntimeException("Simulated communication error")
         }
         
         var stopped = false
@@ -164,9 +158,10 @@ class TransactionWatchdogTest {
         
         val result = watchdog.monitorTransaction(config, volumeProvider, stopCommand)
         
-        // Should eventually succeed despite initial errors
-        assertTrue(result is TransactionWatchdog.WatchdogResult.MaxReached)
-        assertTrue(stopped)
+        // KRITISK SIKKERHET: Provider exceptions trigger emergency stop and return Error
+        // This is the correct safety behavior - don't silently continue on communication failures
+        assertTrue(result is TransactionWatchdog.WatchdogResult.Error, "Should return Error on provider exception")
+        assertTrue(stopped, "Emergency stop should have been triggered")
     }
     
     @Test

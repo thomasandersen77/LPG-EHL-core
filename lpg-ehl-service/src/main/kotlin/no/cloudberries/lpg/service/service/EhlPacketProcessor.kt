@@ -2,6 +2,8 @@ package no.cloudberries.lpg.service.service
 
 import no.cloudberries.lpg.protocol.EhlCommand
 import no.cloudberries.lpg.protocol.EhlPacket
+import no.cloudberries.lpg.service.pump.DispenserService
+import no.cloudberries.lpg.service.pump.DispenserState
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service

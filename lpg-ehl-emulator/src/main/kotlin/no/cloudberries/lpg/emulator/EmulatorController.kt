@@ -80,14 +80,13 @@ class EmulatorController(
         
         // Map frontend payment methods to emulator payment methods
         val emulatorMethod = when (method.uppercase()) {
-            "CASH" -> "CARD"  // Map CASH to CARD (both are non-credit)
             "CARD" -> "CARD"
             "CREDIT" -> "CREDIT"
             else -> {
                 logger.warn("⚠️ Invalid payment method: $method")
                 return ResponseEntity.badRequest().body(mapOf(
                     "status" to "error",
-                    "message" to "Invalid payment method. Use CASH, CARD, or CREDIT"
+                    "message" to "Invalid payment method. Use CARD or CREDIT"
                 ))
             }
         }

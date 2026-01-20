@@ -23,6 +23,11 @@
             <groupId>no.cloudberries.lpg</groupId>
             <artifactId>lpg-ehl-core</artifactId>
         </dependency>
+        <dependency>
+            <groupId>no.cloudberries.lpg</groupId>
+            <artifactId>lpg-transport</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- Spring Boot Starters -->
         <dependency>

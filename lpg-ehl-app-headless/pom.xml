@@ -25,10 +25,17 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- lpg-transport dependency -->
+        <!-- lpg-transport dependency (includes EhlCommunicator) -->
         <dependency>
             <groupId>no.cloudberries.lpg</groupId>
             <artifactId>lpg-transport</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        
+        <!-- lpg-ehl-emulator dependency (for LAB mode) -->
+        <dependency>
+            <groupId>no.cloudberries.lpg</groupId>
+            <artifactId>lpg-ehl-emulator</artifactId>
             <version>${project.version}</version>
         </dependency>
 

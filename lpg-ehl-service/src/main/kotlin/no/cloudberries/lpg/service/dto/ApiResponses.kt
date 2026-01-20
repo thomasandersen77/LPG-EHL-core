@@ -1,6 +1,8 @@
 package no.cloudberries.lpg.service.dto
 
-import no.cloudberries.lpg.service.model.*
+import no.cloudberries.lpg.service.model.DailySummary
+import no.cloudberries.lpg.service.pump.DispenserStatus
+import no.cloudberries.lpg.service.transaction.Transaction
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime

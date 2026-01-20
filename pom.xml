@@ -26,14 +26,14 @@
     </modules>
 
     <properties>
-        <kotlin.version>2.3.0</kotlin.version>
+        <kotlin.version>1.9.25</kotlin.version>
         <coroutines.version>1.8.0</coroutines.version>
         <spring-boot.version>3.2.1</spring-boot.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <slf4j.version>2.0.13</slf4j.version>
-        <logback.version>1.5.19</logback.version>
+        <!-- logback.version managed by Spring Boot BOM -->
         <junit.version>5.10.2</junit.version>
         <jserialcomm.version>2.10.4</jserialcomm.version>
         <azure-storage.version>12.24.0</azure-storage.version>
@@ -88,16 +88,7 @@
                 <artifactId>slf4j-api</artifactId>
                 <version>${slf4j.version}</version>
             </dependency>
-            <dependency>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-core</artifactId>
-                <version>${logback.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-classic</artifactId>
-                <version>${logback.version}</version>
-            </dependency>
+            <!-- Logback version managed by Spring Boot BOM - do not override -->
 
             <!-- Testing -->
             <dependency>
@@ -167,6 +158,8 @@
                     </executions>
                     <configuration>
                         <jvmTarget>21</jvmTarget>
+                        <languageVersion>1.9</languageVersion>
+                        <apiVersion>1.9</apiVersion>
                     </configuration>
                 </plugin>
 
@@ -221,6 +214,12 @@
                 </executions>
                 <configuration>
                     <jvmTarget>${maven.compiler.target}</jvmTarget>
+                    <languageVersion>1.9</languageVersion>
+                    <apiVersion>1.9</apiVersion>
+                    <!-- Use in-process compilation to avoid Kotlin daemon issues -->
+                    <compilerPlugins>
+                        <plugin>spring</plugin>
+                    </compilerPlugins>
                 </configuration>
             </plugin>
         </plugins>

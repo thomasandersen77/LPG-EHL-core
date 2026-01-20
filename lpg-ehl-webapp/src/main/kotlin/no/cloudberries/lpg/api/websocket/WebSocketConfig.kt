@@ -13,11 +13,11 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @Configuration
 @EnableWebSocket
 class WebSocketConfig(
-    private val logWebSocketHandler: LogWebSocketHandler
+    private val webSocketEventPublisher: WebSocketEventPublisher
 ) : WebSocketConfigurer {
     
     override fun registerWebSocketHandlers(registry: WebSocketHandlerRegistry) {
-        registry.addHandler(logWebSocketHandler, "/ws/logs")
+        registry.addHandler(webSocketEventPublisher, "/ws/logs")
             .setAllowedOrigins("*") // Allow all origins for development
     }
 }

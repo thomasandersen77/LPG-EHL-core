@@ -1,7 +1,7 @@
 package no.cloudberries.lpg.cli.commands
 
 import kotlinx.coroutines.runBlocking
-import no.cloudberries.lpg.service.EhlOperationsService
+import no.cloudberries.lpg.service.operations.EhlOperationsService
 import org.springframework.shell.standard.ShellComponent
 import org.springframework.shell.standard.ShellMethod
 import org.springframework.shell.standard.ShellOption

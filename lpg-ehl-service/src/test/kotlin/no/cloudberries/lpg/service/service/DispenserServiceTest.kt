@@ -1,8 +1,10 @@
 package no.cloudberries.lpg.service.service
 
-import no.cloudberries.lpg.service.model.Transaction
-import no.cloudberries.lpg.service.repository.DispenserStatusRepository
-import no.cloudberries.lpg.service.repository.TransactionRepository
+import no.cloudberries.lpg.service.pump.DispenserService
+import no.cloudberries.lpg.service.pump.DispenserState
+import no.cloudberries.lpg.service.pump.DispenserStatusRepository
+import no.cloudberries.lpg.service.transaction.Transaction
+import no.cloudberries.lpg.service.transaction.TransactionRepository
 import no.cloudberries.lpg.protocol.EhlCommand
 import no.cloudberries.lpg.protocol.EhlPacket
 import org.junit.jupiter.api.Assertions.*
@@ -559,17 +561,16 @@ class DispenserServiceTest {
     }
 
     private fun createVolumePacket(address: Int, volumeLiters: Float, amountCents: Int): EhlPacket {
-        // EHL VOLUME format: 4 bytes total - 2 bytes volume (deciliters) + 2 bytes amount (øre) in big-endian
-        val volumeDeciliters = (volumeLiters * 10).toInt()
-        val data = ByteArray(4)
+        // VB6 VOLUME format: 5 ASCII digit bytes in LSB-first order
+        // Example: 45.50 liters -> "04550" -> bytes ['0','5','5','4','0'] (LSB first)
+        val volumeCentiliters = (volumeLiters * 100).toInt()  // 45.50L -> 4550
+        val volumeString = volumeCentiliters.toString().padStart(5, '0')  // "04550"
         
-        // Volume in deciliters (big-endian)
-        data[0] = ((volumeDeciliters shr 8) and 0xFF).toByte()
-        data[1] = (volumeDeciliters and 0xFF).toByte()
-        
-        // Amount in øre (big-endian)
-        data[2] = ((amountCents shr 8) and 0xFF).toByte()
-        data[3] = (amountCents and 0xFF).toByte()
+        val data = ByteArray(5)
+        // LSB-first: data[0]=0.01L, data[1]=0.1L, data[2]=1L, data[3]=10L, data[4]=100L
+        for (i in 0..4) {
+            data[i] = volumeString[4 - i].code.toByte()  // Reverse order
+        }
         
         return EhlPacket(
             address = address,

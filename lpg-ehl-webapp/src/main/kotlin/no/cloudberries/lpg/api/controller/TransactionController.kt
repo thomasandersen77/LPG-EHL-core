@@ -8,13 +8,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
-import no.cloudberries.lpg.api.client.EmulatorClient
+import no.cloudberries.lpg.emulator.EhlDispenserEmulator
 import no.cloudberries.lpg.service.dto.CreateTransactionRequest
 import no.cloudberries.lpg.service.dto.ErrorResponse
 import no.cloudberries.lpg.service.dto.PageResponse
 import no.cloudberries.lpg.service.dto.TransactionResponse
-import no.cloudberries.lpg.service.model.Transaction
-import no.cloudberries.lpg.service.service.TransactionService
+import no.cloudberries.lpg.service.transaction.Transaction
+import no.cloudberries.lpg.service.transaction.TransactionService
 import java.math.BigDecimal
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -32,7 +32,7 @@ class TransactionController(
     private val transactionService: TransactionService
 ) {
     @Autowired(required = false)
-    private var emulatorClient: EmulatorClient? = null
+    private var dispenserEmulator: EhlDispenserEmulator? = null
     private val logger = LoggerFactory.getLogger(TransactionController::class.java)
 
     @GetMapping
@@ -171,17 +171,18 @@ class TransactionController(
         
         logger.info("✅ Payment status updated for transaction $id")
         
-        // Notify emulator to reset dispenser and broadcast to Windows (LAB MODE only)
-        if (emulatorClient != null) {
-            logger.info("📢 Notifying emulator to settle dispenser #${updated.dispenserAddress}")
-            val settled = emulatorClient!!.settleDispenser(updated.dispenserAddress, paymentMethod)
+        // Settle emulator and reset to IDLE (LAB MODE only)
+        val emulator = dispenserEmulator
+        if (emulator != null) {
+            logger.info("📢 Settling emulator for dispenser #${updated.dispenserAddress}")
+            val settled = emulator.markTransactionPaid()
             if (settled) {
-                logger.info("✅ Emulator reset broadcast sent to Windows")
+                logger.info("✅ Emulator reset to IDLE - ready for next transaction")
             } else {
-                logger.warn("⚠️ Failed to notify emulator (Windows may still show old values)")
+                logger.warn("⚠️ Failed to settle emulator (no pending transaction)")
             }
         } else {
-            logger.info("🏭 FIELD MODE: Skipping emulator notification (not available)")
+            logger.info("🏭 FIELD MODE: Emulator not available (using real hardware)")
         }
         
         return ResponseEntity.ok(TransactionResponse.from(updated))

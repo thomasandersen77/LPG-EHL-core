@@ -3,10 +3,8 @@ package no.cloudberries.lpg.headless
 import org.slf4j.LoggerFactory
 import org.springframework.boot.WebApplicationType
 import org.springframework.boot.autoconfigure.SpringBootApplication
-import org.springframework.boot.autoconfigure.domain.EntityScan
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.ComponentScan
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import org.springframework.scheduling.annotation.EnableScheduling
 
 /**
@@ -32,15 +30,16 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication
 @ComponentScan(
     basePackages = [
-        "no.cloudberries.lpg.headless",      // Headless-spesifikk kode
+        "no.cloudberries.lpg.headless",      // Headless-spesifikk kode (config, service, startup)
         "no.cloudberries.lpg.service",        // Business logic fra service-modulen
-        "no.cloudberries.lpg.communication",  // EhlCommunicator fra core
-        "no.cloudberries.lpg.emulator",       // Emulator (optional, for LAB mode)
-        "no.cloudberries.lpg.transport"       // Serial port transport
+        "no.cloudberries.lpg.communication",  // EhlCommunicator fra transport
+        "no.cloudberries.lpg.transport",      // Serial port transport
+        "no.cloudberries.lpg.pls"             // RealSerialTransport
+        // Note: no.cloudberries.lpg.emulator is NOT scanned - has web dependencies
+        // For LAB mode, emulator is created directly in TransportConfiguration
     ]
 )
-@EntityScan("no.cloudberries.lpg.service.model")
-@EnableJpaRepositories("no.cloudberries.lpg.service.repository")
+// EntityScan and EnableJpaRepositories are defined in ServiceConfiguration
 @EnableScheduling
 class HeadlessApplication
 
@@ -52,15 +51,11 @@ fun main(args: Array<String>) {
     logger.info("   Mode: HEADLESS (No Web Server)")
     logger.info("═══════════════════════════════════════════════════════════")
     
-    val app = runApplication<HeadlessApplication>(*args) {
-        // Disable web server completely
+    // Run as headless Spring Boot application (no web server)
+    runApplication<HeadlessApplication>(*args) {
         setWebApplicationType(WebApplicationType.NONE)
     }
     
-    logger.info("✅ Headless application started successfully")
-    logger.info("📡 Listening for dispenser events...")
-    logger.info("💾 Database connection active")
-    logger.info("☁️  Azure sync service running")
-    logger.info("")
-    logger.info("Press Ctrl+C to stop")
+    // Note: HeadlessStartupRunner executes automatically via CommandLineRunner
+    // Scheduled tasks (@Scheduled) keep the application alive
 }
