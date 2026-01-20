@@ -204,4 +204,35 @@ class TransactionService(
         
         return saved
     }
+    
+    /**
+     * Pay all pending transactions.
+     * Useful for clearing out unpaid transactions in test/demo scenarios.
+     */
+    @Transactional
+    fun payAllPendingTransactions(paymentMethod: String = "CARD"): List<Transaction> {
+        val pendingTransactions = transactionRepository.findByPaymentStatus("PENDING")
+        
+        logger.info("💳 Betaler {} ventende transaksjoner med metode: {}", pendingTransactions.size, paymentMethod)
+        
+        val paidTransactions = pendingTransactions.map { transaction ->
+            transaction.paymentType = paymentMethod
+            transaction.paymentStatus = "PAID"
+            val saved = transactionRepository.save(transaction)
+            
+            // Queue for Azure sync
+            transactionSyncService?.queueTransactionForSync(saved, "PAID")
+            
+            logger.info("✅ Transaksjon betalt: ID={}, volum={} L, beløp={} kr",
+                saved.transactionId,
+                saved.volumeDeciliters / 10.0,
+                saved.amountOre / 100.0)
+            
+            saved
+        }
+        
+        logger.info("✅ Totalt {} transaksjoner betalt", paidTransactions.size)
+        
+        return paidTransactions
+    }
 }

@@ -188,6 +188,34 @@ class TransactionController(
         return ResponseEntity.ok(TransactionResponse.from(updated))
     }
 
+    @PostMapping("/pay-all-pending")
+    @Operation(
+        summary = "Pay all pending transactions",
+        description = "Mark all pending transactions as paid (useful for clearing test/demo data)"
+    )
+    fun payAllPendingTransactions(
+        @RequestParam(defaultValue = "CARD") paymentMethod: String
+    ): ResponseEntity<Map<String, Any>> {
+        logger.info("💳 Pay all pending transactions with method: $paymentMethod")
+        
+        val paidTransactions = transactionService.payAllPendingTransactions(paymentMethod)
+        
+        logger.info("✅ Paid ${paidTransactions.size} transactions")
+        
+        // Settle emulator if available (LAB MODE only)
+        val emulator = dispenserEmulator
+        if (emulator != null) {
+            logger.info("📢 Settling emulator")
+            emulator.markTransactionPaid()
+            logger.info("✅ Emulator reset to IDLE")
+        }
+        
+        return ResponseEntity.ok(mapOf(
+            "count" to paidTransactions.size,
+            "transactions" to paidTransactions.map { TransactionResponse.from(it) }
+        ))
+    }
+
     @PostMapping
     @Operation(
         summary = "Create transaction",
