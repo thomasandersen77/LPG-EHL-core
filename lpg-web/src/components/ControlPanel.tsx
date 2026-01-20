@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 // API configuration
-// In production (Fat JAR), use same origin. In development, use localhost:9001
+// Both webapp frontend and API run on port 8080
 const EMULATOR_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || 
-  (import.meta.env.PROD ? window.location.origin : 'http://localhost:9001');
+  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080');
 const WS_BASE_URL = EMULATOR_BASE_URL.replace(/^http/, 'ws');
 
 // Types
@@ -34,6 +34,33 @@ const pumpApi = {
     const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/status`);
     return res.json();
   },
+  cardSwipe: async (address: number = 1, maxAmountKr: number = 2000) => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/card-swipe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        maxAmountKr, 
+        triggeredBy: 'WEBAPP_GUI', 
+        paymentMethod: 'SIMULATION',
+        immediate: true  // GUI-modus: Send UNBLOCK direkte
+      })
+    });
+    return res.json();
+  },
+  startPumping: async (address: number = 1) => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/start-pumping`, {
+      method: 'POST'
+    });
+    return res.json();
+  },
+  confirmPayment: async (address: number = 1) => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/confirm-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentMethod: 'SIMULATION' })
+    });
+    return res.json();
+  },
   unblock: async (address: number = 1) => {
     const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/unblock`, {
       method: 'POST'
@@ -56,6 +83,8 @@ const pumpApi = {
 
 export function ControlPanel() {
   const queryClient = useQueryClient();
+  const [maxAmount, setMaxAmount] = useState(2000);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Pump status
   const { data: pumpStatus, isLoading } = useQuery({
@@ -67,20 +96,46 @@ export function ControlPanel() {
     }
   });
 
-  // Mutations
-  const unblockMutation = useMutation({
-    mutationFn: () => pumpApi.unblock(1),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pump-status'] })
+  // Card swipe mutation
+  const cardSwipeMutation = useMutation({
+    mutationFn: () => pumpApi.cardSwipe(1, maxAmount),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pump-status'] });
+      setErrorMessage(null);
+    },
+    onError: (error: any) => {
+      setErrorMessage(error.message || 'Kunne ikke simulere kortdragning');
+    }
+  });
+  
+  // Start pumping mutation
+  const startPumpingMutation = useMutation({
+    mutationFn: () => pumpApi.startPumping(1),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pump-status'] });
+      setErrorMessage(null);
+    },
+    onError: (error: any) => {
+      setErrorMessage(error.message || 'Kunne ikke starte pumping');
+    }
   });
 
+  // Confirm payment mutation
+  const confirmPaymentMutation = useMutation({
+    mutationFn: () => pumpApi.confirmPayment(1),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pump-status'] });
+      setErrorMessage(null);
+    }
+  });
+
+  // Block/stop mutation
   const blockMutation = useMutation({
     mutationFn: () => pumpApi.block(1),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pump-status'] })
-  });
-
-  const settleMutation = useMutation({
-    mutationFn: () => pumpApi.settle(1, 'CARD'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pump-status'] })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pump-status'] });
+      queryClient.invalidateQueries({ queryKey: ['authorization'] });
+    }
   });
 
   // Logs state
@@ -245,39 +300,75 @@ export function ControlPanel() {
                 <span className="font-bold">{pumpStatus?.pricePerLitreKr.toFixed(2)} kr/L</span>
               </div>
 
-              {/* Control Buttons */}
+              {/* Error message */}
+              {errorMessage && (
+                <div className="bg-red-900/30 border border-red-500 rounded-lg p-3 mb-4 text-center">
+                  <span className="text-red-300">⚠️ {errorMessage}</span>
+                </div>
+              )}
+
+              {/* Control Buttons - State-based */}
               <div className="space-y-3">
-                <button
-                  onClick={() => unblockMutation.mutate()}
-                  disabled={pumpStatus?.state === 'PUMPING' || pumpStatus?.hasPendingTransaction || unblockMutation.isPending}
-                  className={`w-full py-4 rounded-xl font-bold text-xl transition-colors ${
-                    pumpStatus?.state === 'PUMPING' || pumpStatus?.hasPendingTransaction
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700'
-                  }`}
-                >
-                  {unblockMutation.isPending ? '...' : '🔓 FRI PUMPE'}
-                </button>
+                {/* IDLE: Show card swipe button */}
+                {pumpStatus?.state === 'IDLE' && !pumpStatus?.hasPendingTransaction && (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={maxAmount}
+                        onChange={(e) => setMaxAmount(Number(e.target.value))}
+                        className="flex-1 bg-gray-700 rounded-lg px-3 py-2 text-white"
+                        placeholder="Maks beløp"
+                      />
+                      <span className="self-center text-gray-400">kr</span>
+                    </div>
+                    <button
+                      onClick={() => cardSwipeMutation.mutate()}
+                      disabled={cardSwipeMutation.isPending}
+                      className="w-full py-4 rounded-xl font-bold text-xl bg-blue-600 hover:bg-blue-700 transition-colors"
+                    >
+                      {cardSwipeMutation.isPending ? '...' : '💳 SIMULER KORTDRAGNING'}
+                    </button>
+                  </div>
+                )}
 
-                <button
-                  onClick={() => blockMutation.mutate()}
-                  disabled={pumpStatus?.state !== 'PUMPING' || blockMutation.isPending}
-                  className={`w-full py-4 rounded-xl font-bold text-xl transition-colors ${
-                    pumpStatus?.state !== 'PUMPING'
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-red-600 hover:bg-red-700'
-                  }`}
-                >
-                  {blockMutation.isPending ? '...' : '🛑 STOPP'}
-                </button>
+                {/* READY_TO_PUMP: Show start pumping button */}
+                {pumpStatus?.state === 'READY_TO_PUMP' && (
+                  <div className="space-y-3">
+                    <div className="text-center py-2">
+                      <div className="text-3xl mb-2">✅</div>
+                      <p className="text-green-400 font-bold">Pumpe frigjort!</p>
+                      <p className="text-gray-400 text-xs mt-1">Trykk "START PUMPING" når klar (60s timeout)</p>
+                    </div>
+                    <button
+                      onClick={() => startPumpingMutation.mutate()}
+                      disabled={startPumpingMutation.isPending}
+                      className="w-full py-4 rounded-xl font-bold text-xl bg-green-600 hover:bg-green-700 transition-colors"
+                    >
+                      {startPumpingMutation.isPending ? '...' : '⛽ START PUMPING'}
+                    </button>
+                  </div>
+                )}
 
-                {pumpStatus?.hasPendingTransaction && (
+                {/* PUMPING: Show stop button */}
+                {pumpStatus?.state === 'PUMPING' && (
                   <button
-                    onClick={() => settleMutation.mutate()}
-                    disabled={settleMutation.isPending}
+                    onClick={() => blockMutation.mutate()}
+                    disabled={blockMutation.isPending}
+                    className="w-full py-4 rounded-xl font-bold text-xl bg-red-600 hover:bg-red-700 transition-colors"
+                  >
+                    {blockMutation.isPending ? '🛑 Stopper...' : '🛑 STOPP'}
+                  </button>
+                )}
+
+                {/* PAYMENT_PENDING: Show confirm payment button */}
+                {pumpStatus?.state === 'PAYMENT_PENDING' && pumpStatus?.hasPendingTransaction && (
+                  <button
+                    onClick={() => confirmPaymentMutation.mutate()}
+                    disabled={confirmPaymentMutation.isPending}
                     className="w-full py-4 rounded-xl font-bold text-xl bg-yellow-600 hover:bg-yellow-700 transition-colors"
                   >
-                    {settleMutation.isPending ? '...' : '💳 SIMULER BETALING'}
+                    {confirmPaymentMutation.isPending ? '💳 Behandler...' : '💳 BEKREFT BETALING'}
                   </button>
                 )}
               </div>
@@ -357,29 +448,37 @@ export function ControlPanel() {
 
         {/* Instructions */}
         <div className="mt-6 bg-gray-800 rounded-xl p-6 border border-gray-700">
-          <h3 className="text-xl font-bold mb-4">📖 Instruksjoner - Felt-testing</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-300">
+          <h3 className="text-xl font-bold mb-4">📖 Bruksanvisning</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-gray-300">
             <div>
-              <h4 className="font-bold text-green-400 mb-2">🔓 Fri Pumpe</h4>
+              <h4 className="font-bold text-blue-400 mb-2">1️⃣ Kortdragning</h4>
               <p className="text-sm">
-                Frigir pumpen for levering. Tilsvarer UNBLOCK-kommando (0x77) i EHL-protokollen.
-                Brukes når PLS/terminal ikke er tilgjengelig.
+                Trykk på "SIMULER KORTDRAGNING" for å autorisere pumpen.
               </p>
             </div>
             <div>
-              <h4 className="font-bold text-red-400 mb-2">🛑 Stopp</h4>
+              <h4 className="font-bold text-yellow-400 mb-2">2️⃣ Pumpe frigjort</h4>
               <p className="text-sm">
-                Stopper pågående levering. Tilsvarer BLOCK-kommando (0x69).
-                Transaksjonen fryses og venter på betaling.
+                Pumpen er nå klar. Løft dysen for å starte fylling.
               </p>
             </div>
             <div>
-              <h4 className="font-bold text-yellow-400 mb-2">💳 Betaling</h4>
+              <h4 className="font-bold text-green-400 mb-2">3️⃣ Pumping</h4>
               <p className="text-sm">
-                Simulerer kortbetaling. Nullstiller transaksjonen og klargjør pumpen
-                for neste kunde.
+                Volum og beløp oppdateres automatisk under fylling.
               </p>
             </div>
+            <div>
+              <h4 className="font-bold text-orange-400 mb-2">4️⃣ Betaling</h4>
+              <p className="text-sm">
+                Trykk "BEKREFT BETALING" når fyllingen er ferdig.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-gray-700/50 rounded-lg">
+            <p className="text-sm text-gray-400">
+              <strong>💡 Tips:</strong> Denne GUI-en sender UNBLOCK automatisk etter kortdragning - du trenger ikke vente på eksterne systemer.
+            </p>
           </div>
         </div>
       </div>

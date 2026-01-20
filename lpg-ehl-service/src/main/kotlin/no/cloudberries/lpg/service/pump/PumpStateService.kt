@@ -35,7 +35,8 @@ class PumpStateService(
     private val transactionService: TransactionService,
     private val ehlCommunicator: EhlCommunicator,
     private val dispenserEmulator: EhlDispenserEmulator?,  // Null i FIELD MODE
-    private val priceService: PriceService
+    private val priceService: PriceService,
+    private val authorizationService: PumpAuthorizationService? = null  // Optional - for kortdragning-flow
 ) {
     private val logger = LoggerFactory.getLogger(PumpStateService::class.java)
     private val protocolLogger = LoggerFactory.getLogger("no.cloudberries.lpg.protocol")
@@ -114,7 +115,10 @@ class PumpStateService(
         var nozzleLifted: Boolean = false,
         var hasPendingTransaction: Boolean = false,
         var pumpingStartTime: Instant? = null,
-        var pendingTransactionId: UUID? = null
+        var pendingTransactionId: UUID? = null,
+        var authorizationId: UUID? = null,  // Linked authorization for kortdragning flow
+        var unblockTime: Instant? = null,  // When UNBLOCK was sent (for 60s timeout)
+        var timeoutJob: kotlinx.coroutines.Job? = null  // Coroutine job for timeout
     )
     
     data class PumpStatus(
@@ -179,14 +183,58 @@ class PumpStateService(
             return Result.failure(e)
         }
         
-        // Start pumping
-        state.state = "PUMPING"
+        // Cancel any pending timeout job
+        state.timeoutJob?.cancel()
+        state.timeoutJob = null
+        state.unblockTime = Instant.now()
+        
+        // Find active authorization if any
+        authorizationService?.let { authService ->
+            val auth = authService.findActiveAuthorization(address)
+            if (auth != null) {
+                logger.info("📋 Pumping med autorisasjon: ${auth.authorizationId}")
+                state.authorizationId = auth.authorizationId
+                // Mark authorization as PUMPING
+                authService.markPumping(auth.authorizationId)
+            }
+        }
+        
+        // Start 60-second timeout - auto BLOCK if pumping doesn't start
+        state.timeoutJob = scope.launch {
+            delay(60000)  // 60 seconds
+            
+            // Check if pumping has started
+            if (state.state != "PUMPING") {
+                logger.warn("⏰ 60s timeout - Pumping ikke startet, sender BLOCK til pumpe $address")
+                
+                try {
+                    val blockPacket = EhlPacket(address, EhlCommand.BLOCK, ByteArray(0))
+                    runBlocking {
+                        ehlCommunicator.sendAndReceive(blockPacket, 3000)
+                    }
+                    
+                    state.state = "IDLE"
+                    state.unblockTime = null
+                    
+                    // Cancel authorization if exists
+                    state.authorizationId?.let { authId ->
+                        authorizationService?.cancel(authId, "60s timeout - pumping ikke startet")
+                    }
+                    state.authorizationId = null
+                    
+                    protocolLogger.info("❌ Pumpe $address blokkert etter 60s timeout")
+                    broadcastStatus(state)
+                } catch (e: Exception) {
+                    logger.error("❌ Kunne ikke sende BLOCK etter timeout: ${e.message}")
+                }
+            }
+        }
+        
+        // Pumpe er nå UNBLOCKED og klar til pumping
+        state.state = "READY_TO_PUMP"  // Ny state: Venter på at kunde starter pumping
         state.volumeLitres = 0.0
         state.amountKr = 0.0
         state.pricePerLitreKr = currentPriceKr
-        state.nozzleLifted = true
-        state.pumpingStartTime = Instant.now()
-        lastLoggedMilestone[address] = 0.0
         
         // Create transaction in database with status STARTED
         try {
@@ -197,7 +245,37 @@ class PumpStateService(
             logger.error("❌ Kunne ikke opprette transaksjon: ${e.message}")
         }
         
-        logger.info("⛽ PUMPING START: Pump $address at ${state.pricePerLitreKr} kr/L")
+        logger.info("🔓 PUMPE FRIGJORT: Pump $address klar til fylling (60s timeout startet)")
+        broadcastStatus(state)
+        
+        return Result.success(getStatus(address))
+    }
+    
+    /**
+     * Start pumping (kalles når kunde fysisk starter pumping ved å trykke på knapp).
+     * 
+     * Dette markerer overgangen fra READY_TO_PUMP til PUMPING.
+     * Kansellerer 60s timeout siden pumping er startet.
+     */
+    fun startPumping(address: Int = 1): Result<PumpStatus> {
+        val state = pumpStates.getOrPut(address) { PumpState(address = address, pricePerLitreKr = currentPriceKr) }
+        
+        if (state.state != "READY_TO_PUMP") {
+            return Result.failure(IllegalStateException("Pump must be in READY_TO_PUMP state to start pumping (current: ${state.state})"))
+        }
+        
+        // Cancel timeout job - pumping har startet
+        state.timeoutJob?.cancel()
+        state.timeoutJob = null
+        
+        // Start pumping
+        state.state = "PUMPING"
+        state.nozzleLifted = true
+        state.pumpingStartTime = Instant.now()
+        lastLoggedMilestone[address] = 0.0
+        
+        logger.info("⛽ PUMPING STARTED: Pump $address - kunde har startet fylling")
+        protocolLogger.info("⛽️ Pumping startet - 60s timeout kansellert")
         broadcastStatus(state)
         
         return Result.success(getStatus(address))
@@ -261,6 +339,17 @@ class PumpStateService(
         state.nozzleLifted = false
         state.pumpingStartTime = null
         
+        // Update authorization if kortdragning flow
+        val authId = state.authorizationId
+        if (authId != null && state.volumeLitres > 0) {
+            try {
+                authorizationService?.markStopped(authId, state.volumeLitres, state.amountKr)
+                protocolLogger.info("📋 Autorisasjon oppdatert til STOPPED: $authId")
+            } catch (e: Exception) {
+                logger.error("❌ Kunne ikke oppdatere autorisasjon: ${e.message}")
+            }
+        }
+        
         // Update transaction in database with status PENDING
         val transactionId = state.pendingTransactionId
         if (transactionId != null && state.volumeLitres > 0) {
@@ -271,7 +360,7 @@ class PumpStateService(
                     state.amountKr, 
                     "PENDING"
                 )
-                protocolLogger.info("📝 Transaksjon oppdatert: ID=$transactionId, status=PENDING")
+                protocolLogger.info("📋 Transaksjon oppdatert: ID=$transactionId, status=PENDING")
             } catch (e: Exception) {
                 logger.error("❌ Kunne ikke oppdatere transaksjon: ${e.message}")
             }
@@ -371,6 +460,7 @@ class PumpStateService(
         state.amountKr = 0.0
         state.hasPendingTransaction = false
         state.pendingTransactionId = null
+        state.authorizationId = null
         lastLoggedMilestone.remove(address)
         
         logger.info("💳 Pump $address settled: ${settled.liters}L = ${settled.amountNok} kr via $paymentMethod")
@@ -393,6 +483,7 @@ class PumpStateService(
         state.hasPendingTransaction = false
         state.pumpingStartTime = null
         state.pendingTransactionId = null
+        state.authorizationId = null
         lastLoggedMilestone.remove(address)
         
         logger.info("🔄 Pump $address reset to IDLE")

@@ -63,8 +63,32 @@ echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
+# Step 0: Build React Frontend
+echo -e "${GREEN}[0/6]${NC} Building React frontend..."
+FRONTEND_DIR="$SCRIPT_DIR/lpg-web"
+WEBAPP_STATIC="$SCRIPT_DIR/lpg-ehl-webapp/src/main/resources/static"
+
+if [ -d "$FRONTEND_DIR" ]; then
+    echo "  📦 Installing npm dependencies..."
+    cd "$FRONTEND_DIR"
+    npm install --silent 2>/dev/null || npm install
+    echo "  🔨 Building React app..."
+    npm run build
+    
+    echo "  📁 Copying to webapp static resources..."
+    rm -rf "$WEBAPP_STATIC"/*
+    mkdir -p "$WEBAPP_STATIC"
+    cp -r "$FRONTEND_DIR/dist/"* "$WEBAPP_STATIC/"
+    STATIC_FILES=$(find "$WEBAPP_STATIC" -type f | wc -l | tr -d ' ')
+    echo -e "  ${GREEN}✓${NC} Frontend built and copied ($STATIC_FILES files)"
+    cd "$SCRIPT_DIR"
+else
+    echo -e "  ${YELLOW}⚠${NC} Frontend directory not found, skipping frontend build"
+fi
+echo ""
+
 # Step 1: Clean and Build All Maven Modules
-echo -e "${GREEN}[1/5]${NC} Building all Maven modules..."
+echo -e "${GREEN}[1/6]${NC} Building all Maven modules..."
 echo "  📦 Modules: core, emulator, transport, service, webapp, headless, cli"
 echo ""
 
@@ -85,7 +109,7 @@ echo -e "  ${GREEN}✓${NC} All Maven modules built successfully"
 echo ""
 
 # Step 2: Package WebApp JAR
-echo -e "${GREEN}[2/5]${NC} Packaging WebApp JAR (with React frontend)..."
+echo -e "${GREEN}[2/6]${NC} Packaging WebApp JAR (with React frontend)..."
 cd "$SCRIPT_DIR"
 echo "  Module: lpg-ehl-webapp"
 echo "  Includes: Service layer + REST API + React UI"
@@ -113,7 +137,7 @@ echo -e "  ${GREEN}✓${NC} WebApp JAR built: $(basename "$WEBAPP_JAR") ($WEBAPP
 echo ""
 
 # Step 3: Package Headless JAR
-echo -e "${GREEN}[3/5]${NC} Packaging Headless JAR (background service)..."
+echo -e "${GREEN}[3/6]${NC} Packaging Headless JAR (background service)..."
 cd "$SCRIPT_DIR"
 echo "  Module: lpg-ehl-app-headless"
 echo "  Includes: Service layer + No web server"
@@ -142,7 +166,7 @@ echo -e "  ${GREEN}✓${NC} Headless JAR built: $(basename "$HEADLESS_JAR") ($HE
 echo ""
 
 # Step 4: Package CLI JAR
-echo -e "${GREEN}[4/5]${NC} Packaging CLI JAR (command line tools)..."
+echo -e "${GREEN}[4/6]${NC} Packaging CLI JAR (command line tools)..."
 cd "$SCRIPT_DIR"
 echo "  Module: lpg-ehl-cli"
 echo "  Includes: Service layer + CLI commands"
@@ -171,7 +195,7 @@ echo -e "  ${GREEN}✓${NC} CLI JAR built: $(basename "$CLI_JAR_SOURCE") ($CLI_S
 echo ""
 
 # Step 5: Create Release Artifacts
-echo -e "${GREEN}[5/5]${NC} Creating release artifacts..."
+echo -e "${GREEN}[5/6]${NC} Creating release artifacts..."
 cd "$SCRIPT_DIR"
 echo "  Preparing release/ directory..."
 echo ""
