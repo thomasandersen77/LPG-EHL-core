@@ -93,6 +93,7 @@ export function PaymentTerminalPage() {
   // Get the latest transaction (most recent pending)
   const latestTransaction = transactionsPage?.content?.[0] ?? null;
   const hasPendingAmount = latestTransaction && latestTransaction.amountKr > 0;
+  const isPaid = latestTransaction?.paymentStatus === 'PAID';
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -101,13 +102,37 @@ export function PaymentTerminalPage() {
         <p className="text-slate-600">Simulerer Nets-terminal for nullstilling av dispenser</p>
       </div>
 
-      {/* Payment Terminal UI */}
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl p-8 mb-6">
-        <div className="bg-white rounded-xl p-6 mb-6">
-          {/* Display */}
-          <div className="text-center mb-6">
-            <div className="text-sm text-slate-500 mb-2">Beløp å betale</div>
-            {hasPendingAmount ? (
+      {/* Show "Payment Complete" message if transaction is PAID */}
+      {isPaid ? (
+        <div className="bg-gradient-to-br from-green-600 to-green-700 rounded-2xl shadow-2xl p-8 mb-6">
+          <div className="text-center text-white">
+            <div className="text-6xl mb-4">✅</div>
+            <h2 className="text-3xl font-bold mb-2">Betaling fullført!</h2>
+            <p className="text-green-100 mb-6">Transaksjonen er allerede betalt</p>
+            <div className="bg-white/10 rounded-lg p-4 mb-6">
+              <div className="text-4xl font-bold mb-2">{latestTransaction.amountKr.toFixed(2)} kr</div>
+              <div className="text-sm text-green-100">
+                {latestTransaction.volumeLiters.toFixed(2)} L @ {latestTransaction.pricePerLiter.toFixed(2)} kr/L
+              </div>
+              <div className="text-xs text-green-200 mt-2">
+                Pumpe #{latestTransaction.dispenserAddress} • {new Date(latestTransaction.timestamp).toLocaleTimeString('nb-NO')}
+              </div>
+            </div>
+            <a
+              href="/"
+              className="inline-block bg-white text-green-700 font-bold py-3 px-6 rounded-xl hover:bg-green-50 transition"
+            >
+              ← Tilbake til hovedside
+            </a>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl p-8 mb-6">
+          <div className="bg-white rounded-xl p-6 mb-6">
+            {/* Display */}
+            <div className="text-center mb-6">
+              <div className="text-sm text-slate-500 mb-2">Beløp å betale</div>
+              {hasPendingAmount ? (
               <>
                 <div className="text-5xl font-bold text-slate-900 mb-2">
                   {latestTransaction.amountKr.toFixed(2)} kr
@@ -157,10 +182,10 @@ export function PaymentTerminalPage() {
               </div>
             </div>
           )}
-        </div>
+          </div>
 
-        {/* Payment Buttons */}
-        <div className="grid grid-cols-1 gap-4">
+          {/* Payment Buttons */}
+          <div className="grid grid-cols-1 gap-4">
           <button
             onClick={handleCardPayment}
             disabled={settlementMutation.isPending || !hasPendingAmount}
@@ -182,12 +207,13 @@ export function PaymentTerminalPage() {
           </button>
         </div>
 
-        {settlementMutation.isPending && (
-          <div className="mt-4 text-center text-white">
-            <div className="animate-pulse">⏳ Behandler betaling...</div>
-          </div>
-        )}
-      </div>
+          {settlementMutation.isPending && (
+            <div className="mt-4 text-center text-white">
+              <div className="animate-pulse">⏳ Behandler betaling...</div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Info Box */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">

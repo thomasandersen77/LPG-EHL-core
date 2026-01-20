@@ -399,6 +399,7 @@ class PumpStateService(
      * Settle pending transaction ("Simuler betaling").
      * 
      * Markerer eksisterende transaksjon som PAID i databasen.
+     * Markerer også tilhørende autorisasjon som COMPLETED.
      */
     fun settle(address: Int = 1, paymentMethod: String = "CARD"): SettledTransaction? {
         val state = pumpStates.getOrPut(address) { PumpState(address = address, pricePerLitreKr = currentPriceKr) }
@@ -418,18 +419,35 @@ class PumpStateService(
             idempotencyKey = UUID.randomUUID().toString()
         )
         
+        // Mark authorization as COMPLETED (VIKTIG: Frigiør autorisasjon før ny kortdragning)
+        val authorizationId = state.authorizationId
+        if (authorizationId != null && authorizationService != null) {
+            try {
+                val auth = authorizationService.getStatus(authorizationId)
+                if (auth != null && auth.status == AuthorizationStatus.STOPPED) {
+                    authorizationService.confirmPayment(authorizationId, paymentMethod)
+                    logger.info("✅ Autorisasjon $authorizationId markert som COMPLETED")
+                } else {
+                    logger.warn("⚠️ Autorisasjon $authorizationId er ikke i STOPPED status (${auth?.status}), hopper over")
+                }
+            } catch (e: Exception) {
+                logger.warn("⚠️ Kunne ikke oppdatere autorisasjon: ${e.message}")
+                // Continue anyway - transaction will still be marked as paid
+            }
+        }
+        
         // Mark existing transaction as paid in database
         val transactionId = state.pendingTransactionId
         if (transactionId != null) {
             try {
                 transactionService.markTransactionPaid(transactionId, paymentMethod)
-                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                 protocolLogger.info("💳 BETALING SIMULERT")
                 protocolLogger.info("   Transaksjon: $transactionId")
                 protocolLogger.info("   Volum: ${state.volumeLitres} L")
                 protocolLogger.info("   Beløp: ${state.amountKr} kr")
                 protocolLogger.info("   Metode: $paymentMethod")
-                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             } catch (e: Exception) {
                 logger.error("❌ Failed to mark transaction as paid: ${e.message}")
             }

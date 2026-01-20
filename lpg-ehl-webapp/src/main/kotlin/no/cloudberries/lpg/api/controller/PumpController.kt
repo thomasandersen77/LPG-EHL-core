@@ -342,6 +342,7 @@ class PumpController(
      * Bekreft betaling og avslutt autorisasjon.
      * 
      * Kalles når pumping er ferdig og betaling er gjennomført.
+     * Resetter pumpe til IDLE for neste kunde.
      */
     @PostMapping("/pump/{address}/confirm-payment")
     fun confirmPayment(
@@ -361,16 +362,24 @@ class PumpController(
         }
         
         try {
+            // Bekreft betaling og marker autorisasjon som COMPLETED
+            val paymentMethod = request?.paymentMethod ?: auth.paymentMethod ?: "SIMULATION"
             val completed = authorizationService.confirmPayment(
                 authorizationId = auth.authorizationId,
-                paymentMethod = request?.paymentMethod ?: auth.paymentMethod ?: "SIMULATION"
+                paymentMethod = paymentMethod
             )
             
             logger.info("✅ Betaling bekreftet: ${completed.actualVolumeLiters} L = ${completed.actualAmountKr} kr")
             
+            // VIKTIG: Kall settle() for å resette pumpe til IDLE for neste kunde
+            val settled = pumpStateService.settle(address, paymentMethod)
+            if (settled != null) {
+                logger.info("🚀 Pumpe $address frigitt for neste kunde")
+            }
+            
             return ResponseEntity.ok(mapOf(
                 "success" to true,
-                "message" to "Betaling bekreftet",
+                "message" to "Betaling bekreftet - pumpe frigitt",
                 "authorization" to mapOf(
                     "authorizationId" to completed.authorizationId.toString(),
                     "status" to completed.status.name,

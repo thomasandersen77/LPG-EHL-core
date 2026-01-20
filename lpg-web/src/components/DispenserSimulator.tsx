@@ -1,36 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { dispenserApi } from '../api/dispenser';
-import type { DispenserStateDto } from '../types/api';
+import { useState, useEffect } from 'react';
 
 type PaymentMethod = 'CARD' | 'CREDIT';
 
 // API base URL
+// Both webapp frontend and API run on port 8080
 const API_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || 
-  (import.meta.env.PROD ? window.location.origin : 'http://localhost:9001');
+  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080');
 
-// Authorization types
-interface Authorization {
-  authorizationId: string;
-  status: string;
-  maxAmountKr: number;
-  actualVolumeLiters: number;
-  actualAmountKr: number;
-}
 
-interface AuthorizationResponse {
-  hasActiveAuthorization: boolean;
-  authorization?: Authorization;
-}
-
-// Authorization API
-const authApi = {
-  getAuthorization: async (): Promise<AuthorizationResponse> => {
-    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/1/authorization`);
+// Pump API (aligned with ControlPanel)
+const pumpApi = {
+  getStatus: async (address: number = 1) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/${address}/status`);
     return res.json();
   },
-  cardSwipe: async (maxAmountKr: number = 2000) => {
-    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/1/card-swipe`, {
+  cardSwipe: async (address: number = 1, maxAmountKr: number = 2000) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/${address}/card-swipe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -42,19 +28,23 @@ const authApi = {
     });
     return res.json();
   },
-  confirmPayment: async () => {
-    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/1/confirm-payment`, {
+  startPumping: async (address: number = 1) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/${address}/start-pumping`, {
+      method: 'POST'
+    });
+    return res.json();
+  },
+  confirmPayment: async (address: number = 1) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/${address}/confirm-payment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paymentMethod: 'SIMULATION' })
     });
     return res.json();
   },
-  cancelAuthorization: async () => {
-    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/1/cancel-authorization`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason: 'Kansellert fra simulator' })
+  block: async (address: number = 1) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/${address}/block`, {
+      method: 'POST'
     });
     return res.json();
   }
@@ -67,65 +57,92 @@ export function DispenserSimulator() {
   const [settlementMessage, setSettlementMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [maxAmount, setMaxAmount] = useState(2000);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
-  // Poll state every 500ms when delivering
-  const { data: state, isLoading, error } = useQuery<DispenserStateDto>({
-    queryKey: ['dispenser-state'],
-    queryFn: dispenserApi.getState,
+  // Poll pump status (aligned with ControlPanel)
+  const { data: pumpStatus, isLoading, error } = useQuery({
+    queryKey: ['pump-status-sim'],
+    queryFn: () => pumpApi.getStatus(1),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data?.state === 'DELIVERING' ? 500 : 2000;
-    },
+      return data?.state === 'PUMPING' ? 500 : 2000;
+    }
   });
-
-  // Authorization status
-  const { data: authData } = useQuery({
-    queryKey: ['authorization-sim'],
-    queryFn: authApi.getAuthorization,
-    refetchInterval: 2000
-  });
-
-  const authorization = authData?.authorization;
-  const hasAuthorization = authData?.hasActiveAuthorization ?? false;
+  
+  // Use legacy state for backwards compatibility with UI
+  const state = {
+    state: pumpStatus?.state === 'PUMPING' ? 'DELIVERING' : 
+           pumpStatus?.state === 'PAYMENT_PENDING' ? 'FINISHED' :
+           pumpStatus?.state === 'READY_TO_PUMP' ? 'READY' :
+           pumpStatus?.state || 'IDLE',
+    connected: true,
+    litres: pumpStatus?.volumeLitres || 0,
+    amountToPay: pumpStatus?.amountKr || 0,
+    pricePerLitre: pumpStatus?.pricePerLitreKr || 0,
+    roadTaxPerLiterOre: 0,
+    dayMode: true
+  };
 
   // Card swipe mutation
   const cardSwipeMutation = useMutation({
-    mutationFn: () => authApi.cardSwipe(maxAmount),
+    mutationFn: () => pumpApi.cardSwipe(1, maxAmount),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['authorization-sim'] });
-      queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
+      queryClient.invalidateQueries({ queryKey: ['pump-status-sim'] });
       setErrorMessage(null);
     },
     onError: () => setErrorMessage('Kunne ikke simulere kortdragning')
   });
+  
+  // Start pumping mutation
+  const startPumpingMutation = useMutation({
+    mutationFn: () => pumpApi.startPumping(1),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pump-status-sim'] });
+      setErrorMessage(null);
+    },
+    onError: (error: any) => {
+      setErrorMessage(error.message || 'Kunne ikke starte pumping');
+    }
+  });
 
   // Confirm payment mutation
   const confirmPaymentMutation = useMutation({
-    mutationFn: authApi.confirmPayment,
+    mutationFn: () => pumpApi.confirmPayment(1),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['authorization-sim'] });
-      queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
+      queryClient.invalidateQueries({ queryKey: ['pump-status-sim'] });
       setSettlementMessage('Betaling bekreftet! ✅');
       setTimeout(() => setSettlementMessage(null), 3000);
     }
   });
 
-  // Cancel authorization mutation
-  const cancelAuthMutation = useMutation({
-    mutationFn: authApi.cancelAuthorization,
+  // Block/stop mutation
+  const blockMutation = useMutation({
+    mutationFn: () => pumpApi.block(1),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['authorization-sim'] });
-      queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
+      queryClient.invalidateQueries({ queryKey: ['pump-status-sim'] });
     }
   });
-
-  // Stop mutation
-  const stopMutation = useMutation({
-    mutationFn: dispenserApi.stop,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
-    },
-  });
+  
+  // 60-second countdown for READY_TO_PUMP state
+  useEffect(() => {
+    if (pumpStatus?.state === 'READY_TO_PUMP') {
+      setCountdown(60);
+      
+      const interval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    } else {
+      setCountdown(null);
+    }
+  }, [pumpStatus?.state]);
 
   const getStateColor = (currentState?: string) => {
     switch (currentState) {
@@ -309,93 +326,53 @@ export function DispenserSimulator() {
             </div>
           )}
 
-          {/* Authorization Status */}
-          {hasAuthorization && authorization && (
-            <div className={`rounded-xl p-4 mb-6 border-2 ${
-              authorization.status === 'PENDING' ? 'bg-yellow-900/30 border-yellow-500' :
-              authorization.status === 'PUMPING' ? 'bg-green-900/30 border-green-500' :
-              authorization.status === 'STOPPED' ? 'bg-orange-900/30 border-orange-500' :
-              'bg-gray-700 border-gray-600'
-            }`}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-400">💳 Autorisasjon</span>
-                <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                  authorization.status === 'PENDING' ? 'bg-yellow-500' :
-                  authorization.status === 'PUMPING' ? 'bg-green-500' :
-                  authorization.status === 'STOPPED' ? 'bg-orange-500' :
-                  'bg-gray-500'
-                }`}>
-                  {authorization.status}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>Maks: <span className="font-bold">{authorization.maxAmountKr} kr</span></div>
-                <div>Brukt: <span className="font-bold">{authorization.actualAmountKr?.toFixed(2) || '0.00'} kr</span></div>
-              </div>
-            </div>
-          )}
 
-          {/* Control Buttons */}
+          {/* Control Buttons - Kun kortdragning-simulering */}
           <div className="space-y-4">
-            {/* Step 1: Card Swipe */}
-            {!hasAuthorization && state?.state !== 'DELIVERING' && state?.state !== 'FINISHED' && (
-              <div className="space-y-3">
-                <div className="flex gap-3">
-                  <input
-                    type="number"
-                    value={maxAmount}
-                    onChange={(e) => setMaxAmount(Number(e.target.value))}
-                    className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                    placeholder="Maks beløp"
-                  />
-                  <span className="self-center text-gray-400 text-lg">kr</span>
-                </div>
-                <button
-                  onClick={() => cardSwipeMutation.mutate()}
-                  disabled={cardSwipeMutation.isPending}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg"
-                >
-                  {cardSwipeMutation.isPending ? '...' : '💳 Dra kort for å starte'}
-                </button>
+            {/* Kort swipe - Alltid tilgjengelig */}
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <input
+                  type="number"
+                  value={maxAmount}
+                  onChange={(e) => setMaxAmount(Number(e.target.value))}
+                  className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                  placeholder="Maks beløp"
+                />
+                <span className="self-center text-gray-400 text-lg">kr</span>
               </div>
-            )}
-
-            {/* Step 2: Pump ready after card swipe (AUTHORIZED or PENDING) */}
-            {(authorization?.status === 'AUTHORIZED' || authorization?.status === 'PENDING') && 
-             state?.state !== 'DELIVERING' && (
-              <div className="text-center py-6">
+              <button
+                onClick={() => cardSwipeMutation.mutate()}
+                disabled={cardSwipeMutation.isPending || (pumpStatus?.state !== 'IDLE' && !pumpStatus?.hasPendingTransaction)}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg text-xl"
+              >
+                {cardSwipeMutation.isPending ? '...' : '💳 SIMULER KORTDRAGNING'}
+              </button>
+            </div>
+            
+            {/* Status melding */}
+            {pumpStatus?.state === 'READY_TO_PUMP' && (
+              <div className="text-center py-6 bg-green-900/30 rounded-xl border border-green-500">
                 <div className="text-5xl mb-3">✅</div>
                 <p className="text-green-400 text-lg font-bold">Pumpe frigjort!</p>
-                <p className="text-gray-400 text-sm mt-2">Løft dysen og start fylling</p>
-                <button
-                  onClick={() => cancelAuthMutation.mutate()}
-                  className="mt-4 px-4 py-2 rounded-lg bg-gray-600 hover:bg-gray-500"
-                >
-                  ❌ Avbryt
-                </button>
+                <p className="text-gray-400 text-sm mt-2">Gå til /control for å starte pumping</p>
               </div>
             )}
-
-            {/* Step 4: Pumping (only when authorized) */}
-            {hasAuthorization && (state?.state === 'DELIVERING' || authorization?.status === 'PUMPING') && (
-              <button
-                onClick={() => stopMutation.mutate()}
-                disabled={stopMutation.isPending}
-                className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg text-xl"
-              >
-                {stopMutation.isPending ? '■ Stopper...' : '■ Stopp levering'}
-              </button>
+            
+            {pumpStatus?.state === 'PUMPING' && (
+              <div className="text-center py-6 bg-blue-900/30 rounded-xl border border-blue-500">
+                <div className="text-5xl mb-3">⛽</div>
+                <p className="text-blue-400 text-lg font-bold">Pumping pågår...</p>
+                <p className="text-gray-400 text-sm mt-2">Gå til /control for å stoppe</p>
+              </div>
             )}
-
-            {/* Step 5: Payment (only when authorized and stopped) */}
-            {hasAuthorization && authorization?.status === 'STOPPED' && (
-              <button
-                onClick={() => confirmPaymentMutation.mutate()}
-                disabled={confirmPaymentMutation.isPending}
-                className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg text-xl"
-              >
-                {confirmPaymentMutation.isPending ? '💳 Behandler...' : '💳 Betal og avslutt'}
-              </button>
+            
+            {pumpStatus?.state === 'PAYMENT_PENDING' && (
+              <div className="text-center py-6 bg-orange-900/30 rounded-xl border border-orange-500">
+                <div className="text-5xl mb-3">💳</div>
+                <p className="text-orange-400 text-lg font-bold">Venter på betaling</p>
+                <p className="text-gray-400 text-sm mt-2">Gå til /control eller /payment for å bekrefte</p>
+              </div>
             )}
           </div>
         </div>

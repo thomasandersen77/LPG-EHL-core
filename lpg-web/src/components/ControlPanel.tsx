@@ -85,6 +85,7 @@ export function ControlPanel() {
   const queryClient = useQueryClient();
   const [maxAmount, setMaxAmount] = useState(2000);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
   
   // Pump status
   const { data: pumpStatus, isLoading } = useQuery({
@@ -182,6 +183,27 @@ export function ControlPanel() {
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
+  
+  // 60-second countdown for READY_TO_PUMP state
+  useEffect(() => {
+    if (pumpStatus?.state === 'READY_TO_PUMP') {
+      setCountdown(60);
+      
+      const interval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    } else {
+      setCountdown(null);
+    }
+  }, [pumpStatus?.state]);
 
   // Filter logs by channel
   const filteredLogs = activeChannel === 'all' 
@@ -332,20 +354,35 @@ export function ControlPanel() {
                   </div>
                 )}
 
-                {/* READY_TO_PUMP: Show start pumping button */}
+                {/* READY_TO_PUMP: Show FRI DISPENSER button with countdown */}
                 {pumpStatus?.state === 'READY_TO_PUMP' && (
                   <div className="space-y-3">
-                    <div className="text-center py-2">
-                      <div className="text-3xl mb-2">✅</div>
-                      <p className="text-green-400 font-bold">Pumpe frigjort!</p>
-                      <p className="text-gray-400 text-xs mt-1">Trykk "START PUMPING" når klar (60s timeout)</p>
+                    <div className="text-center py-3">
+                      <div className="text-4xl mb-2">✅</div>
+                      <p className="text-green-400 font-bold text-lg">Pumpe frigjort!</p>
+                      <p className="text-gray-400 text-sm mt-2">Reservert beløp: {maxAmount} kr</p>
+                      {countdown !== null && countdown > 0 && (
+                        <div className="mt-3">
+                          <div className="text-3xl font-bold text-yellow-400">{countdown}s</div>
+                          <p className="text-xs text-gray-400 mt-1">Tid igjen til automatisk BLOCK</p>
+                        </div>
+                      )}
+                      {countdown === 0 && (
+                        <div className="mt-3 text-red-400 font-bold">
+                          ⏰ Timeout - pumpe blokkert
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={() => startPumpingMutation.mutate()}
-                      disabled={startPumpingMutation.isPending}
-                      className="w-full py-4 rounded-xl font-bold text-xl bg-green-600 hover:bg-green-700 transition-colors"
+                      disabled={startPumpingMutation.isPending || countdown === 0}
+                      className={`w-full py-4 rounded-xl font-bold text-xl transition-colors ${
+                        countdown === 0 
+                          ? 'bg-gray-600 cursor-not-allowed' 
+                          : 'bg-green-600 hover:bg-green-700'
+                      }`}
                     >
-                      {startPumpingMutation.isPending ? '...' : '⛽ START PUMPING'}
+                      {startPumpingMutation.isPending ? '...' : '🔓 FRI DISPENSER'}
                     </button>
                   </div>
                 )}
@@ -453,31 +490,31 @@ export function ControlPanel() {
             <div>
               <h4 className="font-bold text-blue-400 mb-2">1️⃣ Kortdragning</h4>
               <p className="text-sm">
-                Trykk på "SIMULER KORTDRAGNING" for å autorisere pumpen.
+                Trykk "SIMULER KORTDRAGNING" for å reservere beløp (f.eks. 1500 kr).
               </p>
             </div>
             <div>
-              <h4 className="font-bold text-yellow-400 mb-2">2️⃣ Pumpe frigjort</h4>
+              <h4 className="font-bold text-yellow-400 mb-2">2️⃣ Fri dispenser</h4>
               <p className="text-sm">
-                Pumpen er nå klar. Løft dysen for å starte fylling.
+                Trykk "FRI DISPENSER" innen 60s for å starte pumping.
               </p>
             </div>
             <div>
               <h4 className="font-bold text-green-400 mb-2">3️⃣ Pumping</h4>
               <p className="text-sm">
-                Volum og beløp oppdateres automatisk under fylling.
+                Trykk "STOPP" når ønsket volum er fylt. Faktisk beløp (f.eks. 700 kr) trekkes.
               </p>
             </div>
             <div>
               <h4 className="font-bold text-orange-400 mb-2">4️⃣ Betaling</h4>
               <p className="text-sm">
-                Trykk "BEKREFT BETALING" når fyllingen er ferdig.
+                Trykk "BEKREFT BETALING" for å fullføre transaksjonen.
               </p>
             </div>
           </div>
           <div className="mt-4 p-3 bg-gray-700/50 rounded-lg">
             <p className="text-sm text-gray-400">
-              <strong>💡 Tips:</strong> Denne GUI-en sender UNBLOCK automatisk etter kortdragning - du trenger ikke vente på eksterne systemer.
+              <strong>💡 Tips:</strong> Du har 60 sekunder på deg etter kortdragning før pumpen automatisk blokkeres. Kun faktisk fylt volum trekkes fra kortet.
             </p>
           </div>
         </div>
