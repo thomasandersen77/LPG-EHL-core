@@ -164,13 +164,19 @@ class DispenserService(
     }
     
     /**
-     * Interpret the raw status byte to determine dispenser state
-     * This maps hardware status to business logic states
+     * Interpret the raw status byte to determine dispenser state.
+     * This maps VB6-compatible hardware bitmasks to business logic states.
+     * 
+     * VB6 Bitmask values:
+     *   0x00 = IDLE (all flags clear)
+     *   0x04 = AUTHORIZED (START_BUTTON_PRESSED) - nozzle lifted, ready to pump
+     *   0x06 = PUMPING (START_BUTTON + OPEN_FOR_DELIVERY) - fuel flowing
+     *   0x08 = PAYMENT_PENDING (AUTOMODE) - transaction complete, awaiting reset
      */
     private fun interpretStatusByte(statusByte: Int, currentState: DispenserStateInfo): DispenserState {
-        return when {
-            // Status 0: Idle/Ready state
-            statusByte == 0 -> {
+        return when (statusByte) {
+            // 0x00: Idle/Ready state - all flags clear
+            0 -> {
                 when (currentState.state) {
                     // If we were FILLING and now IDLE, transaction is finished
                     DispenserState.FILLING -> DispenserState.FINISHED
@@ -180,17 +186,43 @@ class DispenserService(
                     else -> DispenserState.IDLE
                 }
             }
-            // Status 1-3: Various busy/active states - nozzle lifted or pumping
-            statusByte in 1..3 -> {
+            // 0x04: AUTHORIZED (START_BUTTON_PRESSED) - nozzle lifted, authorized to pump
+            4 -> {
+                when (currentState.state) {
+                    DispenserState.IDLE -> DispenserState.STARTED
+                    DispenserState.STARTED -> DispenserState.STARTED  // Stay in STARTED
+                    DispenserState.FILLING -> DispenserState.FILLING  // Keep FILLING (might be transient)
+                    else -> DispenserState.STARTED
+                }
+            }
+            // 0x06: PUMPING (START_BUTTON + OPEN_FOR_DELIVERY) - fuel is flowing
+            6 -> {
+                when (currentState.state) {
+                    DispenserState.IDLE -> DispenserState.STARTED  // Fast transition
+                    DispenserState.STARTED -> DispenserState.FILLING
+                    DispenserState.FILLING -> DispenserState.FILLING  // Stay in FILLING
+                    else -> DispenserState.FILLING
+                }
+            }
+            // 0x08: PAYMENT_PENDING (AUTOMODE) - transaction complete
+            8 -> {
+                when (currentState.state) {
+                    DispenserState.FILLING -> DispenserState.FINISHED
+                    DispenserState.FINISHED -> DispenserState.FINISHED
+                    else -> currentState.state
+                }
+            }
+            // Legacy support: status 1-3 (some hardware variants)
+            in 1..3 -> {
                 if (currentState.state == DispenserState.IDLE) {
                     DispenserState.STARTED
                 } else {
-                    currentState.state // Keep current state if already active
+                    currentState.state
                 }
             }
-            // Status > 3: Error states or unknown - stay in current state
+            // Unknown status - log and keep current state
             else -> {
-                logger.warn("Unknown status byte $statusByte from dispenser ${currentState}, keeping current state")
+                logger.warn("Unknown status byte 0x${String.format("%02X", statusByte)} from dispenser, keeping current state")
                 currentState.state
             }
         }
