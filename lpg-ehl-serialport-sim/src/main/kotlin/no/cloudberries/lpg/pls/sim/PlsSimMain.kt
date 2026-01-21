@@ -10,20 +10,37 @@ private val log = LoggerFactory.getLogger("PlsSimMain")
  * PLS Simulator - Serial port simulator for testing EHL protocol.
  *
  * Usage:
- *   java -jar pls-sim.jar --port=/dev/ttys013 --baud=9600 --mode=line --chunk=true
+ *   java -jar pls-sim.jar --port=/tmp/ttyV0 --mode=ehl --address=1 --price=1590
  */
 fun main(args: Array<String>) {
-    log.info("=== PLS Simulator Starting ===")
+    log.info("")
+    log.info("══════════════════════════════════════════════════════════")
+    log.info("  ⛽ PLS SIMULATOR")
+    log.info("══════════════════════════════════════════════════════════")
     
     val cliArgs = CliArgs.parse(args)
     
-    log.info("Configuration:")
-    log.info("  Port:      {}", cliArgs.port)
-    log.info("  Baud:      {}", cliArgs.baud)
-    log.info("  Mode:      {}", cliArgs.mode)
-    log.info("  Chunked:   {}", cliArgs.chunk)
-    log.info("  Latency:   {} ms", cliArgs.latencyMs)
-    log.info("  Log Hex:   {}", cliArgs.logHex)
+    log.info("  Serial Configuration:")
+    log.info("    Port:      {}", cliArgs.port)
+    log.info("    Baud:      {}", cliArgs.baud)
+    log.info("    Mode:      {}", cliArgs.mode)
+    log.info("    Chunked:   {}", cliArgs.chunk)
+    log.info("    Latency:   {} ms", cliArgs.latencyMs)
+    log.info("    Log Hex:   {}", cliArgs.logHex)
+    log.info("")
+    log.info("  Dispenser Configuration:")
+    log.info("    Address:   {}", cliArgs.dispenserAddress)
+    log.info("    Price:     {} kr/L", cliArgs.priceCents / 100.0)
+    log.info("    Blocked:   {}", cliArgs.initiallyBlocked)
+    log.info("══════════════════════════════════════════════════════════")
+    log.info("")
+
+    // Create state with configured parameters
+    val plsState = PlsState(
+        defaultAddress = cliArgs.dispenserAddress,
+        priceCents = cliArgs.priceCents,
+        initiallyBlocked = cliArgs.initiallyBlocked
+    )
 
     val handler = SerialPortHandler(
         portName = cliArgs.port,
@@ -31,7 +48,8 @@ fun main(args: Array<String>) {
         mode = cliArgs.mode,
         chunked = cliArgs.chunk,
         latencyMs = cliArgs.latencyMs,
-        logHex = cliArgs.logHex
+        logHex = cliArgs.logHex,
+        plsState = plsState
     )
 
     // Shutdown hook for clean exit

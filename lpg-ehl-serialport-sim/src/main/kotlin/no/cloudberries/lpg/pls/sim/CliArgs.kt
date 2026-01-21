@@ -9,7 +9,10 @@ data class CliArgs(
     val mode: FrameMode = FrameMode.LINE,
     val chunk: Boolean = false,
     val latencyMs: Int = 0,
-    val logHex: Boolean = false
+    val logHex: Boolean = false,
+    val dispenserAddress: Int = 1,
+    val priceCents: Int = 1590,
+    val initiallyBlocked: Boolean = true
 ) {
     companion object {
         fun parse(args: Array<String>): CliArgs {
@@ -19,6 +22,9 @@ data class CliArgs(
             var chunk = false
             var latencyMs = 0
             var logHex = false
+            var dispenserAddress = 1
+            var priceCents = 1590
+            var initiallyBlocked = true
 
             val iterator = args.iterator()
             while (iterator.hasNext()) {
@@ -38,6 +44,9 @@ data class CliArgs(
                     arg.startsWith("--chunk=") -> chunk = arg.substringAfter("--chunk=").lowercase() == "true"
                     arg.startsWith("--latencyMs=") -> latencyMs = arg.substringAfter("--latencyMs=").toIntOrNull() ?: 0
                     arg.startsWith("--logHex=") -> logHex = arg.substringAfter("--logHex=").lowercase() == "true"
+                    arg.startsWith("--address=") -> dispenserAddress = arg.substringAfter("--address=").toIntOrNull() ?: 1
+                    arg.startsWith("--price=") -> priceCents = arg.substringAfter("--price=").toIntOrNull() ?: 1590
+                    arg.startsWith("--blocked=") -> initiallyBlocked = arg.substringAfter("--blocked=").lowercase() != "false"
                     arg == "--help" || arg == "-h" -> {
                         printHelp()
                         kotlin.system.exitProcess(0)
@@ -51,7 +60,7 @@ data class CliArgs(
                 kotlin.system.exitProcess(1)
             }
 
-            return CliArgs(port, baud, mode, chunk, latencyMs, logHex)
+            return CliArgs(port, baud, mode, chunk, latencyMs, logHex, dispenserAddress, priceCents, initiallyBlocked)
         }
 
         private fun printHelp() {
@@ -61,19 +70,31 @@ data class CliArgs(
                 |Usage: java -jar pls-sim.jar --port=<port> [options]
                 |
                 |Required:
-                |  --port=<port>       Serial port device (e.g., /dev/ttys013, /dev/ttyS0)
+                |  --port=<port>       Serial port device (e.g., /tmp/ttyV0, /dev/ttyS0)
                 |
-                |Options:
+                |Serial Options:
                 |  --baud=<baud>       Baud rate (default: 9600)
                 |  --mode=<mode>       Frame mode: 'line', 'stxetx', or 'ehl' (default: line)
                 |  --chunk=<bool>      Enable chunked responses (default: false)
                 |  --latencyMs=<ms>    Add latency jitter to read loop (default: 0)
                 |  --logHex=<bool>     Log raw bytes as hex (default: false)
+                |
+                |Dispenser Options:
+                |  --address=<addr>    Dispenser address 1-8 (default: 1)
+                |  --price=<cents>     Price per liter in cents, e.g. 1590 = 15.90 kr/L (default: 1590)
+                |  --blocked=<bool>    Initial blocked state (default: true)
+                |
                 |  --help, -h          Show this help message
                 |
                 |Examples:
+                |  # Basic EHL mode for socat testing:
+                |  java -jar pls-sim.jar --port=/tmp/ttyV0 --mode=ehl --logHex=true
+                |
+                |  # Full configuration:
+                |  java -jar pls-sim.jar --port=/tmp/ttyV0 --mode=ehl --address=1 --price=2100 --blocked=true
+                |
+                |  # Text-based testing:
                 |  java -jar pls-sim.jar --port=/dev/ttys013 --baud=9600 --mode=line
-                |  java -jar pls-sim.jar --port=/dev/ttyS0 --mode=stxetx --chunk=true
             """.trimMargin())
         }
     }

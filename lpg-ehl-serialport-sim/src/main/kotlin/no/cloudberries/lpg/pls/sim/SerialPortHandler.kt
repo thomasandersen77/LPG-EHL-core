@@ -7,6 +7,8 @@ import kotlin.random.Random
 
 /**
  * Handles serial port communication using jSerialComm.
+ * 
+ * @param plsState Optional PLS state - if null, a default state is created
  */
 class SerialPortHandler(
     private val portName: String,
@@ -14,7 +16,8 @@ class SerialPortHandler(
     private val mode: FrameMode,
     private val chunked: Boolean,
     private val latencyMs: Int,
-    private val logHex: Boolean
+    private val logHex: Boolean,
+    plsState: PlsState? = null
 ) {
     private val log = LoggerFactory.getLogger(SerialPortHandler::class.java)
     
@@ -22,7 +25,7 @@ class SerialPortHandler(
     private val running = AtomicBoolean(false)
     private var readerThread: Thread? = null
     
-    private val state = PlsState()
+    private val state = plsState ?: PlsState()
     private val frameExtractor = FrameExtractor(mode, logHex)
 
     companion object {
@@ -144,6 +147,9 @@ class SerialPortHandler(
                 }
                 is EhlCommandResult.VolumeResponse -> {
                     EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_VOLUME, result.data)
+                }
+                is EhlCommandResult.PriceResponse -> {
+                    EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_PRICE, result.data)
                 }
             }
 

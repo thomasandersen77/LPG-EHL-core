@@ -132,7 +132,15 @@ class TransportConfiguration {
             }
         }
         
-        return RealSerialTransport(portName, baudRate, dataBits, parityMode, stopBits)
+        val transport = RealSerialTransport(portName, baudRate, dataBits, parityMode, stopBits)
+        
+        // Connect to the serial port
+        if (!transport.connect()) {
+            logger.error("❌ Failed to connect to serial port $portName")
+            logger.warn("⚠️  Hardware communication will fail until port is available")
+        }
+        
+        return transport
     }
     
     /**

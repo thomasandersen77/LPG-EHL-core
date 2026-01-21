@@ -1,430 +1,296 @@
 #!/bin/bash
-# build_monolith.sh - Build LPG-EHL Applications (3 Deployment Modes)
-#
-# This script creates THREE executable JAR files:
-# 1. WEBAPP JAR: lpg-ehl-service + lpg-ehl-webapp (Web UI + REST API)
-# 2. HEADLESS JAR: lpg-ehl-service + lpg-ehl-app-headless (Background Service)
-# 3. CLI JAR: lpg-ehl-service + lpg-ehl-cli (Command Line Tools)
+# build_monolith.sh - Build LPG-EHL Applications
 #
 # Output: 
-#   - release/lpg-ehl-webapp.jar (Web UI + REST API)
-#   - release/lpg-ehl-headless.jar (Headless Background Service)
-#   - release/lpg-ehl-cli.jar (CLI Tools)
+#   release/lpg-ehl-webapp.jar    - Web UI + REST API (Undertow)
+#   release/lpg-ehl-headless.jar  - Background Service + Debug API
+#   release/lpg-ehl-cli.jar       - Command Line Tools
 #
 # Usage:
-#   ./build_monolith.sh          # Build with tests
-#   ./build_monolith.sh --skip-tests  # Build without tests
-#
-# Requirements:
-#   - Maven 3.8+ (for Spring Boot build)
-#   - Java 21 (Temurin recommended)
+#   ./build_monolith.sh              # Build with tests
+#   ./build_monolith.sh --skip-tests # Build without tests
+#   ./build_monolith.sh --verbose    # Show full Maven output
 
-set -e  # Exit on error
+set -e
 
-# Colors for output
+# Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+GRAY='\033[0;90m'
+BOLD='\033[1m'
+NC='\033[0m'
 
 # Parse arguments
 SKIP_TESTS=false
-if [[ "$1" == "--skip-tests" ]]; then
-    SKIP_TESTS=true
-fi
+VERBOSE=false
+for arg in "$@"; do
+    case $arg in
+        --skip-tests) SKIP_TESTS=true ;;
+        --verbose) VERBOSE=true ;;
+    esac
+done
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Build start time
+BUILD_LOG="$SCRIPT_DIR/.build.log"
 BUILD_START=$(date +%s)
 
+# Helper: Run Maven command (quiet unless error or verbose)
+run_maven() {
+    local description="$1"
+    shift
+    
+    if [ "$VERBOSE" = true ]; then
+        ./mvnw "$@"
+    else
+        if ! ./mvnw "$@" > "$BUILD_LOG" 2>&1; then
+            echo ""
+            echo -e "${RED}✗ BUILD FAILED: $description${NC}"
+            echo ""
+            echo -e "${YELLOW}Last 30 lines of output:${NC}"
+            tail -30 "$BUILD_LOG"
+            echo ""
+            echo -e "${GRAY}Full log: $BUILD_LOG${NC}"
+            exit 1
+        fi
+    fi
+}
+
+# Header
+echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  LPG-EHL Multi-Mode Build System${NC}"
+echo -e "${BLUE}  🛢️  LPG-EHL Build System${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${YELLOW}Build Configuration:${NC}"
-echo "  Architecture: Hexagonal (Service-based)"
-if [ "$SKIP_TESTS" = true ]; then
-    echo "  Tests: SKIPPED"
-else
-    echo "  Tests: ENABLED"
-fi
-echo "  Java Version: $(java -version 2>&1 | head -1 | cut -d'"' -f2)"
-echo "  Maven Version: $(./mvnw -version | head -1 | cut -d' ' -f3)"
-echo ""
-echo -e "${YELLOW}Building 3 Deployment Modes:${NC}"
-echo "  🖥️  WEBAPP - Full web application with React UI"
-echo "  🤖 HEADLESS - Background service (no web server)"
-echo "  ⚡ CLI - Command line tools"
-echo ""
-echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo -e "  ${GRAY}Java:${NC}  $(java -version 2>&1 | head -1 | cut -d'"' -f2)"
+echo -e "  ${GRAY}Maven:${NC} $(./mvnw -version 2>/dev/null | head -1 | cut -d' ' -f3)"
+echo -e "  ${GRAY}Tests:${NC} $([ "$SKIP_TESTS" = true ] && echo 'Skipped' || echo 'Enabled')"
 echo ""
 
-# Step 0: Build React Frontend
-echo -e "${GREEN}[0/6]${NC} Building React frontend..."
+# Step 1: Build React Frontend
+echo -n -e "  ${GRAY}[1/4]${NC} Building React frontend... "
 FRONTEND_DIR="$SCRIPT_DIR/lpg-web"
 WEBAPP_STATIC="$SCRIPT_DIR/lpg-ehl-webapp/src/main/resources/static"
 
 if [ -d "$FRONTEND_DIR" ]; then
-    echo "  📦 Installing npm dependencies..."
     cd "$FRONTEND_DIR"
-    npm install --silent 2>/dev/null || npm install
-    echo "  🔨 Building React app..."
-    npm run build
+    npm install --silent > /dev/null 2>&1 || npm install > /dev/null 2>&1
+    npm run build > /dev/null 2>&1
     
-    echo "  📁 Copying to webapp static resources..."
-    rm -rf "$WEBAPP_STATIC"/*
+    rm -rf "$WEBAPP_STATIC"/* 2>/dev/null || true
     mkdir -p "$WEBAPP_STATIC"
     cp -r "$FRONTEND_DIR/dist/"* "$WEBAPP_STATIC/"
     STATIC_FILES=$(find "$WEBAPP_STATIC" -type f | wc -l | tr -d ' ')
-    echo -e "  ${GREEN}✓${NC} Frontend built and copied ($STATIC_FILES files)"
+    echo -e "${GREEN}✓${NC} ${GRAY}($STATIC_FILES files)${NC}"
     cd "$SCRIPT_DIR"
 else
-    echo -e "  ${YELLOW}⚠${NC} Frontend directory not found, skipping frontend build"
-fi
-echo ""
-
-# Step 1: Clean and Build All Maven Modules
-echo -e "${GREEN}[1/6]${NC} Building all Maven modules..."
-echo "  📦 Modules: core, emulator, transport, service, webapp, headless, cli"
-echo ""
-
-if [ "$SKIP_TESTS" = true ]; then
-    echo "  Running: mvn clean install -DskipTests (output suppressed)"
-    ./mvnw clean install -DskipTests -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
-else
-    echo "  Running: mvn clean install (with tests, output suppressed)"
-    ./mvnw clean install -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building|Tests run" || true
+    echo -e "${YELLOW}⚠ Skipped${NC}"
 fi
 
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
-    echo -e "${RED}✗ ERROR: Maven build failed - rerun without -q flag for details${NC}"
-    exit 1
-fi
+# Step 2: Maven Build
+echo -n -e "  ${GRAY}[2/4]${NC} Compiling all modules... "
+MVN_ARGS="clean install"
+[ "$SKIP_TESTS" = true ] && MVN_ARGS="$MVN_ARGS -DskipTests"
 
-echo -e "  ${GREEN}✓${NC} All Maven modules built successfully"
-echo ""
+run_maven "Maven compile" $MVN_ARGS -q
+echo -e "${GREEN}✓${NC}"
 
-# Step 2: Package WebApp JAR
-echo -e "${GREEN}[2/6]${NC} Packaging WebApp JAR (with React frontend)..."
-cd "$SCRIPT_DIR"
-echo "  Module: lpg-ehl-webapp"
-echo "  Includes: Service layer + REST API + React UI"
-echo ""
+# Step 3: Package JARs
+echo -n -e "  ${GRAY}[3/4]${NC} Packaging JAR files... "
 
-if [ "$SKIP_TESTS" = true ]; then
-    ./mvnw package -pl lpg-ehl-webapp -am -DskipTests -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
-else
-    ./mvnw package -pl lpg-ehl-webapp -am -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
-fi
+PKG_ARGS="-DskipTests -q"
 
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
-    echo -e "${RED}✗ ERROR: WebApp packaging failed${NC}"
-    exit 1
-fi
+run_maven "WebApp package" package -pl lpg-ehl-webapp -am $PKG_ARGS
+run_maven "Headless package" package -pl lpg-ehl-app-headless -am $PKG_ARGS
+run_maven "CLI package" package -pl lpg-ehl-cli -am $PKG_ARGS
 
-WEBAPP_JAR=$(find "$SCRIPT_DIR/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
-if [ -z "$WEBAPP_JAR" ]; then
-    echo -e "${RED}✗ ERROR: WebApp JAR not found${NC}"
-    exit 1
-fi
+echo -e "${GREEN}✓${NC}"
 
-WEBAPP_SIZE=$(du -h "$WEBAPP_JAR" | cut -f1)
-echo -e "  ${GREEN}✓${NC} WebApp JAR built: $(basename "$WEBAPP_JAR") ($WEBAPP_SIZE)"
-echo ""
-
-# Step 3: Package Headless JAR
-echo -e "${GREEN}[3/6]${NC} Packaging Headless JAR (background service)..."
-cd "$SCRIPT_DIR"
-echo "  Module: lpg-ehl-app-headless"
-echo "  Includes: Service layer + No web server"
-echo "  Perfect for: Production deployment, Docker, Systemd"
-echo ""
-
-if [ "$SKIP_TESTS" = true ]; then
-    ./mvnw package -pl lpg-ehl-app-headless -am -DskipTests -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
-else
-    ./mvnw package -pl lpg-ehl-app-headless -am -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
-fi
-
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
-    echo -e "${RED}✗ ERROR: Headless packaging failed${NC}"
-    exit 1
-fi
-
-HEADLESS_JAR=$(find "$SCRIPT_DIR/lpg-ehl-app-headless/target" -name "lpg-ehl-app-headless-*.jar" -not -name "*-plain.jar" | head -1)
-if [ -z "$HEADLESS_JAR" ]; then
-    echo -e "${RED}✗ ERROR: Headless JAR not found${NC}"
-    exit 1
-fi
-
-HEADLESS_SIZE=$(du -h "$HEADLESS_JAR" | cut -f1)
-echo -e "  ${GREEN}✓${NC} Headless JAR built: $(basename "$HEADLESS_JAR") ($HEADLESS_SIZE)"
-echo ""
-
-# Step 4: Package CLI JAR
-echo -e "${GREEN}[4/6]${NC} Packaging CLI JAR (command line tools)..."
-cd "$SCRIPT_DIR"
-echo "  Module: lpg-ehl-cli"
-echo "  Includes: Service layer + CLI commands"
-echo "  Perfect for: Automation, scripting, diagnostics"
-echo ""
-
-if [ "$SKIP_TESTS" = true ]; then
-    ./mvnw package -pl lpg-ehl-cli -am -DskipTests -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
-else
-    ./mvnw package -pl lpg-ehl-cli -am -q 2>&1 | grep -E "BUILD (SUCCESS|FAILURE)|ERROR|Building" || true
-fi
-
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
-    echo -e "${RED}✗ ERROR: CLI packaging failed${NC}"
-    exit 1
-fi
-
-CLI_JAR_SOURCE=$(find "$SCRIPT_DIR/lpg-ehl-cli/target" -name "lpg-ehl-cli-*.jar" -not -name "*-plain.jar" | head -1)
-if [ -z "$CLI_JAR_SOURCE" ]; then
-    echo -e "${RED}✗ ERROR: CLI JAR not found${NC}"
-    exit 1
-fi
-
-CLI_SIZE=$(du -h "$CLI_JAR_SOURCE" | cut -f1)
-echo -e "  ${GREEN}✓${NC} CLI JAR built: $(basename "$CLI_JAR_SOURCE") ($CLI_SIZE)"
-echo ""
-
-# Step 5: Create Release Artifacts
-echo -e "${GREEN}[5/6]${NC} Creating release artifacts..."
-cd "$SCRIPT_DIR"
-echo "  Preparing release/ directory..."
-echo ""
+# Step 4: Create Release Artifacts
+echo -n -e "  ${GRAY}[4/4]${NC} Creating release artifacts... "
 
 RELEASE_DIR="release"
 mkdir -p "$RELEASE_DIR"
 
-# Copy WebApp JAR
-WEBAPP_RELEASE="$RELEASE_DIR/lpg-ehl-webapp.jar"
-cp "$WEBAPP_JAR" "$WEBAPP_RELEASE"
-chmod +x "$WEBAPP_RELEASE"
-WEBAPP_RELEASE_SIZE=$(du -h "$WEBAPP_RELEASE" | cut -f1)
-echo -e "  ${GREEN}✓${NC} WebApp JAR: lpg-ehl-webapp.jar ($WEBAPP_RELEASE_SIZE)"
+# Find and copy JARs
+WEBAPP_JAR=$(find "$SCRIPT_DIR/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
+HEADLESS_JAR=$(find "$SCRIPT_DIR/lpg-ehl-app-headless/target" -name "lpg-ehl-app-headless-*.jar" -not -name "*-plain.jar" | head -1)
+CLI_JAR=$(find "$SCRIPT_DIR/lpg-ehl-cli/target" -name "lpg-ehl-cli-*.jar" -not -name "*-plain.jar" | head -1)
 
-# Copy Headless JAR
-HEADLESS_RELEASE="$RELEASE_DIR/lpg-ehl-headless.jar"
-cp "$HEADLESS_JAR" "$HEADLESS_RELEASE"
-chmod +x "$HEADLESS_RELEASE"
-HEADLESS_RELEASE_SIZE=$(du -h "$HEADLESS_RELEASE" | cut -f1)
-echo -e "  ${GREEN}✓${NC} Headless JAR: lpg-ehl-headless.jar ($HEADLESS_RELEASE_SIZE)"
+cp "$WEBAPP_JAR" "$RELEASE_DIR/lpg-ehl-webapp.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-webapp.jar"
+cp "$HEADLESS_JAR" "$RELEASE_DIR/lpg-ehl-headless.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-headless.jar"
+cp "$CLI_JAR" "$RELEASE_DIR/lpg-ehl-cli.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-cli.jar"
 
-# Copy CLI JAR
-CLI_RELEASE="$RELEASE_DIR/lpg-ehl-cli.jar"
-cp "$CLI_JAR_SOURCE" "$CLI_RELEASE"
-chmod +x "$CLI_RELEASE"
-CLI_RELEASE_SIZE=$(du -h "$CLI_RELEASE" | cut -f1)
-echo -e "  ${GREEN}✓${NC} CLI JAR: lpg-ehl-cli.jar ($CLI_RELEASE_SIZE)"
+echo -e "${GREEN}✓${NC}"
 
-echo ""
-echo -e "  ${GREEN}✓${NC} All release artifacts created in release/"
-echo ""
-
-# Build completion time
+# Build time
 BUILD_END=$(date +%s)
 BUILD_DURATION=$((BUILD_END - BUILD_START))
 BUILD_TIME=$(printf "%d:%02d" $((BUILD_DURATION / 60)) $((BUILD_DURATION % 60)))
 
-# Build summary
+# Sizes
+WEBAPP_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-webapp.jar" | cut -f1)
+HEADLESS_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-headless.jar" | cut -f1)
+CLI_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-cli.jar" | cut -f1)
+
+# Clean up build log on success
+rm -f "$BUILD_LOG"
+
+echo ""
+echo -e "${GREEN}✓ BUILD COMPLETE${NC} ${GRAY}($BUILD_TIME)${NC}"
+echo ""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ARTIFACT DETAILS
+# ═══════════════════════════════════════════════════════════════════════════════
+
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}✓ BUILD COMPLETE!${NC}"
-echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo ""
-echo -e "${YELLOW}Build Statistics:${NC}"
-echo "  Duration: $BUILD_TIME (mm:ss)"
-if [ "$SKIP_TESTS" = true ]; then
-    echo "  Tests: Skipped"
-else
-    echo "  Tests: Passed"
-fi
-echo "  Artifacts: 3 executable JARs"
-echo ""
-echo -e "${YELLOW}Release Artifacts:${NC}"
-echo "  🖥️  WebApp:   release/lpg-ehl-webapp.jar ($WEBAPP_RELEASE_SIZE)"
-echo "  🤖 Headless: release/lpg-ehl-headless.jar ($HEADLESS_RELEASE_SIZE)"
-echo "  ⚡ CLI:      release/lpg-ehl-cli.jar ($CLI_RELEASE_SIZE)"
-echo ""
-echo -e "${YELLOW}What's Included in Each JAR:${NC}"
-echo ""
-echo -e "${BLUE}1. WebApp JAR (lpg-ehl-webapp.jar):${NC}"
-echo "  ✓ lpg-ehl-service (Business logic core)"
-echo "  ✓ lpg-ehl-core (EHL protocol)"
-echo "  ✓ lpg-transport (Serial communication)"
-echo "  ✓ lpg-ehl-emulator (LAB mode simulator)"
-echo "  ✓ Spring Boot + Tomcat (REST API)"
-echo "  ✓ React frontend (Control Panel UI)"
-echo "  ✓ WebSocket support (Real-time updates)"
-echo "  ✓ All dependencies (Fat JAR)"
-echo ""
-echo -e "${BLUE}2. Headless JAR (lpg-ehl-headless.jar):${NC}"
-echo "  ✓ lpg-ehl-service (Business logic core)"
-echo "  ✓ lpg-ehl-core (EHL protocol)"
-echo "  ✓ lpg-transport (Serial communication)"
-echo "  ✓ Spring Boot (NO WEB SERVER)"
-echo "  ✓ Scheduled tasks (@Scheduled)"
-echo "  ✓ Database persistence"
-echo "  ✓ Azure cloud sync"
-echo "  ✓ Hardware watchdog"
-echo "  ✓ All dependencies (Fat JAR)"
-echo ""
-echo -e "${BLUE}3. CLI JAR (lpg-ehl-cli.jar):${NC}"
-echo "  ✓ lpg-ehl-service (Business logic core)"
-echo "  ✓ lpg-ehl-core (EHL protocol)"
-echo "  ✓ lpg-transport (Serial communication)"
-echo "  ✓ Spring Shell (CLI framework)"
-echo "  ✓ All dependencies (Fat JAR)"
-echo ""
-echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${YELLOW}HOW TO RUN EACH MODE${NC}"
+echo -e "${BOLD}  📦 RELEASE ARTIFACTS${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${GREEN}1. 🖥️  WebApp Mode (Full Web Application):${NC}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WEBAPP
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "${YELLOW}┌─────────────────────────────────────────────────────────────┐${NC}"
+echo -e "${YELLOW}│${NC} ${BOLD}🖥️  WEBAPP${NC} ${GRAY}($WEBAPP_SIZE)${NC}"
+echo -e "${YELLOW}│${NC} ${GRAY}release/lpg-ehl-webapp.jar${NC}"
+echo -e "${YELLOW}├─────────────────────────────────────────────────────────────┤${NC}"
+echo -e "${YELLOW}│${NC}"
+echo -e "${YELLOW}│${NC} ${BOLD}Innhold:${NC}"
+echo -e "${YELLOW}│${NC}   • React frontend (Control Panel UI)"
+echo -e "${YELLOW}│${NC}   • REST API + Swagger UI"
+echo -e "${YELLOW}│${NC}   • Undertow webserver (port 8080)"
+echo -e "${YELLOW}│${NC}   • WebSocket real-time updates"
+echo -e "${YELLOW}│${NC}   • EHL protokoll + emulator"
+echo -e "${YELLOW}│${NC}"
+echo -e "${YELLOW}│${NC} ${BOLD}Start (LAB mode med emulator):${NC}"
+echo -e "${YELLOW}│${NC}"
+echo -e "${YELLOW}│${NC}   java -jar release/lpg-ehl-webapp.jar"
+echo -e "${YELLOW}│${NC}"
+echo -e "${YELLOW}│${NC}   ${GRAY}→ http://localhost:8080${NC}"
+echo -e "${YELLOW}│${NC}   ${GRAY}→ http://localhost:8080/swagger-ui.html${NC}"
+echo -e "${YELLOW}│${NC}"
+echo -e "${YELLOW}│${NC} ${BOLD}Start (FIELD mode med fysisk pumpe):${NC}"
+echo -e "${YELLOW}│${NC}"
+echo -e "${YELLOW}│${NC}   java -jar release/lpg-ehl-webapp.jar \\"
+echo -e "${YELLOW}│${NC}     --lpg.mode=FIELD \\"
+echo -e "${YELLOW}│${NC}     --ehl.serial.port=/dev/ttyS1 \\"
+echo -e "${YELLOW}│${NC}     --server.port=8080"
+echo -e "${YELLOW}│${NC}"
+echo -e "${YELLOW}│${NC} ${BOLD}Miljøvariabler:${NC}"
+echo -e "${YELLOW}│${NC}   LPG_MODE=LAB|FIELD         ${GRAY}# LAB=emulator, FIELD=hardware${NC}"
+echo -e "${YELLOW}│${NC}   EHL_SERIAL_PORT=/dev/ttyS1 ${GRAY}# Seriell port (FIELD mode)${NC}"
+echo -e "${YELLOW}│${NC}   SERVER_PORT=8080           ${GRAY}# HTTP port${NC}"
+echo -e "${YELLOW}│${NC}   DB_HOST=localhost          ${GRAY}# PostgreSQL host${NC}"
+echo -e "${YELLOW}│${NC}   DB_PASSWORD=secret         ${GRAY}# PostgreSQL passord${NC}"
+echo -e "${YELLOW}└─────────────────────────────────────────────────────────────┘${NC}"
 echo ""
-echo -e "   ${YELLOW}Development (LAB mode with emulator):${NC}"
-echo "     java -jar release/lpg-ehl-webapp.jar"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HEADLESS
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "${GREEN}┌─────────────────────────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}│${NC} ${BOLD}🤖 HEADLESS${NC} ${GRAY}($HEADLESS_SIZE)${NC}"
+echo -e "${GREEN}│${NC} ${GRAY}release/lpg-ehl-headless.jar${NC}"
+echo -e "${GREEN}├─────────────────────────────────────────────────────────────┤${NC}"
+echo -e "${GREEN}│${NC}"
+echo -e "${GREEN}│${NC} ${BOLD}Innhold:${NC}"
+echo -e "${GREEN}│${NC}   • Ingen webserver (minimal footprint)"
+echo -e "${GREEN}│${NC}   • EHL protokoll + seriell kommunikasjon"
+echo -e "${GREEN}│${NC}   • Database-persistering"
+echo -e "${GREEN}│${NC}   • Scheduled tasks (polling, watchdog)"
+echo -e "${GREEN}│${NC}   • Valgfri Debug API (Undertow)"
+echo -e "${GREEN}│${NC}"
+echo -e "${GREEN}│${NC} ${BOLD}Start (LAB mode, ingen webserver):${NC}"
+echo -e "${GREEN}│${NC}"
+echo -e "${GREEN}│${NC}   java -jar release/lpg-ehl-headless.jar"
+echo -e "${GREEN}│${NC}"
+echo -e "${GREEN}│${NC} ${BOLD}Start (FIELD mode med Debug API for curl-testing):${NC}"
+echo -e "${GREEN}│${NC}"
+echo -e "${GREEN}│${NC}   java -jar release/lpg-ehl-headless.jar \\"
+echo -e "${GREEN}│${NC}     --spring.profiles.active=debug-api,local \\"
+echo -e "${GREEN}│${NC}     --lpg.mode=FIELD \\"
+echo -e "${GREEN}│${NC}     --ehl.serial.port=/dev/ttyS1"
+echo -e "${GREEN}│${NC}"
+echo -e "${GREEN}│${NC}   ${GRAY}Debug API endepunkter (kun med debug-api profil):${NC}"
+echo -e "${GREEN}│${NC}   ${GRAY}  curl http://IP:8080/api/debug/health${NC}"
+echo -e "${GREEN}│${NC}   ${GRAY}  curl http://IP:8080/api/debug/state/1${NC}"
+echo -e "${GREEN}│${NC}   ${GRAY}  curl -X POST http://IP:8080/api/debug/linetest/1${NC}"
+echo -e "${GREEN}│${NC}   ${GRAY}  curl -X POST http://IP:8080/api/debug/unblock/1${NC}"
+echo -e "${GREEN}│${NC}   ${GRAY}  curl -X POST http://IP:8080/api/debug/block/1${NC}"
+echo -e "${GREEN}│${NC}"
+echo -e "${GREEN}│${NC} ${BOLD}Profiler:${NC}"
+echo -e "${GREEN}│${NC}   ${GRAY}(ingen)${NC}      → Headless, ingen webserver"
+echo -e "${GREEN}│${NC}   debug-api   → Undertow på port 8080 for curl"
+echo -e "${GREEN}│${NC}   local       → Lokal database-config"
+echo -e "${GREEN}│${NC}"
+echo -e "${GREEN}│${NC} ${BOLD}Miljøvariabler:${NC}"
+echo -e "${GREEN}│${NC}   LPG_MODE=LAB|FIELD         ${GRAY}# LAB=emulator, FIELD=hardware${NC}"
+echo -e "${GREEN}│${NC}   EHL_SERIAL_PORT=/dev/ttyS1 ${GRAY}# Seriell port (FIELD mode)${NC}"
+echo -e "${GREEN}│${NC}   DEBUG_API_PORT=8080        ${GRAY}# Port for debug-api profil${NC}"
+echo -e "${GREEN}│${NC}   DB_HOST=localhost          ${GRAY}# PostgreSQL host${NC}"
+echo -e "${GREEN}│${NC}   DB_PASSWORD=secret         ${GRAY}# PostgreSQL passord${NC}"
+echo -e "${GREEN}└─────────────────────────────────────────────────────────────┘${NC}"
 echo ""
-echo "     Then open: http://localhost:8080"
-echo "     Swagger:   http://localhost:8080/swagger-ui.html"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLI
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
+echo -e "${BLUE}│${NC} ${BOLD}⚡ CLI${NC} ${GRAY}($CLI_SIZE)${NC}"
+echo -e "${BLUE}│${NC} ${GRAY}release/lpg-ehl-cli.jar${NC}"
+echo -e "${BLUE}├─────────────────────────────────────────────────────────────┤${NC}"
+echo -e "${BLUE}│${NC}"
+echo -e "${BLUE}│${NC} ${BOLD}Innhold:${NC}"
+echo -e "${BLUE}│${NC}   • Spring Shell interaktiv CLI"
+echo -e "${BLUE}│${NC}   • EHL protokoll-kommandoer"
+echo -e "${BLUE}│${NC}   • Database-operasjoner"
+echo -e "${BLUE}│${NC}"
+echo -e "${BLUE}│${NC} ${BOLD}Start (interaktiv shell):${NC}"
+echo -e "${BLUE}│${NC}"
+echo -e "${BLUE}│${NC}   java -jar release/lpg-ehl-cli.jar"
+echo -e "${BLUE}│${NC}"
+echo -e "${BLUE}│${NC} ${BOLD}Eksempel-kommandoer:${NC}"
+echo -e "${BLUE}│${NC}   java -jar release/lpg-ehl-cli.jar help"
+echo -e "${BLUE}│${NC}   java -jar release/lpg-ehl-cli.jar linetest --addr=1"
+echo -e "${BLUE}│${NC}"
+echo -e "${BLUE}│${NC} ${BOLD}Miljøvariabler:${NC}"
+echo -e "${BLUE}│${NC}   LPG_MODE=LAB|FIELD         ${GRAY}# LAB=emulator, FIELD=hardware${NC}"
+echo -e "${BLUE}│${NC}   EHL_SERIAL_PORT=/dev/ttyS1 ${GRAY}# Seriell port (FIELD mode)${NC}"
+echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
 echo ""
-echo -e "   ${YELLOW}Production (FIELD mode with real hardware):${NC}"
-echo "     java -jar release/lpg-ehl-webapp.jar \\"
-echo "       --EHL_EMULATOR_ENABLED=false \\"
-echo "       --EHL_SERIAL_PORT=/dev/ttyUSB0 \\"
-echo "       --DB_HOST=localhost \\"
-echo "       --DB_PASSWORD=<secret> \\"
-echo "       --AZURE_ENABLED=true"
-echo ""
-echo -e "   ${YELLOW}Configuration Options:${NC}"
-echo "     --EHL_EMULATOR_ENABLED=true/false  # Use emulator or real hardware"
-echo "     --EHL_SERIAL_PORT=/dev/ttyUSB0     # Serial port device"
-echo "     --DB_HOST=localhost                 # Database host"
-echo "     --DB_PASSWORD=secret                # Database password"
-echo "     --AZURE_ENABLED=true                # Enable cloud sync"
-echo "     --PORT=8080                         # HTTP port"
-echo ""
-echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
-echo ""
-echo -e "${GREEN}2. 🤖 Headless Mode (Background Service - NO WEB SERVER):${NC}"
-echo ""
-echo -e "   ${YELLOW}Development (LAB mode with emulator):${NC}"
-echo "     java -jar release/lpg-ehl-headless.jar"
-echo ""
-echo -e "   ${YELLOW}Production (FIELD mode - typical bensinstasjon deployment):${NC}"
-echo "     java -jar release/lpg-ehl-headless.jar \\"
-echo "       --EHL_EMULATOR_ENABLED=false \\"
-echo "       --EHL_SERIAL_PORT=/dev/ttyUSB0 \\"
-echo "       --DB_HOST=localhost \\"
-echo "       --DB_PASSWORD=<secret> \\"
-echo "       --AZURE_ENABLED=true"
-echo ""
-echo -e "   ${YELLOW}Systemd Service (Linux production):${NC}"
-echo "     # Copy JAR to server"
-echo "     scp release/lpg-ehl-headless.jar user@station:/opt/lpg-ehl/"
-echo ""
-echo "     # Create /etc/systemd/system/lpg-ehl.service:"
-echo "     [Unit]"
-echo "     Description=LPG EHL Headless Service"
-echo "     After=network.target postgresql.service"
-echo ""
-echo "     [Service]"
-echo "     Type=simple"
-echo "     User=lpg"
-echo "     ExecStart=/usr/bin/java -jar /opt/lpg-ehl/lpg-ehl-headless.jar"
-echo "     Environment=\"EHL_EMULATOR_ENABLED=false\""
-echo "     Environment=\"EHL_SERIAL_PORT=/dev/ttyUSB0\""
-echo "     Restart=on-failure"
-echo ""
-echo "     [Install]"
-echo "     WantedBy=multi-user.target"
-echo ""
-echo "     # Enable and start"
-echo "     sudo systemctl enable lpg-ehl"
-echo "     sudo systemctl start lpg-ehl"
-echo "     sudo systemctl status lpg-ehl"
-echo ""
-echo -e "   ${YELLOW}Docker Deployment:${NC}"
-echo "     docker run -d \\"
-echo "       --name lpg-ehl \\"
-echo "       --device=/dev/ttyUSB0 \\"
-echo "       -e EHL_EMULATOR_ENABLED=false \\"
-echo "       -e DB_HOST=postgres \\"
-echo "       -e AZURE_ENABLED=true \\"
-echo "       lpg-ehl-headless:latest"
-echo ""
-echo -e "   ${YELLOW}Configuration Options:${NC}"
-echo "     --EHL_EMULATOR_ENABLED=false       # FIELD mode by default"
-echo "     --EHL_SERIAL_PORT=/dev/ttyUSB0     # Serial port"
-echo "     --DB_HOST=localhost                 # Database"
-echo "     --AZURE_ENABLED=true                # Cloud sync"
-echo "     --LOG_FILE=/var/log/lpg-ehl/headless.log  # Log file"
-echo ""
-echo -e "   ${YELLOW}What It Does:${NC}"
-echo "     ✓ Monitors hardware via serial port"
-echo "     ✓ Saves transactions to database"
-echo "     ✓ Syncs to Azure automatically"
-echo "     ✓ Runs scheduled tasks (@Scheduled)"
-echo "     ✓ Hardware watchdog monitoring"
-echo "     ✓ NO web server = minimal overhead"
-echo ""
-echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
-echo ""
-echo -e "${GREEN}3. ⚡ CLI Mode (Command Line Tools):${NC}"
-echo ""
-echo -e "   ${YELLOW}Interactive Shell:${NC}"
-echo "     java -jar release/lpg-ehl-cli.jar"
-echo ""
-echo -e "   ${YELLOW}Example Commands:${NC}"
-echo "     # Migrations"
-echo "     java -jar release/lpg-ehl-cli.jar migrate --target-version=1.5.0"
-echo ""
-echo "     # Export transactions"
-echo "     java -jar release/lpg-ehl-cli.jar transactions export \\"
-echo "       --from=2026-01-01 --to=2026-01-31 --format=csv"
-echo ""
-echo "     # Diagnostics"
-echo "     java -jar release/lpg-ehl-cli.jar diagnostics \\"
-echo "       --check-hardware --check-database"
-echo ""
-echo "     # Price updates"
-echo "     java -jar release/lpg-ehl-cli.jar price set --product=LPG --price=16.50"
-echo ""
-echo -e "   ${YELLOW}With Real Hardware:${NC}"
-echo "     EHL_EMULATOR_ENABLED=false EHL_SERIAL_PORT=/dev/ttyUSB0 \\"
-echo "       java -jar release/lpg-ehl-cli.jar [command]"
-echo ""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# QUICK START
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}  🚀 QUICK START${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${YELLOW}DEPLOYMENT RECOMMENDATIONS:${NC}"
+echo -e "  ${BOLD}Utvikling (LAB mode med emulator):${NC}"
+echo -e "    java -jar release/lpg-ehl-webapp.jar"
+echo -e "    ${GRAY}→ Åpne http://localhost:8080${NC}"
 echo ""
-echo -e "  ${GREEN}Production Bensinstasjon:${NC}"
-echo "    • Use HEADLESS mode (lpg-ehl-headless.jar)"
-echo "    • Run as systemd service"
-echo "    • Set FIELD mode (EHL_EMULATOR_ENABLED=false)"
-echo "    • Configure serial port (/dev/ttyUSB0)"
-echo "    • Enable Azure sync"
+echo -e "  ${BOLD}Felt-test (FIELD mode med Debug API):${NC}"
+echo -e "    java -jar release/lpg-ehl-headless.jar \\"
+echo -e "      --spring.profiles.active=debug-api \\"
+echo -e "      --lpg.mode=FIELD \\"
+echo -e "      --ehl.serial.port=/dev/ttyS1"
 echo ""
-echo -e "  ${GREEN}Development & Testing:${NC}"
-echo "    • Use WEBAPP mode (lpg-ehl-webapp.jar)"
-echo "    • LAB mode with emulator (default)"
-echo "    • Access web UI at http://localhost:8080"
+echo -e "    ${GRAY}# Test fra laptop:${NC}"
+echo -e "    ${GRAY}curl http://ARK-IP:8080/api/debug/health${NC}"
+echo -e "    ${GRAY}curl -X POST http://ARK-IP:8080/api/debug/unblock/1${NC}"
 echo ""
-echo -e "  ${GREEN}Administration & Scripts:${NC}"
-echo "    • Use CLI mode (lpg-ehl-cli.jar)"
-echo "    • Automate tasks with shell scripts"
-echo "    • Database migrations and batch ops"
+echo -e "  ${BOLD}Produksjon (FIELD mode, headless):${NC}"
+echo -e "    java -jar release/lpg-ehl-headless.jar \\"
+echo -e "      --lpg.mode=FIELD \\"
+echo -e "      --ehl.serial.port=/dev/ttyS1"
 echo ""
-echo -e "${GREEN}✓ Ready for deployment! 🚀${NC}"
-echo ""
-echo -e "${YELLOW}Documentation:${NC}"
-echo "  Architecture: ARCHITECTURE.md"
-echo "  Headless:     lpg-ehl-app-headless/README.md"
-echo "  WebApp:       lpg-ehl-webapp/README.md"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""

@@ -2,6 +2,26 @@
 
 Serial port PLS (Pump Level System) simulator for testing EHL protocol without physical hardware.
 
+> **See also**: [Transport Modes Documentation](../docs/TRANSPORT_MODES.md) for complete setup guide.
+
+## Quick Start
+
+The easiest way to use the PLS Simulator is with the startup script:
+
+```bash
+# Build JARs first
+mvn -q -DskipTests package
+
+# Start socat + simulator + webapp
+./scripts/start-socat-sim.sh
+
+# Or just socat + simulator (for manual testing)
+./scripts/start-socat-sim.sh --sim-only
+
+# Headless with debug API for curl testing
+./scripts/start-socat-sim.sh --headless --debug-api
+```
+
 ## Build
 
 ```bash
@@ -9,13 +29,13 @@ Serial port PLS (Pump Level System) simulator for testing EHL protocol without p
 mvn -q -DskipTests package
 
 # JAR location
-ls -la lpg-ehl-pls-sim/target/pls-sim.jar
+ls -la lpg-ehl-serialport-sim/target/pls-sim.jar
 ```
 
-## Usage
+## Manual Usage
 
 ```bash
-java -jar lpg-ehl-pls-sim/target/pls-sim.jar --port=<port> [options]
+java -jar lpg-ehl-serialport-sim/target/pls-sim.jar --port=<port> [options]
 ```
 
 ### CLI Options
@@ -24,10 +44,13 @@ java -jar lpg-ehl-pls-sim/target/pls-sim.jar --port=<port> [options]
 |--------|---------|-------------|
 | `--port=<port>` | (required) | Serial port device |
 | `--baud=<baud>` | 9600 | Baud rate |
-| `--mode=<mode>` | line | Frame mode: `line` or `stxetx` |
+| `--mode=<mode>` | line | Frame mode: `line`, `stxetx`, or `ehl` |
 | `--chunk=<bool>` | false | Enable chunked responses |
 | `--latencyMs=<ms>` | 0 | Add random latency jitter (0-N ms) |
 | `--logHex=<bool>` | false | Log raw bytes as hex |
+| `--address=<addr>` | 1 | Dispenser address (1-8) |
+| `--price=<cents>` | 1590 | Price per liter in cents |
+| `--blocked=<bool>` | true | Initial blocked state |
 
 ### Frame Modes
 

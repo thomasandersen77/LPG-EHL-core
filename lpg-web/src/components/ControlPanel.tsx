@@ -163,8 +163,15 @@ export function ControlPanel() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        
+        // Handle log messages
         if (data.channel) {
           setLogs(prev => [...prev.slice(-499), data as LogEntry]);
+        }
+        
+        // Handle pump_update and price_update - refresh pump status immediately
+        if (data.type === 'pump_update' || data.type === 'price_update') {
+          queryClient.invalidateQueries({ queryKey: ['pump-status'] });
         }
       } catch (e) {
         console.error('Error parsing WebSocket message:', e);

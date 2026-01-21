@@ -117,20 +117,40 @@ server:
 # EHL PROTOCOL CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 # 
-# DUAL-MODE ARKITEKTUR:
-#   LAB MODE  (ehl.emulator.enabled=true)  -> Emulator, ingen fysisk hardware
-#   FIELD MODE (ehl.emulator.enabled=false) -> Ekte serial port til pumpe
+# TRI-MODE ARKITEKTUR (ehl.transport.mode):
 #
-# DEFAULT: LAB MODE (trygt for utvikling)
+#   EMULATOR (Default):
+#     - InMemorySerialPort + EhlDispenserEmulator
+#     - Ingen fysisk hardware nødvendig
+#     - Perfekt for utvikling og testing
+#
+#   SOCAT:
+#     - RealSerialTransport + virtuell PTY (socat)
+#     - PLS Simulator på andre enden av PTY
+#     - Realistisk serial testing uten hardware
+#     - Bruk: ./scripts/start-socat-sim.sh
+#
+#   HARDWARE:
+#     - RealSerialTransport + fysisk RS-485
+#     - Kommuniserer med ekte LPG-pumpe
+#     - Kun for produksjon på ARK-3600
+#
+# LEGACY STØTTE: ehl.emulator.enabled fungerer fortsatt for bakoverkompatibilitet
+#
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
+  transport:
+    # Transport mode: EMULATOR, SOCAT, or HARDWARE
+    mode: ${EHL_TRANSPORT_MODE:EMULATOR}
   emulator:
-    enabled: ${EHL_EMULATOR_ENABLED:true}  # DEFAULT: LAB MODE (sikkert)
+    # Legacy property - still works for backwards compatibility
+    enabled: ${EHL_EMULATOR_ENABLED:true}
     dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
     price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
     latency-ms: ${EHL_LATENCY_MS:20}  # Simulert serial port latency
   serial:
-    port: ${EHL_SERIAL_PORT:/dev/ttyS0}  # Kun brukt når enabled=false
+    # Serial port device path (for SOCAT and HARDWARE modes)
+    port: ${EHL_SERIAL_PORT:/tmp/ttyV1}
     baud-rate: ${EHL_BAUD_RATE:9600}
     data-bits: 8
     parity: EVEN  # 8E1 (8 data bits, even parity, 1 stop bit)

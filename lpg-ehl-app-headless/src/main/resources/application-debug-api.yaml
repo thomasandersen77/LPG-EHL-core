@@ -1,0 +1,38 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEBUG API PROFILE
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Aktiverer en lett webserver (Undertow) for felt-testing via curl.
+#
+# Bruk:
+#   java -jar lpg-ehl-app-headless.jar --spring.profiles.active=debug-api
+#
+# Endepunkter:
+#   GET  /api/debug/health          - Helsesjekk
+#   GET  /api/debug/state/{addr}    - Les pumpetilstand
+#   GET  /api/debug/volume/{addr}   - Les volum
+#   POST /api/debug/linetest/{addr} - Test kommunikasjon
+#   POST /api/debug/unblock/{addr}  - Frigi pumpe
+#   POST /api/debug/block/{addr}    - Blokker pumpe
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+spring:
+  main:
+    # Override default: Enable servlet web server
+    web-application-type: servlet
+
+server:
+  port: ${DEBUG_API_PORT:8080}
+  
+  # Undertow configuration - optimized for embedded/low-resource
+  undertow:
+    threads:
+      io: 1          # Minimal I/O threads (default: available processors)
+      worker: 4      # Minimal worker threads (default: io * 8)
+    buffer-size: 1024
+    direct-buffers: true
+
+logging:
+  level:
+    no.cloudberries.lpg.headless.debug: DEBUG

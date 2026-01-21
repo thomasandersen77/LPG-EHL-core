@@ -31,9 +31,11 @@ object EhlFrameCodec {
     const val CMD_LINETEST: Byte = 0x6A    // 106 - Transmission channel test
     const val CMD_STATE: Byte = 0x4B       // 75 - Give/take calculator state
     const val CMD_VOLUME: Byte = 0x45      // 69 - Give/take fuel amount
+    const val CMD_PRICE: Byte = 0x4F       // 79 - Give/take unit price
     const val CMD_BLOCK: Byte = 0x69       // 105 - Block/stop dispenser
     const val CMD_UNBLOCK: Byte = 0x77     // 119 - Start delivery mode
     const val CMD_STOP: Byte = 0x2F        // 47 - Stop the dispenser
+    const val CMD_RESET: Byte = 0x52       // 82 - Reset dispenser
     
     /**
      * Decode an EHL frame from raw bytes.

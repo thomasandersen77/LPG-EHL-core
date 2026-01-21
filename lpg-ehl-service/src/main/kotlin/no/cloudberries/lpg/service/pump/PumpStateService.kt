@@ -574,13 +574,19 @@ class PumpStateService(
     /**
      * Update price for all pumps.
      * Synkroniserer også med emulator i LAB MODE.
+     * 
+     * Prisen oppdateres for ALLE pumper uavhengig av tilstand.
+     * Dette sikrer at GUI alltid viser korrekt pris.
      */
     fun updatePrice(priceKr: Double, roadTaxEnabled: Boolean = true) {
         currentPriceKr = priceKr
+        
+        // Oppdater pris for ALLE pumper (ikke bare IDLE)
+        // GUI viser alltid gjeldende pris, uavhengig av pumpetilstand
         pumpStates.values.forEach { state ->
-            if (state.state == "IDLE") {
-                state.pricePerLitreKr = priceKr
-            }
+            state.pricePerLitreKr = priceKr
+            // Broadcast oppdatert status til frontend
+            broadcastStatus(state)
         }
         
         // Synkroniser med emulator hvis tilgjengelig (LAB MODE)

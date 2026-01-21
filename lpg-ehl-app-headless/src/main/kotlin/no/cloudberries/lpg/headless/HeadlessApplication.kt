@@ -1,7 +1,6 @@
 package no.cloudberries.lpg.headless
 
 import org.slf4j.LoggerFactory
-import org.springframework.boot.WebApplicationType
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.ComponentScan
@@ -48,13 +47,13 @@ fun main(args: Array<String>) {
     
     logger.info("═══════════════════════════════════════════════════════════")
     logger.info("   LPG EHL HEADLESS APPLICATION")
-    logger.info("   Mode: HEADLESS (No Web Server)")
     logger.info("═══════════════════════════════════════════════════════════")
     
-    // Run as headless Spring Boot application (no web server)
-    runApplication<HeadlessApplication>(*args) {
-        setWebApplicationType(WebApplicationType.NONE)
-    }
+    // Run Spring Boot application
+    // Web application type is controlled by spring.main.web-application-type in yaml:
+    //   - Default (application.yaml): NONE (headless mode)
+    //   - debug-api profile: SERVLET (Undertow web server for curl testing)
+    runApplication<HeadlessApplication>(*args)
     
     // Note: HeadlessStartupRunner executes automatically via CommandLineRunner
     // Scheduled tasks (@Scheduled) keep the application alive

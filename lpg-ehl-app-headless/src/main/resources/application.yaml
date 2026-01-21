@@ -1,6 +1,10 @@
 spring:
   application:
     name: lpg-ehl-headless
+  main:
+    # DEFAULT: No web server (headless mode)
+    # Activate debug-api profile to enable Undertow web server
+    web-application-type: none
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
   
@@ -81,11 +85,23 @@ logging:
 # EHL PROTOCOL CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 # 
-# DUAL-MODE ARKITEKTUR:
-#   LAB MODE  (ehl.emulator.enabled=true)  -> Emulator, ingen fysisk hardware
-#   FIELD MODE (ehl.emulator.enabled=false) -> Ekte serial port til pumpe
+# TRI-MODE ARKITEKTUR (ehl.transport.mode):
 #
-# HEADLESS DEFAULT: FIELD MODE (produksjon)
+#   EMULATOR:
+#     - InMemorySerialPort + EhlDispenserEmulator
+#     - Ingen fysisk hardware nødvendig
+#     - Perfekt for utvikling og testing
+#
+#   SOCAT:
+#     - RealSerialTransport + virtuell PTY (socat)
+#     - PLS Simulator på andre enden av PTY
+#     - Realistisk serial testing uten hardware
+#     - Bruk: ./scripts/start-socat-sim.sh
+#
+#   HARDWARE (Default for headless):
+#     - RealSerialTransport + fysisk RS-485
+#     - Kommuniserer med ekte LPG-pumpe
+#     - Kun for produksjon på ARK-3600
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 # SERIAL PORT CONFIGURATION
@@ -93,23 +109,25 @@ logging:
 #
 # Port name examples:
 #   Linux:   /dev/ttyS0, /dev/ttyUSB0, /dev/ttyAMA0 (Raspberry Pi)
-#   macOS:   /dev/cu.usbserial-0001
+#   macOS:   /dev/cu.usbserial-0001 or /tmp/ttyV1 (socat PTY)
 #   Windows: COM1, COM3, etc.
 #
 # Standard EHL Protocol: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
 #
-# Parity options: NONE, ODD, EVEN, MARK, SPACE
-# Stop bits options: 1, 2 (1.5 not commonly used)
-#
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
+  transport:
+    # Transport mode: EMULATOR, SOCAT, or HARDWARE
+    # HEADLESS DEFAULT: HARDWARE (for production deployment)
+    mode: ${EHL_TRANSPORT_MODE:HARDWARE}
   emulator:
-    enabled: ${EHL_EMULATOR_ENABLED:false}  # DEFAULT: FIELD MODE for headless
+    # Legacy property - still works for backwards compatibility
+    enabled: ${EHL_EMULATOR_ENABLED:false}
     dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
     price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
     latency-ms: ${EHL_LATENCY_MS:20}
   serial:
-    # Serial port device path
+    # Serial port device path (for SOCAT and HARDWARE modes)
     port: ${EHL_SERIAL_PORT:/dev/ttyS0}
     # Baud rate (standard EHL: 9600)
     baud-rate: ${EHL_BAUD_RATE:9600}

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import no.cloudberries.lpg.api.pls.MockPlsService
 import no.cloudberries.lpg.service.price.PriceHistoryRepository
+import no.cloudberries.lpg.service.pump.PumpStateService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseEntity
@@ -17,7 +18,8 @@ import java.time.LocalDateTime
 class PriceController(
     @Value("\${lpg.price.per-liter:15.90}") private var defaultPricePerLiter: BigDecimal,
     private val priceHistoryRepository: PriceHistoryRepository,
-    private val priceService: no.cloudberries.lpg.service.price.PriceService
+    private val priceService: no.cloudberries.lpg.service.price.PriceService,
+    private val pumpStateService: PumpStateService
 ) {
     @Autowired(required = false)
     private var plsService: MockPlsService? = null
@@ -91,14 +93,17 @@ class PriceController(
         
         logger.info("💰 Price update request: {} kr/L", request.pricePerLiter)
         
-        // Use PriceService to update price everywhere
-        // (Database, Emulator, WebSocket, PumpStateService)
+        // Use PriceService to update price in database and emulator
         priceService.updatePrice(
             productCode = "LPG",
             productName = "LPG (Flytende petroleumsgass)",
             pricePerLiter = request.pricePerLiter,
             createdBy = "admin" // TODO: Get from security context when auth is enabled
         )
+        
+        // Update PumpStateService (oppdaterer GUI via WebSocket)
+        pumpStateService.updatePrice(request.pricePerLiter.toDouble())
+        logger.info("📊 PumpStateService oppdatert med ny pris")
         
         // Update in PLS if available
         if (plsService != null) {
