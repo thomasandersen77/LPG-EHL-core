@@ -26,6 +26,7 @@ interface PriceHistoryRepository : JpaRepository<PriceHistory, UUID> {
         AND ph.effectiveFrom <= :now
         AND (ph.effectiveUntil IS NULL OR ph.effectiveUntil > :now)
         ORDER BY ph.effectiveFrom DESC
+        LIMIT 1
         """
     )
     fun findCurrentPrice(

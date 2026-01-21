@@ -509,6 +509,69 @@ class PumpStateService(
     }
     
     /**
+     * Confirm payment for pending transaction on pump.
+     * Finds latest PENDING transaction for this dispenser and marks it as PAID.
+     */
+    fun confirmPayment(address: Int = 1, paymentMethod: String = "SIMULATION"): Result<Transaction> {
+        val state = pumpStates.getOrPut(address) { PumpState(address = address, pricePerLitreKr = currentPriceKr) }
+        
+        // Find pending transaction
+        val transactionId = state.pendingTransactionId
+            ?: return Result.failure(IllegalStateException("Ingen ventende transaksjon funnet"))
+        
+        try {
+            // Mark authorization as COMPLETED
+            val authorizationId = state.authorizationId
+            if (authorizationId != null && authorizationService != null) {
+                try {
+                    val auth = authorizationService.getStatus(authorizationId)
+                    if (auth != null && auth.status == AuthorizationStatus.STOPPED) {
+                        authorizationService.confirmPayment(authorizationId, paymentMethod)
+                        logger.info("✅ Autorisasjon $authorizationId markert som COMPLETED")
+                    } else {
+                        logger.warn("⚠️ Autorisasjon $authorizationId er ikke i STOPPED status (${auth?.status}), hopper over")
+                    }
+                } catch (e: Exception) {
+                    logger.warn("⚠️ Kunne ikke oppdatere autorisasjon: ${e.message}")
+                }
+            }
+            
+            // Mark transaction as PAID
+            val paidTransaction = transactionService.markTransactionPaid(transactionId, paymentMethod)
+            
+            if (paidTransaction != null) {
+                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                protocolLogger.info("💳 BETALING SIMULERT")
+                protocolLogger.info("   Transaksjon: $transactionId")
+                protocolLogger.info("   Volum: ${state.volumeLitres} L")
+                protocolLogger.info("   Beløp: ${state.amountKr} kr")
+                protocolLogger.info("   Metode: $paymentMethod")
+                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                
+                // Reset pump state
+                state.state = "IDLE"
+                state.volumeLitres = 0.0
+                state.amountKr = 0.0
+                state.hasPendingTransaction = false
+                state.pendingTransactionId = null
+                state.authorizationId = null
+                lastLoggedMilestone.remove(address)
+                
+                logger.info("💳 Pump $address settled: ${paidTransaction.volumeLiters}L = ${paidTransaction.amountKr} kr via $paymentMethod")
+                logger.info("🚀 Pumpe $address frigitt for neste kunde")
+                broadcastStatus(state)
+                
+                return Result.success(paidTransaction)
+            } else {
+                return Result.failure(IllegalStateException("Kunne ikke markere transaksjon som betalt"))
+            }
+        } catch (e: Exception) {
+            logger.error("❌ Feil ved bekreftelse av betaling: ${e.message}")
+            return Result.failure(e)
+        }
+    }
+    
+    /**
      * Update price for all pumps.
      * Synkroniserer også med emulator i LAB MODE.
      */

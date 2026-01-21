@@ -113,4 +113,9 @@ interface TransactionRepository : JpaRepository<Transaction, UUID> {
         dispenserAddress: Int,
         paymentStatus: String
     ): Transaction?
+    
+    /**
+     * Find all transactions with a specific payment status
+     */
+    fun findByPaymentStatus(paymentStatus: String): List<Transaction>
 }
