@@ -14,6 +14,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -49,9 +50,15 @@ class HeadlessPollingService(
     
     private val logger = LoggerFactory.getLogger(javaClass)
     private val pollCount = AtomicLong(0)
+    private val consecutiveTimeouts = AtomicInteger(0)  // Track consecutive timeouts
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
     
     private var isRunning = false
+    
+    companion object {
+        const val POLL_TIMEOUT_MS = 2000L  // Match serial timeout (was 1000ms - too tight)
+        const val WARN_AFTER_CONSECUTIVE_TIMEOUTS = 3  // Only ERROR after N consecutive failures
+    }
     
     /**
      * Scheduled task som poller dispenser status.
@@ -81,7 +88,7 @@ class HeadlessPollingService(
             )
             
             val stateResponse = runBlocking {
-                ehlCommunicator.sendAndReceive(statePacket, 1000)
+                ehlCommunicator.sendAndReceive(statePacket, POLL_TIMEOUT_MS)
             }
             
             // Send til DispenserService for state machine processing
@@ -95,7 +102,7 @@ class HeadlessPollingService(
             )
             
             val volumeResponse = runBlocking {
-                ehlCommunicator.sendAndReceive(volumePacket, 1000)
+                ehlCommunicator.sendAndReceive(volumePacket, POLL_TIMEOUT_MS)
             }
             
             // Send til DispenserService for state machine processing
@@ -103,6 +110,9 @@ class HeadlessPollingService(
             
             // Oppdater volum i aktive autorisasjoner
             updateActiveAuthorizationVolume()
+            
+            // Reset consecutive timeout counter on success
+            consecutiveTimeouts.set(0)
             
             // Logg hver 10. poll ved DEBUG nivå (for troubleshooting)
             if (count % 10 == 0L) {
@@ -112,12 +122,17 @@ class HeadlessPollingService(
             }
             
         } catch (e: Exception) {
-            // Logg feil, men fortsett polling (ikke crash appen)
-            logger.error("❌ Polling error (poll #$count): ${e.message}")
+            val timeoutCount = consecutiveTimeouts.incrementAndGet()
             
-            // Logg full stacktrace hvert 30. forsøk for debugging
-            if (count % 30 == 0L) {
-                logger.error("Full error details:", e)
+            // Single timeout = WARN (transient), multiple consecutive = ERROR (persistent issue)
+            if (timeoutCount >= WARN_AFTER_CONSECUTIVE_TIMEOUTS) {
+                logger.error("❌ Polling error (poll #$count, $timeoutCount consecutive): ${e.message}")
+                // Full stacktrace only on escalation to ERROR
+                if (timeoutCount == WARN_AFTER_CONSECUTIVE_TIMEOUTS) {
+                    logger.error("Full error details:", e)
+                }
+            } else {
+                logger.warn("⚠️ Polling timeout (poll #$count, $timeoutCount consecutive): ${e.message}")
             }
         }
     }
