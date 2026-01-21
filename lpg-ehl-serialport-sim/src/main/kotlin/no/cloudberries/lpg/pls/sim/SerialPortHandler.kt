@@ -97,7 +97,7 @@ class SerialPortHandler(
                     val received = buffer.copyOfRange(0, bytesRead)
                     
                     if (logHex) {
-                        log.info("RX: {} bytes: {}", bytesRead, received.toHexString())
+                        log.debug("RX: {} bytes: {}", bytesRead, received.toHexString())
                     }
 
                     // Extract frames
@@ -126,7 +126,7 @@ class SerialPortHandler(
         if (mode == FrameMode.EHL) {
             // Binary EHL protocol
             if (logHex) {
-                log.info("EHL frame received: {}", frame.toHexString())
+                log.debug("EHL frame received: {}", frame.toHexString())
             }
 
             val ehlFrame = EhlFrameCodec.decode(frame)
@@ -135,7 +135,7 @@ class SerialPortHandler(
                 return
             }
 
-            log.info("EHL command: 0x{} from addr 0x{}", ehlFrame.cmd.toHex(), ehlFrame.addr.toHex())
+            log.debug("EHL command: 0x{} from addr 0x{}", ehlFrame.cmd.toHex(), ehlFrame.addr.toHex())
 
             val result = state.processEhlCommand(ehlFrame)
             val response = when (result) {
@@ -205,7 +205,7 @@ class SerialPortHandler(
         val port = serialPort ?: return
 
         if (logHex) {
-            log.info("TX: {} bytes: {}", response.size, response.toHexString())
+            log.debug("TX: {} bytes: {}", response.size, response.toHexString())
         }
 
         if (chunked && response.size > 1) {
@@ -213,9 +213,9 @@ class SerialPortHandler(
         } else {
             port.writeBytes(response, response.size)
             if (mode != FrameMode.EHL) {
-                log.info("TX: '{}'", String(response, Charsets.US_ASCII).trim())
+                log.debug("TX: '{}'", String(response, Charsets.US_ASCII).trim())
             } else {
-                log.info("TX: EHL frame {} bytes", response.size)
+                log.debug("TX: EHL frame {} bytes", response.size)
             }
         }
     }
@@ -254,9 +254,9 @@ class SerialPortHandler(
         }
         
         if (mode != FrameMode.EHL) {
-            log.info("TX (chunked {}x): '{}'", chunkNum, String(response, Charsets.US_ASCII).trim())
+            log.debug("TX (chunked {}x): '{}'", chunkNum, String(response, Charsets.US_ASCII).trim())
         } else {
-            log.info("TX (chunked {}x): EHL frame {} bytes", chunkNum, response.size)
+            log.debug("TX (chunked {}x): EHL frame {} bytes", chunkNum, response.size)
         }
     }
 }

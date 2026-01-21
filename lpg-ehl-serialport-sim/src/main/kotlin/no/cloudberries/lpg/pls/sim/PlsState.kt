@@ -92,33 +92,34 @@ class PlsState(
      */
     fun processEhlCommand(frame: EhlFrame): EhlCommandResult {
         val cmd = frame.cmd
-        val addrInt = (frame.addr.toInt() and 0xFF) - 0x30  // Convert ASCII '1' (0x31) to 1
+        // Binary address (Core/VB6 sends raw address byte, not ASCII)
+        val addrInt = frame.addr.toInt() and 0xFF
 
         return when (cmd) {
             EhlFrameCodec.CMD_LINETEST -> {
-                log.info("🔗 LINETEST from dispenser $addrInt")
+                log.debug("🔗 LINETEST from dispenser $addrInt")
                 EhlCommandResult.OkAck(frame.addr)
             }
             EhlFrameCodec.CMD_STATE -> {
                 val blocked = isBlocked(addrInt)
-                // State codes: 0x30=ready, 0x31=blocked, 0x32=pumping, etc.
-                val stateCode = if (blocked) 0x31.toByte() else 0x30.toByte()
-                log.info("📊 STATE request from dispenser $addrInt -> ${if(blocked) "BLOCKED" else "READY"}")
-                EhlCommandResult.StateResponse(frame.addr, byteArrayOf(stateCode))
+                // Core expects bitmask: 0x00=IDLE, 0x04=AUTHORIZED (START_BUTTON_PRESSED bit)
+                val statusByte: Byte = if (blocked) 0x00 else 0x04
+                log.debug("📊 STATE request from dispenser $addrInt -> ${if(blocked) "IDLE" else "AUTHORIZED"} (0x${String.format("%02X", statusByte.toInt() and 0xFF)})")
+                EhlCommandResult.StateResponse(frame.addr, byteArrayOf(statusByte))
             }
             EhlFrameCodec.CMD_VOLUME -> {
-                // Return VOLUME response with 4 ASCII digits representing liters * 100
-                val volumeL100 = (getVolumeMl() / 10).toInt()  // Convert mL to cL
-                val volumeStr = "%04d".format(volumeL100.coerceIn(0, 9999))
-                val volumeBytes = volumeStr.map { it.code.toByte() }.toByteArray()
-                log.info("⛽ VOLUME request from dispenser $addrInt -> ${getVolumeMl()/1000.0} L")
+                // Core expects 5 ASCII digits in LSB-first order (centiliters)
+                val volumeCl = (getVolumeMl() / 10).toInt().coerceIn(0, 99999)
+                val volumeStr = "%05d".format(volumeCl)
+                val volumeBytes = volumeStr.reversed().map { it.code.toByte() }.toByteArray()
+                log.debug("⛽ VOLUME request from dispenser $addrInt -> ${getVolumeMl()/1000.0} L (cl=$volumeCl, raw=$volumeStr)")
                 EhlCommandResult.VolumeResponse(frame.addr, volumeBytes)
             }
             EhlFrameCodec.CMD_PRICE -> {
-                // Return PRICE response with 4 ASCII digits representing price in cents
+                // Core expects 4 ASCII digits in LSB-first order (cents)
                 val priceStr = "%04d".format(getPrice().coerceIn(0, 9999))
-                val priceBytes = priceStr.map { it.code.toByte() }.toByteArray()
-                log.info("💰 PRICE request from dispenser $addrInt -> ${getPrice()/100.0} kr/L")
+                val priceBytes = priceStr.reversed().map { it.code.toByte() }.toByteArray()
+                log.debug("💰 PRICE request from dispenser $addrInt -> ${getPrice()/100.0} kr/L (raw=$priceStr)")
                 EhlCommandResult.PriceResponse(frame.addr, priceBytes)
             }
             EhlFrameCodec.CMD_BLOCK -> {
@@ -149,7 +150,7 @@ class PlsState(
         }
     }
 
-    private fun Byte.toHex(): String = "%02X".format(this)
+    private fun Byte.toHex(): String = String.format("%02X", this.toInt() and 0xFF)
 }
 
 sealed class CommandResult {

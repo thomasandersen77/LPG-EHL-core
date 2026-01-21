@@ -3,6 +3,7 @@ package no.cloudberries.lpg.pls
 import com.fazecast.jSerialComm.SerialPort
 import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
+import java.io.IOException
 
 /**
  * Real serial port transport using jSerialComm.
@@ -89,14 +90,44 @@ class RealSerialTransport(
         val port = serialPort ?: throw IllegalStateException("Serial port not connected")
         
         try {
-            val bytesWritten = port.writeBytes(data, data.size)
-            if (bytesWritten != data.size) {
-                logger.warn("Only wrote $bytesWritten of ${data.size} bytes")
+            var totalWritten = 0
+            var remaining = data
+            var retries = 0
+            val maxRetries = 3
+            
+            while (remaining.isNotEmpty() && retries < maxRetries) {
+                val bytesWritten = port.writeBytes(remaining, remaining.size)
+                
+                if (bytesWritten <= 0) {
+                    // Complete write failure - throw to trigger watchdog reconnect
+                    throw IOException("Write failed: 0 bytes written (retry $retries)")
+                }
+                
+                totalWritten += bytesWritten
+                
+                if (bytesWritten < remaining.size) {
+                    // Partial write - retry with remaining bytes
+                    logger.warn("Partial write: $bytesWritten of ${remaining.size} bytes, retrying...")
+                    remaining = remaining.copyOfRange(bytesWritten, remaining.size)
+                    retries++
+                    Thread.sleep(10)  // Small delay before retry
+                } else {
+                    // All bytes written successfully
+                    remaining = ByteArray(0)
+                }
             }
-            return bytesWritten
+            
+            if (remaining.isNotEmpty()) {
+                throw IOException("Failed to write all bytes after $maxRetries retries: wrote $totalWritten of ${data.size}")
+            }
+            
+            return totalWritten
+        } catch (e: IOException) {
+            logger.error("Serial port write failed: ${e.message}")
+            throw e
         } catch (e: Exception) {
             logger.error("Error writing to serial port: ${e.message}", e)
-            throw e
+            throw IOException("Serial port write error: ${e.message}", e)
         }
     }
     

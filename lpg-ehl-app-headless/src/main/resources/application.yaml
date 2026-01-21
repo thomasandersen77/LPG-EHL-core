@@ -65,17 +65,32 @@ nets:
     connect-timeout-ms: ${NETS_CONNECT_TIMEOUT_MS:10000}
     read-timeout-ms: ${NETS_READ_TIMEOUT_MS:30000}
 
-# Logging Configuration (headless-specific)
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOGGING CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Default: INFO level - only shows significant events (startup, API calls, errors)
+# For protocol debugging, set LOG_LEVEL=DEBUG to see TX/RX traffic and polling status
+#
+# Environment variables:
+#   LOG_LEVEL=DEBUG          - Enable detailed protocol logging
+#   LOG_LEVEL_TRANSPORT=DEBUG - Enable only transport layer debugging
+#
+# ═══════════════════════════════════════════════════════════════════════════════
 logging:
   level:
     root: INFO
-    no.cloudberries.lpg: INFO
-    no.cloudberries.lpg.headless: INFO
-    no.cloudberries.lpg.service: INFO
-    no.cloudberries.lpg.protocol: INFO
+    no.cloudberries.lpg: ${LOG_LEVEL:INFO}
+    no.cloudberries.lpg.headless: ${LOG_LEVEL:INFO}
+    no.cloudberries.lpg.headless.service: ${LOG_LEVEL:INFO}
+    no.cloudberries.lpg.communication: ${LOG_LEVEL_TRANSPORT:${LOG_LEVEL:INFO}}
+    no.cloudberries.lpg.service: ${LOG_LEVEL:INFO}
+    no.cloudberries.lpg.protocol: ${LOG_LEVEL:INFO}
     org.hibernate.SQL: WARN
+    org.springframework: WARN
+    liquibase: WARN
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{HH:mm:ss} %-5level %logger{20} - %msg%n"
   file:
     name: ${LOG_FILE:/var/log/lpg-ehl/headless.log}
     max-size: 10MB

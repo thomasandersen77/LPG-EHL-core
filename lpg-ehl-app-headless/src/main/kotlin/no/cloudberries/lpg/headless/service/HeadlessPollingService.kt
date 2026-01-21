@@ -104,11 +104,11 @@ class HeadlessPollingService(
             // Oppdater volum i aktive autorisasjoner
             updateActiveAuthorizationVolume()
             
-            // Logg hver 10. poll for å vise at det fungerer uten å spamme
+            // Logg hver 10. poll ved DEBUG nivå (for troubleshooting)
             if (count % 10 == 0L) {
                 val time = LocalDateTime.now().format(timeFormatter)
                 val dispenserState = dispenserService.getDispenserState(dispenserAddress)
-                logger.info("📊 [$time] Polling #$count - Dispenser $dispenserAddress state: $dispenserState")
+                logger.debug("📊 [$time] Polling #$count - Dispenser $dispenserAddress state: $dispenserState")
             }
             
         } catch (e: Exception) {
@@ -124,12 +124,12 @@ class HeadlessPollingService(
     
     /**
      * Heartbeat task som logger hver 30. sekund for å bekrefte at appen lever.
-     * Dette er nyttig for overvåking og debugging.
+     * Logger ved DEBUG nivå for å unngå spam - bruk DEBUG logging for å se dette.
      */
     @Scheduled(fixedRate = 30000, initialDelay = 10000)
     fun heartbeat() {
         val time = LocalDateTime.now().format(timeFormatter)
-        logger.info("💓 [$time] Headless app is alive - Poll count: ${pollCount.get()}")
+        logger.debug("💓 [$time] Headless app is alive - Poll count: ${pollCount.get()}")
     }
     
     /**

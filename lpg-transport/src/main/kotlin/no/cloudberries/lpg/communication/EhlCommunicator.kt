@@ -1,6 +1,8 @@
 package no.cloudberries.lpg.communication
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import no.cloudberries.lpg.protocol.*
 import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
@@ -13,14 +15,21 @@ import java.util.concurrent.TimeoutException
  * 
  * Uses SerialTransport interface for serial communication, allowing both real serial ports
  * and in-memory implementations for testing.
+ * 
+ * Thread-safety: Uses Mutex to ensure single-flight request/response pattern.
  */
 class EhlCommunicator(private val transport: SerialTransport) {
     private val logger = LoggerFactory.getLogger(EhlCommunicator::class.java)
     private val receiveBuffer = mutableListOf<Byte>()
     private val bufferLock = Any()
+    private val txMutex = Mutex()  // Ensures only one request/response at a time
 
     /**
      * Send an EHL packet and wait for a response.
+     * Uses Mutex to ensure single-flight pattern (no concurrent requests).
+     * 
+     * Since Mutex guarantees exclusive ownership of the line, the first valid
+     * response received is always intended for us - no filtering needed.
      *
      * @param packet The EHL packet to send
      * @param timeoutMs Maximum time to wait for response in milliseconds
@@ -28,13 +37,18 @@ class EhlCommunicator(private val transport: SerialTransport) {
      * @throws IOException if communication fails
      * @throws TimeoutException if no response within timeout
      */
-    suspend fun sendAndReceive(packet: EhlPacket, timeoutMs: Long = 2000): EhlPacket {
-        return withTimeout(timeoutMs) {
-            // Send packet
-            send(packet)
-            
-            // Wait for response
-            receive()
+    suspend fun sendAndReceive(
+        packet: EhlPacket, 
+        timeoutMs: Long = 2000
+    ): EhlPacket {
+        return txMutex.withLock {
+            withTimeout(timeoutMs) {
+                // Send packet (do NOT clear buffer - may contain valid pending data)
+                send(packet)
+                
+                // Since we own the mutex, first valid response is ours
+                receive(timeoutMs)
+            }
         }
     }
 
@@ -51,8 +65,8 @@ class EhlCommunicator(private val transport: SerialTransport) {
 
         val bytes = EhlCodec.encode(packet)
         
-        // RAW HEX logging for observability (INFO level to ensure visibility)
-        logger.info("📤 TX HEX: [${bytes.toHexString()}] -> ${packet.command}")
+        // RAW HEX logging for protocol debugging
+        logger.debug("📤 TX HEX: [${bytes.toHexString()}] -> ${packet.command}")
         
         // Detailed packet info at DEBUG level
         if (logger.isDebugEnabled) {
@@ -76,21 +90,39 @@ class EhlCommunicator(private val transport: SerialTransport) {
     suspend fun receive(timeoutMs: Long = 5000): EhlPacket = withTimeout(timeoutMs) {
         withContext(Dispatchers.IO) {
             var invalidByteStreak = 0
-            val maxInvalidStreak = 10  // Maximum consecutive invalid bytes before clearing buffer
+            val maxInvalidStreak = 10  // Maximum consecutive parse errors before clearing buffer
             
             while (true) {
                 // Check for complete packet in buffer
-                val packet = tryParseBuffer()
-                if (packet != null) {
-                    invalidByteStreak = 0
-                    return@withContext packet
+                val bufferSizeBeforeParse = synchronized(bufferLock) { receiveBuffer.size }
+                
+                when (val result = tryParseBufferWithStatus()) {
+                    is ParseStatus.Success -> {
+                        invalidByteStreak = 0
+                        return@withContext result.packet
+                    }
+                    is ParseStatus.Incomplete -> {
+                        // If buffer has enough data for a packet but still incomplete,
+                        // it might be noise/garbage - increment streak
+                        if (bufferSizeBeforeParse >= EhlProtocol.MIN_PACKET_LENGTH) {
+                            invalidByteStreak++
+                            if (logger.isDebugEnabled) {
+                                logger.debug("Buffer has $bufferSizeBeforeParse bytes but incomplete (streak=$invalidByteStreak) - possible noise")
+                            }
+                        }
+                    }
+                    is ParseStatus.ParseError -> {
+                        // Checksum or format error - increment streak
+                        invalidByteStreak++
+                        logger.debug("Parse error (streak=$invalidByteStreak): ${result.reason}")
+                    }
                 }
 
                 // Read more data from serial port
                 val newData = transport.readAvailable()
                 if (newData.isNotEmpty()) {
-                    // RAW HEX logging for observability (INFO level to ensure visibility)
-                    logger.info("📥 RX HEX: [${newData.toHexString()}]")
+                    // RAW HEX logging for protocol debugging
+                    logger.debug("📥 RX HEX: [${newData.toHexString()}]")
                     
                     synchronized(bufferLock) {
                         receiveBuffer.addAll(newData.toList())
@@ -98,13 +130,12 @@ class EhlCommunicator(private val transport: SerialTransport) {
                             logger.debug(EhlPacketFormatter.formatBufferStatus(receiveBuffer.size, "received data"))
                         }
                     }
-                    invalidByteStreak = 0
                 } else {
                     // No data available, wait a bit
                     delay(10)
                 }
 
-                // Prevent buffer overflow
+                // Prevent buffer overflow and handle persistent errors
                 synchronized(bufferLock) {
                     if (receiveBuffer.size > MAX_BUFFER_SIZE) {
                         logger.warn(EhlPacketFormatter.formatError(
@@ -114,11 +145,11 @@ class EhlCommunicator(private val transport: SerialTransport) {
                         receiveBuffer.subList(0, receiveBuffer.size - MAX_BUFFER_SIZE).clear()
                     }
                     
-                    // If we keep receiving invalid data, something is wrong - clear buffer and reset
+                    // If we keep getting parse errors, something is wrong - clear buffer and reset
                     if (invalidByteStreak >= maxInvalidStreak) {
                         logger.error(EhlPacketFormatter.formatError(
-                            "Too Many Invalid Bytes",
-                            "$invalidByteStreak consecutive invalid bytes, clearing buffer to recover"
+                            "Too Many Parse Errors",
+                            "$invalidByteStreak consecutive parse errors, clearing buffer to recover"
                         ))
                         receiveBuffer.clear()
                         invalidByteStreak = 0
@@ -129,17 +160,24 @@ class EhlCommunicator(private val transport: SerialTransport) {
             error("Unreachable")
         }
     }
+    
+    /**
+     * Internal status for buffer parsing
+     */
+    private sealed class ParseStatus {
+        data class Success(val packet: EhlPacket) : ParseStatus()
+        data object Incomplete : ParseStatus()
+        data class ParseError(val reason: String) : ParseStatus()
+    }
 
     /**
      * Try to parse a complete EHL packet from the receive buffer.
-     * Handles edge cases like garbage data, partial packets, and multiple packets in buffer.
-     *
-     * @return Parsed packet if successful, null if incomplete or invalid
+     * Returns status indicating success, incomplete, or error.
      */
-    private fun tryParseBuffer(): EhlPacket? {
+    private fun tryParseBufferWithStatus(): ParseStatus {
         synchronized(bufferLock) {
             if (receiveBuffer.isEmpty()) {
-                return null
+                return ParseStatus.Incomplete
             }
 
             // Look for STX byte to synchronize (accept both controller and dispenser STX)
@@ -153,7 +191,7 @@ class EhlCommunicator(private val transport: SerialTransport) {
                     ))
                     receiveBuffer.clear()
                 }
-                return null
+                return ParseStatus.Incomplete
             } else if (stxIndex > 0) {
                 // Found STX but not at start - remove garbage before it
                 if (logger.isDebugEnabled) {
@@ -166,8 +204,8 @@ class EhlCommunicator(private val transport: SerialTransport) {
             
             when (val result = EhlCodec.decode(bufferArray)) {
                 is EhlPacketParseResult.Success -> {
-                    // Log parsed packet at INFO level for observability
-                    logger.info("📥 RX PARSED: ${result.packet.command} from addr ${result.packet.address}")
+                    // Log parsed packet at DEBUG level (routine protocol traffic)
+                    logger.debug("📥 RX PARSED: ${result.packet.command} from addr ${result.packet.address}")
                     
                     if (logger.isDebugEnabled) {
                         logger.debug(EhlPacketFormatter.formatPacketForLogging(
@@ -188,7 +226,6 @@ class EhlCommunicator(private val transport: SerialTransport) {
                         }
                         
                         // PRODUCTION OPTIMIZATION: After successful parse, check for additional STX bytes
-                        // This handles back-to-back packets where the first might be corrupted noise
                         tryParseAdditionalPackets()
                     } else {
                         logger.error(EhlPacketFormatter.formatError(
@@ -197,7 +234,7 @@ class EhlCommunicator(private val transport: SerialTransport) {
                         ))
                         receiveBuffer.clear()
                     }
-                    return result.packet
+                    return ParseStatus.Success(result.packet)
                 }
                 
                 is EhlPacketParseResult.Incomplete -> {
@@ -211,23 +248,37 @@ class EhlCommunicator(private val transport: SerialTransport) {
                             "Buffer has ${receiveBuffer.size} bytes but packet still incomplete"
                         ))
                     }
-                    return null
+                    return ParseStatus.Incomplete
                 }
                 
                 is EhlPacketParseResult.ChecksumError -> {
-                    logger.warn("RS-485 transmission error: checksum mismatch (expected 0x%02X, got 0x%02X)".format(
+                    val reason = "Checksum mismatch (expected 0x%02X, got 0x%02X)".format(
                         result.expected, result.actual
-                    ))
+                    )
+                    logger.warn("RS-485 transmission error: $reason")
                     // ENHANCED RECOVERY: Look for next valid STX more intelligently
-                    return handleCorruptedPacketRecovery()
+                    handleCorruptedPacketRecovery()
+                    return ParseStatus.ParseError(reason)
                 }
                 
                 is EhlPacketParseResult.InvalidFormat -> {
                     logger.warn("Invalid packet format: ${result.reason}")
                     // ENHANCED RECOVERY: Use same intelligent recovery as checksum errors
-                    return handleCorruptedPacketRecovery()
+                    handleCorruptedPacketRecovery()
+                    return ParseStatus.ParseError(result.reason)
                 }
             }
+        }
+    }
+    
+    /**
+     * Legacy method for backward compatibility.
+     * @return Parsed packet if successful, null if incomplete or invalid
+     */
+    private fun tryParseBuffer(): EhlPacket? {
+        return when (val status = tryParseBufferWithStatus()) {
+            is ParseStatus.Success -> status.packet
+            else -> null
         }
     }
 
@@ -254,7 +305,7 @@ class EhlCommunicator(private val transport: SerialTransport) {
      * PRODUCTION HELPER: Enhanced recovery from corrupted packets.
      * Intelligently searches for the next valid STX to minimize data loss.
      */
-    private fun handleCorruptedPacketRecovery(): EhlPacket? {
+    private fun handleCorruptedPacketRecovery() {
         // Look for the next STX byte in the buffer, starting from position 1
         val remainingBuffer = receiveBuffer.drop(1)
         val nextStxIndex = remainingBuffer.indexOfFirst { 
@@ -268,10 +319,6 @@ class EhlCommunicator(private val transport: SerialTransport) {
             if (logger.isDebugEnabled) {
                 logger.debug("🔧 RS-485 Recovery: Found next STX, removed $bytesToRemove corrupted bytes")
             }
-            
-            // Try to parse the packet starting at the new STX position
-            // This handles back-to-back packets where noise corrupted the first one
-            return tryParseAtCurrentPosition()
         } else {
             // No next STX found - remove just the first byte (minimal data loss)
             receiveBuffer.removeAt(0)
@@ -279,8 +326,6 @@ class EhlCommunicator(private val transport: SerialTransport) {
                 logger.debug("🔧 RS-485 Recovery: No next STX found, removed 1 byte")
             }
         }
-        
-        return null
     }
     
     /**
