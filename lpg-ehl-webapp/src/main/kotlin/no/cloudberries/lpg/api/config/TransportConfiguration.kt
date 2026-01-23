@@ -12,6 +12,7 @@ import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
@@ -75,100 +76,161 @@ class TransportConfiguration {
     }
     
     /**
-     * FIELD MODE: Real serial port for production or socat testing.
+     * SOCAT MODE: SerialPortManager to virtual PTY.
+     * For integration testing with PLS Simulator.
      * 
-     * Works with:
-     * - Real hardware: ehl.serial.port=/dev/ttyS0 (or /dev/ttyUSB0, COM1, etc.)
-     * - Socat PTY:     ehl.serial.port=/tmp/ttyV1 (run ./scripts/start-socat.sh first)
+     * Uses SerialPortManager with watchdog for self-healing:
+     * - Survives socat/simulator restart without app restart
+     * - Automatic reconnect on I/O failure
+     * 
+     * Setup:
+     *   1. Run: socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 pty,raw,echo=0,link=/tmp/ttyV1
+     *   2. Start PLS Simulator on /tmp/ttyV0
+     *   3. Start this app with --ehl.transport.mode=SOCAT --ehl.serial.port=/tmp/ttyV1
      */
-    @Bean
-    @Primary
+    @Bean("socatSerialPortManager")
     @ConditionalOnProperty(
-        name = ["lpg.mode"],
-        havingValue = "FIELD",
+        name = ["ehl.transport.mode"],
+        havingValue = "SOCAT",
         matchIfMissing = false
     )
-    fun fieldModeTransport(
+    fun socatModeSerialPortManager(
         @Value("\${ehl.serial.port:/tmp/ttyV1}") portName: String,
         @Value("\${ehl.serial.baud-rate:9600}") baudRate: Int,
-        @Value("\${ehl.serial.data-bits:8}") dataBits: Int,
-        @Value("\${ehl.serial.parity:EVEN}") parity: String,
-        @Value("\${ehl.serial.stop-bits:1}") stopBits: Int,
         @Value("\${ehl.serial.read-timeout-ms:3000}") readTimeout: Int,
         @Value("\${ehl.serial.write-timeout-ms:1000}") writeTimeout: Int
-    ): SerialTransport {
-        val isSocat = portName.contains("ttyV") || portName.contains("pty")
-        
+    ): SerialPortManager {
         logger.info("")
         logger.info("════════════════════════════════════════════════════════════")
-        logger.info("  🏭 FIELD MODE" + if (isSocat) " (via SOCAT)" else "")
+        logger.info("  🔗 SOCAT MODE (with watchdog)")
         logger.info("════════════════════════════════════════════════════════════")
-        logger.info("  Transport:   SerialPortManager (with watchdog)")
+        logger.info("  Transport:  SerialPortManager")
         logger.info("  Serial Port: $portName")
-        logger.info("  Baud Rate:   $baudRate")
-        logger.info("  Data Bits:   $dataBits")
-        logger.info("  Parity:      $parity")
-        logger.info("  Stop Bits:   $stopBits")
-        logger.info("  Protocol:    EHL over " + if (isSocat) "virtual PTY" else "RS-485")
-        if (isSocat) {
-            logger.info("  ──────────────────────────────────────────────────────────")
-            logger.info("  💡 TIP: Run ./scripts/start-socat.sh in another terminal")
-        } else {
-            logger.info("  ──────────────────────────────────────────────────────────")
-            logger.info("  ⚠️  Communicating with REAL HARDWARE")
-        }
+        logger.info("  Baud Rate:  $baudRate")
+        logger.info("  Read Timeout: ${readTimeout}ms")
+        logger.info("  Protocol:   EHL over virtual PTY")
+        logger.info("  ──────────────────────────────────────────────────────────")
+        logger.info("  📋 Setup required:")
+        logger.info("     1. socat running with PTY pair")
+        logger.info("     2. PLS Simulator on other end of PTY")
+        logger.info("  ──────────────────────────────────────────────────────────")
+        logger.info("  💡 TIP: Use scripts/start-socat-sim.sh for auto setup")
         logger.info("════════════════════════════════════════════════════════════")
         logger.info("")
-        
-        val parityMode = when (parity.uppercase()) {
-            "NONE" -> SerialPort.NO_PARITY
-            "ODD" -> SerialPort.ODD_PARITY
-            "EVEN" -> SerialPort.EVEN_PARITY
-            "MARK" -> SerialPort.MARK_PARITY
-            "SPACE" -> SerialPort.SPACE_PARITY
-            else -> {
-                logger.warn("Unknown parity '$parity', defaulting to EVEN")
-                SerialPort.EVEN_PARITY
-            }
-        }
-        
-        val stopBitsMode = when (stopBits) {
-            1 -> SerialPort.ONE_STOP_BIT
-            2 -> SerialPort.TWO_STOP_BITS
-            else -> SerialPort.ONE_STOP_BIT
-        }
         
         val config = SerialPortConfig(
             portName = portName,
             baudRate = baudRate,
-            dataBits = dataBits,
-            stopBits = stopBitsMode,
-            parity = parityMode,
+            dataBits = 8,
+            stopBits = SerialPort.ONE_STOP_BIT,
+            parity = SerialPort.EVEN_PARITY,
             readTimeout = readTimeout,
             writeTimeout = writeTimeout
         )
         
         val manager = SerialPortManager(config)
         manager.enableWatchdog()
-        logger.info("🐕 Hardware watchdog enabled")
+        logger.info("🐕 Hardware watchdog enabled for SOCAT mode")
         
         return manager
     }
     
     /**
-     * Expose SerialPortManager as HardwareWatchdogCapable for FIELD mode.
+     * Expose SOCAT SerialPortManager as SerialTransport.
+     */
+    @Bean
+    @Primary
+    @ConditionalOnProperty(
+        name = ["ehl.transport.mode"],
+        havingValue = "SOCAT",
+        matchIfMissing = false
+    )
+    fun socatModeTransport(@Qualifier("socatSerialPortManager") manager: SerialPortManager): SerialTransport = manager
+    
+    /**
+     * Expose SOCAT SerialPortManager as HardwareWatchdogCapable.
      */
     @Bean
     @ConditionalOnProperty(
-        name = ["lpg.mode"],
-        havingValue = "FIELD",
+        name = ["ehl.transport.mode"],
+        havingValue = "SOCAT",
         matchIfMissing = false
     )
-    fun fieldModeWatchdog(
-        transport: SerialTransport
-    ): HardwareWatchdogCapable? {
-        return transport as? HardwareWatchdogCapable
+    fun socatModeWatchdog(@Qualifier("socatSerialPortManager") manager: SerialPortManager): HardwareWatchdogCapable = manager
+    
+    /**
+     * HARDWARE MODE: SerialPortManager for production hardware.
+     * 
+     * Uses SerialPortManager with watchdog for self-healing:
+     * - Survives cable disconnect/reconnect
+     * - Automatic reconnect on I/O failure
+     * 
+     * Activated when:
+     *   - ehl.transport.mode=HARDWARE (explicit)
+     *   - ehl.transport.mode is not set AND ehl.emulator.enabled=false (legacy)
+     */
+    @Bean("hardwareSerialPortManager")
+    @ConditionalOnExpression(
+        "'\${ehl.transport.mode:}'.equalsIgnoreCase('HARDWARE') or " +
+        "('\${ehl.transport.mode:}'.isEmpty() and '\${ehl.emulator.enabled:true}'.equalsIgnoreCase('false'))"
+    )
+    fun hardwareModeSerialPortManager(
+        @Value("\${ehl.serial.port}") portName: String,
+        @Value("\${ehl.serial.baud-rate:9600}") baudRate: Int,
+        @Value("\${ehl.serial.read-timeout-ms:3000}") readTimeout: Int,
+        @Value("\${ehl.serial.write-timeout-ms:1000}") writeTimeout: Int
+    ): SerialPortManager {
+        logger.info("")
+        logger.info("════════════════════════════════════════════════════════════")
+        logger.info("  🏭 HARDWARE MODE (with watchdog)")
+        logger.info("════════════════════════════════════════════════════════════")
+        logger.info("  Transport:  SerialPortManager")
+        logger.info("  Serial Port: $portName")
+        logger.info("  Baud Rate:  $baudRate")
+        logger.info("  Read Timeout: ${readTimeout}ms")
+        logger.info("  Protocol:   EHL over RS-485")
+        logger.info("  ──────────────────────────────────────────────────────────")
+        logger.info("  ⚠️  WARNING: Communicating with REAL HARDWARE")
+        logger.info("════════════════════════════════════════════════════════════")
+        logger.info("")
+        
+        val config = SerialPortConfig(
+            portName = portName,
+            baudRate = baudRate,
+            dataBits = 8,
+            stopBits = SerialPort.ONE_STOP_BIT,
+            parity = SerialPort.EVEN_PARITY,
+            readTimeout = readTimeout,
+            writeTimeout = writeTimeout
+        )
+        
+        val manager = SerialPortManager(config)
+        manager.enableWatchdog()
+        logger.info("🐕 Hardware watchdog enabled for HARDWARE mode")
+        
+        return manager
     }
+    
+    /**
+     * Expose HARDWARE SerialPortManager as SerialTransport.
+     */
+    @Bean
+    @Primary
+    @ConditionalOnExpression(
+        "'\${ehl.transport.mode:}'.equalsIgnoreCase('HARDWARE') or " +
+        "('\${ehl.transport.mode:}'.isEmpty() and '\${ehl.emulator.enabled:true}'.equalsIgnoreCase('false'))"
+    )
+    fun hardwareModeTransport(@Qualifier("hardwareSerialPortManager") manager: SerialPortManager): SerialTransport = manager
+    
+    /**
+     * Expose HARDWARE SerialPortManager as HardwareWatchdogCapable.
+     */
+    @Bean
+    @ConditionalOnExpression(
+        "'\${ehl.transport.mode:}'.equalsIgnoreCase('HARDWARE') or " +
+        "('\${ehl.transport.mode:}'.isEmpty() and '\${ehl.emulator.enabled:true}'.equalsIgnoreCase('false'))"
+    )
+    fun hardwareModeWatchdog(@Qualifier("hardwareSerialPortManager") manager: SerialPortManager): HardwareWatchdogCapable = manager
     
     /**
      * EHL Communicator - Uses whichever transport is configured.
