@@ -46,7 +46,6 @@ class CommunicationConfig {
         logger.info("")
     }
     
-    
     /**
      * Eksponerer EhlDispenserEmulator kun i LAB MODE.
      * Brukes av ProtocolTestController for debugging.
@@ -67,4 +66,7 @@ class CommunicationConfig {
             pricePerLitreCents = pricePerLiterCents
         )
     }
+    
+    // NOTE: Heartbeat disabled due to class conflict between lpg-ehl-core and lpg-ehl-emulator
+    // Both have EhlDispenserEmulator in same package. Emulator has good logging already.
 }

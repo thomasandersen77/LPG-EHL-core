@@ -92,10 +92,11 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
 
     /**
      * Write raw bytes to the serial port.
+     * Handles partial writes with retries and treats 0 bytes written as hard failure.
      *
      * @param data Bytes to write
      * @return Number of bytes written
-     * @throws IOException if not connected or write fails
+     * @throws IOException if not connected, write fails, or port becomes dead
      */
     override fun write(data: ByteArray): Int {
         synchronized(lock) {
@@ -105,19 +106,75 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
                 throw IOException("Serial port ${config.portName} is not open")
             }
 
-            val bytesWritten = port.writeBytes(data, data.size)
+            var totalWritten = 0
+            var remaining = data
+            var retries = 0
+            val maxRetries = 3
             
-            if (bytesWritten < 0) {
-                throw IOException("Failed to write to serial port ${config.portName}")
+            try {
+                while (remaining.isNotEmpty() && retries < maxRetries) {
+                    val bytesWritten = port.writeBytes(remaining, remaining.size)
+                    
+                    if (bytesWritten <= 0) {
+                        // Hard failure - port is dead (socat/simulator died, cable unplugged)
+                        logger.error("Write failed: 0 bytes written to ${config.portName} (retry $retries)")
+                        // Disconnect to force new FD on reconnect
+                        disconnectInternal()
+                        throw IOException("Write failed: 0 bytes written - port dead")
+                    }
+                    
+                    totalWritten += bytesWritten
+                    
+                    if (bytesWritten < remaining.size) {
+                        // Partial write - retry with remaining bytes
+                        logger.warn("Partial write: $bytesWritten of ${remaining.size} bytes, retrying...")
+                        remaining = remaining.copyOfRange(bytesWritten, remaining.size)
+                        retries++
+                        Thread.sleep(10)  // Small delay before retry
+                    } else {
+                        // All bytes written successfully
+                        remaining = ByteArray(0)
+                    }
+                }
+                
+                if (remaining.isNotEmpty()) {
+                    // Exhausted retries
+                    disconnectInternal()
+                    throw IOException("Failed to write all bytes after $maxRetries retries: wrote $totalWritten of ${data.size}")
+                }
+                
+                logger.debug("Wrote $totalWritten bytes to ${config.portName}: ${data.toHexString()}")
+                return totalWritten
+                
+            } catch (e: IOException) {
+                throw e  // Already handled above
+            } catch (e: Exception) {
+                logger.error("Unexpected error writing to ${config.portName}: ${e.message}", e)
+                disconnectInternal()
+                throw IOException("Serial port write error: ${e.message}", e)
             }
-
-            logger.debug("Wrote $bytesWritten bytes to ${config.portName}: ${data.toHexString()}")
-            return bytesWritten
         }
+    }
+    
+    /**
+     * Internal disconnect without logging (called from error handlers while holding lock).
+     */
+    private fun disconnectInternal() {
+        serialPort?.let { port ->
+            try {
+                if (port.isOpen) {
+                    port.closePort()
+                }
+            } catch (e: Exception) {
+                // Ignore close errors during error recovery
+            }
+        }
+        serialPort = null
     }
 
     /**
      * Read available bytes from the serial port.
+     * Disconnects on read failure to ensure clean reconnect.
      *
      * @param maxBytes Maximum number of bytes to read
      * @return Bytes read, or empty array if no data available
@@ -131,27 +188,39 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
                 throw IOException("Serial port ${config.portName} is not open")
             }
 
-            val available = port.bytesAvailable()
-            if (available <= 0) {
-                return ByteArray(0)
-            }
+            try {
+                val available = port.bytesAvailable()
+                if (available <= 0) {
+                    return ByteArray(0)
+                }
 
-            val buffer = ByteArray(minOf(available, maxBytes))
-            val bytesRead = port.readBytes(buffer, buffer.size)
-            
-            if (bytesRead < 0) {
-                throw IOException("Failed to read from serial port ${config.portName}")
-            }
+                val buffer = ByteArray(minOf(available, maxBytes))
+                val bytesRead = port.readBytes(buffer, buffer.size)
+                
+                if (bytesRead < 0) {
+                    // Read failure - disconnect to force new FD on reconnect
+                    logger.error("Read failed from ${config.portName}: bytesRead=$bytesRead")
+                    disconnectInternal()
+                    throw IOException("Failed to read from serial port ${config.portName}")
+                }
 
-            val result = buffer.copyOf(bytesRead)
-            
-            // WATCHDOG: Update timestamp when we receive valid data
-            if (bytesRead > 0) {
-                lastDataReceivedTime = System.currentTimeMillis()
+                val result = buffer.copyOf(bytesRead)
+                
+                // WATCHDOG: Update timestamp when we receive valid data
+                if (bytesRead > 0) {
+                    lastDataReceivedTime = System.currentTimeMillis()
+                }
+                
+                logger.debug("Read $bytesRead bytes from ${config.portName}: ${result.toHexString()}")
+                return result
+                
+            } catch (e: IOException) {
+                throw e  // Already handled above
+            } catch (e: Exception) {
+                logger.error("Unexpected error reading from ${config.portName}: ${e.message}", e)
+                disconnectInternal()
+                throw IOException("Serial port read error: ${e.message}", e)
             }
-            
-            logger.debug("Read $bytesRead bytes from ${config.portName}: ${result.toHexString()}")
-            return result
         }
     }
 
@@ -170,6 +239,29 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
     override fun flush() {
         synchronized(lock) {
             serialPort?.flushIOBuffers()
+        }
+    }
+    
+    /**
+     * Clear the receive buffer by reading and discarding all available data.
+     */
+    override fun clearBuffer() {
+        synchronized(lock) {
+            try {
+                val port = serialPort ?: return
+                var cleared = 0
+                while (port.bytesAvailable() > 0) {
+                    val buffer = ByteArray(256)
+                    val read = port.readBytes(buffer, buffer.size)
+                    if (read <= 0) break
+                    cleared += read
+                }
+                if (cleared > 0) {
+                    logger.debug("🧹 Serial port buffer cleared: $cleared bytes discarded")
+                }
+            } catch (e: Exception) {
+                logger.warn("Error clearing buffer: ${e.message}")
+            }
         }
     }
 

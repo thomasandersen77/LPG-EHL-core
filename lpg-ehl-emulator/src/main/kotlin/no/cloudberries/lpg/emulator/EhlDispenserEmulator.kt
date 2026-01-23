@@ -79,6 +79,39 @@ class EhlDispenserEmulator(
      */
     fun getPriceCents(): Int = currentPricePerLitreCents
     
+    /**
+     * Get current price per litre in kr.
+     */
+    fun getPricePerLitreKr(): Double = currentPricePerLitreCents / 100.0
+    
+    // Heartbeat counter for periodic logging
+    @Volatile
+    private var commandCount: Long = 0
+    private var lastHeartbeatTime: Long = System.currentTimeMillis()
+    
+    /**
+     * Log heartbeat status (called periodically by external scheduler).
+     * Shows current state, volume, price, and command count.
+     */
+    fun logHeartbeat() {
+        val now = System.currentTimeMillis()
+        val elapsed = (now - lastHeartbeatTime) / 1000
+        lastHeartbeatTime = now
+        
+        if (state == DispenserState.PUMPING) {
+            updateDelivery()
+        }
+        
+        logger.info("━━━━━━━━━━━━━ SIMULATOR HEARTBEAT ━━━━━━━━━━━━━━")
+        logger.info("📍 Station: $stationId | Dispenser: $dispenserId (#$address)")
+        logger.info("🟢 State: ${state.name} | Raw: 0x%02X".format(buildStatusByte().toInt() and 0xFF))
+        logger.info("⛽ Volume: %.2f L | Amount: %.2f kr".format(volumeLitres, amountCents / 100.0))
+        logger.info("🏷️ Price: %.2f kr/L".format(currentPricePerLitreCents / 100.0))
+        logger.info("🛠️ Nozzle: ${if (nozzleLifted) "LIFTED" else "holstered"} | Blocked: ${state == DispenserState.IDLE}")
+        logger.info("📦 Commands processed: $commandCount")
+        logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    }
+    
     // Transaction freeze for payment pending
     @Volatile
     private var pendingTransaction: CompletedTransaction? = null
@@ -554,11 +587,18 @@ class EhlDispenserEmulator(
 
     private fun handlePacket(packet: EhlPacket): List<EhlPacket> {
         if (packet.address != address) {
-            logger.warn("📪 CORE: IGNORED packet addressed to #${packet.address} (I am #$address)")
+            logger.warn("📫 CORE: IGNORED packet addressed to #${packet.address} (I am #$address)")
             return emptyList()
         }
-
-        logger.info("│ ⚡ CORE: Executing command: ${packet.command.name} (0x%02X)".format(packet.command.code) + " ".repeat(maxOf(0, 77 - (36 + packet.command.name.length))) + "│")
+        
+        commandCount++
+        
+        // Log received command with input hex
+        val inputHex = if (packet.data.isNotEmpty()) {
+            packet.data.joinToString(" ") { "%02X".format(it) }
+        } else "(no data)"
+        
+        logger.info("│ ⚡ CMD: ${packet.command.name} (0x%02X) | Input: $inputHex".format(packet.command.code))
         
         return when (packet.command) {
             EhlCommand.STATE     -> {
@@ -914,13 +954,22 @@ class EhlDispenserEmulator(
         if (state == DispenserState.PUMPING) {
             updateDelivery()
         }
-        // Format: volume in deciliters (2 bytes) + amount in cents (2 bytes)
-        val volDeci = (volumeLitres * 10).roundToInt()
-        val data = ByteArray(4)
-        data[0] = ((volDeci shr 8) and 0xFF).toByte()
-        data[1] = (volDeci and 0xFF).toByte()
-        data[2] = ((amountCents shr 8) and 0xFF).toByte()
-        data[3] = (amountCents and 0xFF).toByte()
+        
+        // VB6 format: 5 ASCII bytes LSB-first representing centilitres
+        // Example: 45.50 L = 4550 cL = "04550" reversed = [0x30, 0x35, 0x35, 0x34, 0x30]
+        val centilitres = (volumeLitres * 100).roundToInt()
+        val volumeStr = "%05d".format(centilitres)  // "04550"
+        
+        // Convert to ASCII bytes in LSB-first order (reverse)
+        val data = ByteArray(5)
+        for (i in 0..4) {
+            data[i] = volumeStr[4 - i].code.toByte()  // Reverse order
+        }
+        
+        // Log the response hex for debugging
+        val responseHex = data.joinToString(" ") { "%02X".format(it) }
+        logger.info("│    └─ VOLUME response: %.2f L (%d cL) | HEX: [$responseHex]".format(volumeLitres, centilitres))
+        
         return EhlPacket(address, EhlCommand.VOLUME, data)
     }
 

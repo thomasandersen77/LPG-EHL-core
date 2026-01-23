@@ -1,5 +1,6 @@
 package no.cloudberries.lpg.api.controller
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import no.cloudberries.lpg.service.pump.PumpAuthorizationService
 import no.cloudberries.lpg.service.pump.PumpStateService
 import org.slf4j.LoggerFactory
@@ -76,22 +77,23 @@ class PumpController(
     }
     
     /**
-     * Start pumping (når kunde fysisk trykker på knapp og starter fylling).
+     * Start pumping (simulerer at kunde løfter pistol og trykker på knapp).
      * 
-     * Kansellerer 60s timeout og starter aktiv pumping.
+     * I LAB MODE: Brukes av /control GUI for å simulere nozzle lift.
+     * I FIELD MODE: Ikke brukt - pumping trigges av hardware state (0x06/0x07).
      */
     @PostMapping("/pump/{address}/start-pumping")
     fun startPumping(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
-        logger.info("⛽ START PUMPING: Request for address $address")
+        logger.info("⛽ START PUMPING: Request for address $address (GUI simulation)")
         
-        val result = pumpStateService.startPumping(address)
+        val result = pumpStateService.simulateStartPumping(address)
         
         return result.fold(
             onSuccess = { status ->
                 logger.info("✅ Pumping started: state=${status.state}")
                 ResponseEntity.ok(mapOf(
                     "success" to true,
-                    "message" to "Pumping startet",
+                    "message" to "Pumping startet (simulert)",
                     "state" to status.state,
                     "volumeLitres" to status.volumeLitres,
                     "amountKr" to status.amountKr,
@@ -213,25 +215,25 @@ class PumpController(
     /**
      * Simuler kortdragning.
      * 
-     * To moduser:
-     * 1. GUI-modus (immediate=true): Sender UNBLOCK direkte, ingen avhengighet til Headless
-     * 2. Headless-modus (immediate=false): Oppretter PENDING, Headless poller og sender UNBLOCK
+     * VIKTIG: Denne endepunktet sender ALDRI UNBLOCK til pumpen!
+     * - Oppretter authorization med 60s timeout
+     * - Pumpe-state settes til AUTHORIZED_WAITING
+     * - Bruker må trykke "FRI DISPENSER" (POST /pump/{address}/unblock) for å frigjøre pumpen
      * 
      * Request body:
      * - maxAmountKr: Maks beløp å reservere (default: 2000)
      * - triggeredBy: Hvem/hva som trigget (for logging)
      * - paymentMethod: SIMULATION, CARD, CREDIT, CASH
-     * - immediate: true = send UNBLOCK nå (GUI), false = vent på Headless (default: true)
      */
     @PostMapping("/pump/{address}/card-swipe")
     fun simulateCardSwipe(
         @PathVariable address: Int,
         @RequestBody(required = false) request: CardSwipeRequest?
     ): ResponseEntity<Map<String, Any>> {
-        val immediate = request?.immediate ?: true  // Default til GUI-modus
-        logger.info("💳 SIMULER KORTDRAGNING: Dispenser $address (immediate=$immediate)")
+        logger.info("💳 SIMULER KORTDRAGNING: Dispenser $address")
         
         try {
+            // Opprette authorization med 60s timeout - IKKE send UNBLOCK!
             val auth = authorizationService.simulateCardSwipe(
                 dispenserAddress = address,
                 maxAmountKr = request?.maxAmountKr ?: 2000.0,
@@ -240,45 +242,14 @@ class PumpController(
             )
             
             logger.info("✅ Autorisasjon opprettet: ${auth.authorizationId}")
+            logger.info("⏱️ 60s nedtelling startet - venter på FRI DISPENSER")
             
-            // GUI-modus: Send UNBLOCK direkte og oppdater til AUTHORIZED
-            if (immediate) {
-                logger.info("🔓 GUI-modus: Sender UNBLOCK direkte...")
-                val unblockResult = pumpStateService.unblock(address)
-                unblockResult.fold(
-                    onSuccess = {
-                        // Oppdater autorisasjon til AUTHORIZED
-                        authorizationService.markAuthorized(auth.authorizationId)
-                        logger.info("✅ Pumpe frigjort - klar til fylling")
-                    },
-                    onFailure = { error ->
-                        logger.warn("⚠️ UNBLOCK feilet: ${error.message}")
-                        // Autorisasjonen er opprettet, men UNBLOCK feilet
-                        // La brukeren prøve igjen eller kansellere
-                    }
-                )
-                
-                return ResponseEntity.ok(mapOf(
-                    "success" to true,
-                    "message" to "Kortdragning simulert - pumpe frigjort",
-                    "mode" to "GUI",
-                    "authorization" to mapOf(
-                        "authorizationId" to auth.authorizationId.toString(),
-                        "dispenserAddress" to auth.dispenserAddress,
-                        "status" to "AUTHORIZED",  // Oppdatert til AUTHORIZED
-                        "maxAmountKr" to auth.maxAmountKr,
-                        "pricePerLiterKr" to auth.pricePerLiterKr,
-                        "triggeredBy" to auth.triggeredBy,
-                        "createdAt" to auth.createdAt.toString()
-                    )
-                ))
-            }
+            // Sett pump state til AUTHORIZED_WAITING (kort dratt, venter på FRI DISPENSER)
+            pumpStateService.setAuthorizedWaiting(address, auth.authorizationId)
             
-            // Headless-modus: Vent på at Headless poller og sender UNBLOCK
             return ResponseEntity.ok(mapOf(
                 "success" to true,
-                "message" to "Kortdragning simulert - venter på UNBLOCK fra headless",
-                "mode" to "HEADLESS",
+                "message" to "Kortdragning simulert - trykk FRI DISPENSER for å frigjøre pumpen",
                 "authorization" to mapOf(
                     "authorizationId" to auth.authorizationId.toString(),
                     "dispenserAddress" to auth.dispenserAddress,
@@ -286,7 +257,8 @@ class PumpController(
                     "maxAmountKr" to auth.maxAmountKr,
                     "pricePerLiterKr" to auth.pricePerLiterKr,
                     "triggeredBy" to auth.triggeredBy,
-                    "createdAt" to auth.createdAt.toString()
+                    "createdAt" to auth.createdAt.toString(),
+                    "timeoutSeconds" to 60
                 )
             ))
         } catch (e: IllegalStateException) {
@@ -436,11 +408,13 @@ class PumpController(
 }
 
 // Request DTOs
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class CardSwipeRequest(
     val maxAmountKr: Double? = 2000.0,
     val triggeredBy: String? = "WEBAPP_SIMULATION",
-    val paymentMethod: String? = "SIMULATION",
-    val immediate: Boolean? = true  // true = GUI-modus (send UNBLOCK direkte), false = Headless-modus
+    val paymentMethod: String? = "SIMULATION"
+    // NOTE: 'immediate' parameter removed - card-swipe should NEVER auto-unblock
+    // User must explicitly click "FRI DISPENSER" to send UNBLOCK
 )
 
 data class ConfirmPaymentRequest(

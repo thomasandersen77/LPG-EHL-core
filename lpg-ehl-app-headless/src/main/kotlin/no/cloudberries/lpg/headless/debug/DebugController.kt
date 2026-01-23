@@ -225,44 +225,8 @@ class DebugController(
     }
     
     /**
-     * Start pumping - mark that customer has started pumping.
-     * This cancels the 60s timeout.
-     */
-    @PostMapping("/start-pumping/{addr}")
-    fun startPumping(@PathVariable addr: Int): ResponseEntity<Any> {
-        logger.info("START_PUMPING request for address $addr")
-        
-        return try {
-            val result = pumpStateService.startPumping(addr)
-            
-            result.fold(
-                onSuccess = { status ->
-                    ResponseEntity.ok(CommandResponse(
-                        command = "START_PUMPING",
-                        address = addr,
-                        success = true,
-                        message = "Pumping startet",
-                        responseCode = status.state
-                    ))
-                },
-                onFailure = { error ->
-                    ResponseEntity.badRequest().body(ErrorResponse(
-                        error = "START_PUMPING_REJECTED",
-                        message = error.message ?: "Unknown error"
-                    ))
-                }
-            )
-        } catch (e: Exception) {
-            logger.error("START_PUMPING failed for address $addr: ${e.message}")
-            ResponseEntity.internalServerError().body(ErrorResponse(
-                error = "START_PUMPING_FAILED",
-                message = e.message ?: "Unknown error"
-            ))
-        }
-    }
-    
-    /**
      * Settle transaction - simulate payment.
+     * NOTE: LAB/DEBUG only - not part of production payment flow.
      */
     @PostMapping("/settle/{addr}")
     fun settle(
