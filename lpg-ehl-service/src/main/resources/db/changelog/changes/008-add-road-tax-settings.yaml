@@ -9,7 +9,7 @@ databaseChangeLog:
               - column:
                   name: id
                   type: uuid
-                  defaultValueComputed: gen_random_uuid()
+                  defaultValueComputed: RANDOM_UUID()
                   constraints:
                     primaryKey: true
                     nullable: false
@@ -69,4 +69,5 @@ databaseChangeLog:
                   constraints:
                     nullable: true
         - sql:
+            dbms: postgresql
             sql: "COMMENT ON COLUMN transactions.road_tax_per_liter_ore IS 'Road tax per liter in øre at time of transaction'"

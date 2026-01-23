@@ -6,9 +6,9 @@
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
 
     <changeSet id="005-fix-trigger-to-use-transaction-id" author="system">
-        <comment>Update trigger to use transaction_id instead of removed id column</comment>
+        <comment>Update trigger to use transaction_id instead of removed id column (PostgreSQL only)</comment>
         
-        <sql splitStatements="false">
+        <sql splitStatements="false" dbms="postgresql">
             <![CDATA[
             -- Recreate the trigger function to use transaction_id instead of id
             CREATE OR REPLACE FUNCTION queue_for_azure_sync()

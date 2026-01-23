@@ -103,9 +103,7 @@
     </changeSet>
 
     <changeSet id="002-add-credit-accounts-constraints" author="system">
-        <sql>
-            ALTER TABLE credit_accounts ADD CONSTRAINT balance_within_limit CHECK (balance_cents &lt;= credit_limit_cents);
-        </sql>
+        <addCheckConstraint tableName="credit_accounts" constraintName="balance_within_limit" constraintBody="balance_cents &lt;= credit_limit_cents"/>
     </changeSet>
 
     <changeSet id="002-add-payment-fields-to-transactions" author="system">
@@ -134,9 +132,7 @@
     </changeSet>
 
     <changeSet id="002-add-payment-type-constraints" author="system">
-        <sql>
-            ALTER TABLE transactions ADD CONSTRAINT valid_payment_type CHECK (payment_type IN ('CASH', 'CARD', 'CREDIT', 'VIPPS'));
-        </sql>
+        <addCheckConstraint tableName="transactions" constraintName="valid_payment_type" constraintBody="payment_type IN ('CASH', 'CARD', 'CREDIT', 'VIPPS')"/>
     </changeSet>
 
 </databaseChangeLog>

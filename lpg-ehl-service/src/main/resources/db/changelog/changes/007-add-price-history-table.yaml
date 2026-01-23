@@ -9,7 +9,6 @@ databaseChangeLog:
               - column:
                   name: id
                   type: uuid
-                  defaultValueComputed: gen_random_uuid()
                   constraints:
                     primaryKey: true
                     nullable: false
@@ -70,5 +69,5 @@ databaseChangeLog:
                   name: effective_from
                   descending: true
         - sql:
-            sql: "INSERT INTO price_history (product_code, product_name, price_per_liter, vat_rate, effective_from, created_by) VALUES ('LPG', 'LPG (Flytende petroleumsgass)', 15.90, 0.25, CURRENT_TIMESTAMP, 'system')"
+            sql: "INSERT INTO price_history (id, product_code, product_name, price_per_liter, vat_rate, effective_from, created_by) VALUES (RANDOM_UUID(), 'LPG', 'LPG (Flytende petroleumsgass)', 15.90, 0.25, CURRENT_TIMESTAMP, 'system')"
             comment: "Initialize with current default LPG price"
