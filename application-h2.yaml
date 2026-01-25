@@ -98,7 +98,6 @@ spring:
 azure:
   enabled: false
 
-# Nets Cloud Connect Configuration (disabled for offline testing)
 nets:
   cloud-connect:
     host: localhost
