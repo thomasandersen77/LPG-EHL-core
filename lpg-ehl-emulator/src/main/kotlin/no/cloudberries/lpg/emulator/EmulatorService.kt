@@ -6,6 +6,7 @@ import no.cloudberries.lpg.emulator.api.SaveTransactionRequest
 import no.cloudberries.lpg.emulator.service.TransactionSink
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -14,7 +15,16 @@ import java.util.concurrent.ConcurrentHashMap
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 
+/**
+ * Standalone TCP server emulator for Windows Dispenserkontroll.
+ * Only loaded when emulator.standalone.enabled=true (not in webapp context).
+ */
 @Service
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class EmulatorService(
     @Value("\${station.id:S000}") private val stationId: String,
     @Value("\${edge.id:EDGE-LOCAL}") private val edgeId: String,

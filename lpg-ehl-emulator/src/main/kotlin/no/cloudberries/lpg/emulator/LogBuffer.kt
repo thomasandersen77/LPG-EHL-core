@@ -1,5 +1,6 @@
 package no.cloudberries.lpg.emulator
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedDeque
@@ -7,8 +8,14 @@ import java.util.concurrent.ConcurrentLinkedDeque
 /**
  * In-memory circular buffer for collecting recent log entries.
  * Used to stream logs to frontend/diagnostics without file system access.
+ * Only loaded when emulator.standalone.enabled=true.
  */
 @Service
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class LogBuffer {
     private val buffer = ConcurrentLinkedDeque<LogEntry>()
     private val maxSize = 1000 // Keep last 1000 log entries

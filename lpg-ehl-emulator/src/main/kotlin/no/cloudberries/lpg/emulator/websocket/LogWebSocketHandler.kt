@@ -2,6 +2,7 @@ package no.cloudberries.lpg.emulator.websocket
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.CloseStatus
 import org.springframework.web.socket.TextMessage
@@ -24,8 +25,15 @@ import java.util.concurrent.CopyOnWriteArraySet
  * 
  * Log entries are broadcast as:
  * {"channel": "emulator", "timestamp": "...", "level": "INFO", "logger": "...", "message": "..."}
+ * 
+ * Only loaded when emulator.standalone.enabled=true.
  */
 @Component
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class LogWebSocketHandler(
     private val objectMapper: ObjectMapper
 ) : TextWebSocketHandler() {

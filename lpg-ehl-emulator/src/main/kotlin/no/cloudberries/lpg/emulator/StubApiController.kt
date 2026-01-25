@@ -4,6 +4,7 @@ import no.cloudberries.lpg.emulator.api.LpgApiClient
 import no.cloudberries.lpg.emulator.websocket.LogWebSocketHandler
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.math.BigDecimal
@@ -19,9 +20,15 @@ import java.time.Instant
  * 
  * Transaction queries are proxied to the real lpg-ehl-api service via HTTP,
  * ensuring the emulator uses the same PostgreSQL database as production.
+ * Only loaded when emulator.standalone.enabled=true.
  */
 @RestController
 @RequestMapping("/api/v1")
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class StubApiController(
     private val emulatorService: EmulatorService,
     private val logWebSocketHandler: LogWebSocketHandler,

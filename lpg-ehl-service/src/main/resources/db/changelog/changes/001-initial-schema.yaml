@@ -65,6 +65,11 @@ databaseChangeLog:
                   type: timestamp
                   constraints:
                     nullable: false
+      modifySql:
+        - dbms: h2
+          replace:
+            replace: jsonb
+            with: clob
                     
   - changeSet:
       id: 001-create-dispenser-status-table
@@ -144,6 +149,11 @@ databaseChangeLog:
                   type: json
                   constraints:
                     nullable: false
+      modifySql:
+        - dbms: h2
+          replace:
+            replace: jsonb
+            with: clob
 
   - changeSet:
       id: 001-create-customers-table

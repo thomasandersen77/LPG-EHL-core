@@ -2,6 +2,10 @@
 # Note: datasource config is inherited from application.yaml which uses environment variables
 # This allows the same profile to work both locally and in Docker
 spring:
+  security:
+    user:
+      name: admin
+      password: admin123
   jpa:
     hibernate:
       ddl-auto: validate  # Validate schema against entities, use Liquibase for changes

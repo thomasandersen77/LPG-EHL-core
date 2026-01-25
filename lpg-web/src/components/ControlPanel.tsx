@@ -183,8 +183,22 @@ export function ControlPanel() {
           setLogs(prev => [...prev.slice(-499), data as LogEntry]);
         }
         
-        // Handle pump_update and price_update - refresh pump status immediately
-        if (data.type === 'pump_update' || data.type === 'price_update') {
+        // Handle pump_update - update cache directly for real-time display
+        if (data.type === 'pump_update') {
+          queryClient.setQueryData(['pump-status'], (old: PumpStatus | undefined) => ({
+            ...old,
+            state: data.state,
+            address: data.address,
+            volumeLitres: data.volumeLitres,
+            amountKr: data.amountKr,
+            pricePerLitreKr: data.pricePerLitreKr,
+            nozzleLifted: data.nozzleLifted,
+            hasPendingTransaction: data.hasPendingTransaction
+          } as PumpStatus));
+        }
+        
+        // Handle price_update - refresh status
+        if (data.type === 'price_update') {
           queryClient.invalidateQueries({ queryKey: ['pump-status'] });
         }
       } catch (e) {

@@ -171,9 +171,23 @@ class PlsState(
             }
             EhlFrameCodec.CMD_STATE -> {
                 val blocked = isBlocked(addrInt)
-                // Core expects bitmask: 0x00=IDLE, 0x04=AUTHORIZED (START_BUTTON_PRESSED bit)
-                val statusByte: Byte = if (blocked) 0x00 else 0x04
-                log.debug("📊 STATE request from dispenser $addrInt -> ${if(blocked) "IDLE" else "AUTHORIZED"} (0x${String.format("%02X", statusByte.toInt() and 0xFF)})")
+                val volumeMl = getVolumeMl()
+                // Core expects bitmask:
+                // 0x00 = IDLE (blocked)
+                // 0x04 = AUTHORIZED/READY (unblocked, volume=0)
+                // 0x06 = PUMPING (unblocked, volume>0, nozzle lifted + delivery active)
+                val statusByte: Byte = when {
+                    blocked -> 0x00
+                    volumeMl > 0 -> 0x06  // DELIVERY_ACTIVE (0x04) + NOZZLE_LIFTED (0x02)
+                    else -> 0x04  // Just AUTHORIZED/READY
+                }
+                val statusName = when (statusByte.toInt()) {
+                    0x00 -> "IDLE"
+                    0x04 -> "READY"
+                    0x06 -> "PUMPING"
+                    else -> "UNKNOWN"
+                }
+                log.debug("📊 STATE request from dispenser $addrInt -> $statusName (0x${String.format("%02X", statusByte.toInt() and 0xFF)}, vol=${volumeMl}ml)")
                 EhlCommandResult.StateResponse(frame.addr, byteArrayOf(statusByte))
             }
             EhlFrameCodec.CMD_VOLUME -> {

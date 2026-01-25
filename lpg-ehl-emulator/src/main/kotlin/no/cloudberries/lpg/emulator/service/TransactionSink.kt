@@ -3,6 +3,7 @@ package no.cloudberries.lpg.emulator.service
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.util.*
@@ -54,6 +55,11 @@ data class CompletedTransaction(
  * - Retry with delay on failure (2s, 4s, 8s, ...)
  */
 @Component
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class TransactionSink(
     private val persistenceService: TransactionPersistenceService
 ) {

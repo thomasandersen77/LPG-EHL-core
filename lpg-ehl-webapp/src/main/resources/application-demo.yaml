@@ -1,5 +1,9 @@
 # Use PostgreSQL from local profile
 spring:
+  security:
+    user:
+      name: admin
+      password: admin123
   jpa:
     show-sql: false
   liquibase:

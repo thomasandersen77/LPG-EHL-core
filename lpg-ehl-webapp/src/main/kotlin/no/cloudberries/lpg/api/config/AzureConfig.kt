@@ -9,15 +9,14 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 @Configuration
+@ConditionalOnProperty(name = ["azure.enabled"], havingValue = "true")
 class AzureConfig(
-    @Value("\${azure.enabled}") private val azureEnabled: Boolean,
     @Value("\${azure.storage.connection-string}") private val connectionString: String,
     @Value("\${azure.storage.queue-name}") private val queueName: String
 ) {
     private val logger = LoggerFactory.getLogger(AzureConfig::class.java)
 
     @Bean
-    @ConditionalOnProperty(name = ["azure.enabled"], havingValue = "true")
     fun queueClient(): QueueClient {
         logger.info("Initializing Azure Queue client for queue: $queueName")
         
