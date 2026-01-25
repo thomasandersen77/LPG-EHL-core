@@ -32,7 +32,8 @@ class HeadlessStartupRunner(
     @Autowired(required = false) private val pumpStateService: PumpStateService?,
     @Autowired(required = false) private val hardwareWatchdogService: HardwareWatchdogService?,
     @Autowired(required = false) private val azureQueueReaderService: AzureQueueReaderService?,
-    @Value("\${lpg.mode:LAB}") private val mode: String,
+    @Value("\${ehl.transport.mode:}") private val transportMode: String,
+    @Value("\${lpg.mode:LAB}") private val legacyMode: String,
     @Value("\${lpg.dispenser.address:1}") private val dispenserAddress: Int
 ) : CommandLineRunner {
 
@@ -69,16 +70,32 @@ class HeadlessStartupRunner(
         logger.info("")
     }
     
+    /**
+     * Determine effective transport mode:
+     * - ehl.transport.mode takes precedence if set
+     * - Falls back to lpg.mode for backwards compatibility
+     */
+    private fun getEffectiveMode(): String = when {
+        transportMode.equals("SOCAT", ignoreCase = true) -> "SOCAT"
+        transportMode.equals("HARDWARE", ignoreCase = true) -> "HARDWARE"
+        transportMode.equals("EMULATOR", ignoreCase = true) -> "EMULATOR"
+        legacyMode.equals("FIELD", ignoreCase = true) -> "HARDWARE"
+        legacyMode.equals("LAB", ignoreCase = true) -> "EMULATOR"
+        else -> "HARDWARE" // Default for headless
+    }
+    
     private fun initializeHardware() {
+        val effectiveMode = getEffectiveMode()
+        
         logger.info("🔌 Initializing hardware communication...")
-        logger.info("   Mode: $mode")
+        logger.info("   Mode: $effectiveMode")
         logger.info("   Dispenser Address: $dispenserAddress")
         
         try {
-            if (mode == "LAB") {
-                logger.info("   🧪 LAB MODE: Using emulator")
-            } else {
-                logger.info("   🏭 FIELD MODE: Using real hardware")
+            when (effectiveMode) {
+                "EMULATOR" -> logger.info("   🧪 EMULATOR MODE: Using in-memory emulator")
+                "SOCAT" -> logger.info("   🔗 SOCAT MODE: Using virtual PTY to PLS Simulator")
+                "HARDWARE" -> logger.info("   🏭 HARDWARE MODE: Using real serial hardware")
             }
             
             // Test communication by sending a STATE query

@@ -59,12 +59,17 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: decoded_data
-                  type: jsonb
+                  type: json
               - column:
                   name: created_at
                   type: timestamp
                   constraints:
                     nullable: false
+      modifySql:
+        - dbms: h2
+          replace:
+            replace: jsonb
+            with: clob
                     
   - changeSet:
       id: 001-create-dispenser-status-table
@@ -141,9 +146,14 @@ databaseChangeLog:
                   type: timestamp
               - column:
                   name: payload
-                  type: jsonb
+                  type: json
                   constraints:
                     nullable: false
+      modifySql:
+        - dbms: h2
+          replace:
+            replace: jsonb
+            with: clob
 
   - changeSet:
       id: 001-create-customers-table
@@ -291,9 +301,9 @@ databaseChangeLog:
             replaceIfExists: true
             selectQuery: |
               SELECT 
-                DATE(timestamp) as date,
+                CAST(timestamp AS DATE) as date,
                 SUM(volume_deciliters) as total_volume_deciliters,
                 SUM(amount_ore) as total_amount_ore,
                 COUNT(*) as transaction_count
               FROM transactions
-              GROUP BY DATE(timestamp)
+              GROUP BY CAST(timestamp AS DATE)

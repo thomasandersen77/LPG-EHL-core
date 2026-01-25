@@ -1,38 +1,42 @@
 package no.cloudberries.lpg.headless
 
+import com.fazecast.jSerialComm.SerialPort
 import no.cloudberries.lpg.communication.EhlCommunicator
+import no.cloudberries.lpg.communication.HardwareWatchdogCapable
+import no.cloudberries.lpg.communication.SerialPortConfig
+import no.cloudberries.lpg.communication.SerialPortManager
 import no.cloudberries.lpg.emulator.EhlDispenserEmulator
 import no.cloudberries.lpg.emulator.InMemorySerialPort
-import no.cloudberries.lpg.pls.RealSerialTransport
 import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Primary
 
 /**
- * Transport Configuration for Headless Application - Dual-Mode Architecture.
+ * Transport Configuration - Two Mode Architecture.
  * 
- * Automatically selects between LAB MODE and FIELD MODE based on
- * `ehl.emulator.enabled` property.
+ * Uses `lpg.mode` property:
  * 
- * LAB MODE (ehl.emulator.enabled=true):
+ * LAB (lpg.mode=LAB) - DEFAULT:
  *   - Uses InMemorySerialPort + EhlDispenserEmulator
  *   - No physical hardware required
- *   - For testing and development
+ *   - For development and testing
  * 
- * FIELD MODE (ehl.emulator.enabled=false) - DEFAULT FOR HEADLESS:
- *   - Uses RealSerialTransport + physical RS-485 serial port
- *   - Communicates with real LPG dispenser hardware
- *   - Production deployment on Raspberry Pi or edge device
+ * FIELD (lpg.mode=FIELD):
+ *   - Uses SerialPortManager + real serial port
+ *   - Works with both physical hardware AND socat virtual PTY
+ *   - For production deployment or socat testing
+ *   - Use ./scripts/start-socat.sh to create virtual PTY pair
  * 
- * Serial Port Configuration (Environment Variables):
- *   EHL_SERIAL_PORT      - Serial port device (default: /dev/ttyS0)
- *   EHL_BAUD_RATE        - Baud rate (default: 9600)
- *   EHL_DATA_BITS        - Data bits (default: 8)
- *   EHL_PARITY           - Parity: NONE, ODD, EVEN, MARK, SPACE (default: EVEN)
- *   EHL_STOP_BITS        - Stop bits: 1, 1.5, 2 (default: 1)
+ * Serial Port Configuration:
+ *   ehl.serial.port       - Serial port device (default: /dev/ttyS0, or /tmp/ttyV1 for socat)
+ *   ehl.serial.baud-rate  - Baud rate (default: 9600)
+ *   ehl.serial.data-bits  - Data bits (default: 8)
+ *   ehl.serial.parity     - Parity: NONE, ODD, EVEN (default: EVEN)
+ *   ehl.serial.stop-bits  - Stop bits: 1 or 2 (default: 1)
  * 
  * Standard EHL Protocol: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
  */
@@ -43,30 +47,31 @@ class TransportConfiguration {
     
     /**
      * LAB MODE: In-memory serial port with emulator.
-     * Used for development and testing when no physical hardware is available.
-     * Activated when lpg.mode=LAB
+     * Default mode - safe for development and testing.
      */
     @Bean
+    @Primary
     @ConditionalOnProperty(
-        prefix = "lpg",
-        name = ["mode"], 
-        havingValue = "LAB"
+        name = ["lpg.mode"],
+        havingValue = "LAB",
+        matchIfMissing = true  // LAB is the default
     )
     fun labModeTransport(
         @Value("\${ehl.emulator.dispenser-address:1}") dispenserAddress: Int,
         @Value("\${ehl.emulator.price-per-liter-cents:1590}") pricePerLiterCents: Int,
         @Value("\${ehl.emulator.latency-ms:20}") latencyMs: Long
     ): SerialTransport {
-        logger.info("════════════════════════════════════════════════════════")
-        logger.info("🔬 LAB MODE ACTIVATED (HEADLESS)")
-        logger.info("════════════════════════════════════════════════════════")
-        logger.info("Transport: InMemorySerialPort")
-        logger.info("Backend: EhlDispenserEmulator")
-        logger.info("Dispenser Address: $dispenserAddress")
-        logger.info("Price: ${pricePerLiterCents / 100.0} kr/L")
-        logger.info("Latency: ${latencyMs}ms (simulated)")
-        logger.info("Hardware: NOT REQUIRED")
-        logger.info("════════════════════════════════════════════════════════")
+        logger.info("")
+        logger.info("════════════════════════════════════════════════════════════")
+        logger.info("  🔬 LAB MODE")
+        logger.info("════════════════════════════════════════════════════════════")
+        logger.info("  Transport:  InMemorySerialPort + Emulator")
+        logger.info("  Dispenser:  Address $dispenserAddress")
+        logger.info("  Price:      ${pricePerLiterCents / 100.0} kr/L")
+        logger.info("  Latency:    ${latencyMs}ms (simulated)")
+        logger.info("  Hardware:   NOT REQUIRED")
+        logger.info("════════════════════════════════════════════════════════════")
+        logger.info("")
         
         val emulator = EhlDispenserEmulator(
             address = dispenserAddress,
@@ -80,76 +85,120 @@ class TransportConfiguration {
     }
     
     /**
-     * FIELD MODE: Real serial port for production hardware.
-     * DEFAULT MODE for headless deployment.
-     * Activated when lpg.mode=FIELD (or not specified)
+     * FIELD MODE: Real serial port for production or socat testing.
      * 
-     * Supports full RS-485/RS-232 configuration:
-     * - COM port / device path
-     * - Baud rate
-     * - Data bits (5, 6, 7, 8)
-     * - Parity (NONE, ODD, EVEN, MARK, SPACE)
-     * - Stop bits (1, 1.5, 2)
+     * Works with:
+     * - Real hardware: ehl.serial.port=/dev/ttyS0 (or /dev/ttyUSB0, COM1, etc.)
+     * - Socat PTY:     ehl.serial.port=/tmp/ttyV1 (run ./scripts/start-socat.sh first)
      */
     @Bean
+    @Primary
     @ConditionalOnProperty(
-        prefix = "lpg",
-        name = ["mode"], 
+        name = ["lpg.mode"],
         havingValue = "FIELD",
-        matchIfMissing = true  // Default to FIELD mode for headless
+        matchIfMissing = false
     )
     fun fieldModeTransport(
         @Value("\${ehl.serial.port:/dev/ttyS0}") portName: String,
         @Value("\${ehl.serial.baud-rate:9600}") baudRate: Int,
         @Value("\${ehl.serial.data-bits:8}") dataBits: Int,
         @Value("\${ehl.serial.parity:EVEN}") parity: String,
-        @Value("\${ehl.serial.stop-bits:1}") stopBits: Int
+        @Value("\${ehl.serial.stop-bits:1}") stopBits: Int,
+        @Value("\${ehl.serial.read-timeout-ms:3000}") readTimeout: Int,
+        @Value("\${ehl.serial.write-timeout-ms:1000}") writeTimeout: Int
     ): SerialTransport {
-        logger.info("════════════════════════════════════════════════════════")
-        logger.info("🏭 FIELD MODE ACTIVATED (HEADLESS)")
-        logger.info("════════════════════════════════════════════════════════")
-        logger.info("Transport: RealSerialTransport")
-        logger.info("Serial Port: $portName")
-        logger.info("Baud Rate: $baudRate")
-        logger.info("Data Bits: $dataBits")
-        logger.info("Parity: $parity")
-        logger.info("Stop Bits: $stopBits")
-        logger.info("Protocol: EHL over RS-485")
-        logger.info("════════════════════════════════════════════════════════")
-        logger.info("⚠️  WARNING: This will communicate with REAL HARDWARE")
-        logger.info("════════════════════════════════════════════════════════")
+        val isSocat = portName.contains("ttyV") || portName.contains("pty")
         
-        // Map parity string to jSerialComm constant
+        logger.info("")
+        logger.info("════════════════════════════════════════════════════════════")
+        logger.info("  🏭 FIELD MODE" + if (isSocat) " (via SOCAT)" else "")
+        logger.info("════════════════════════════════════════════════════════════")
+        logger.info("  Transport:   SerialPortManager (with watchdog)")
+        logger.info("  Serial Port: $portName")
+        logger.info("  Baud Rate:   $baudRate")
+        logger.info("  Data Bits:   $dataBits")
+        logger.info("  Parity:      $parity")
+        logger.info("  Stop Bits:   $stopBits")
+        logger.info("  Protocol:    EHL over " + if (isSocat) "virtual PTY" else "RS-485")
+        if (isSocat) {
+            logger.info("  ──────────────────────────────────────────────────────────")
+            logger.info("  💡 TIP: Run ./scripts/start-socat.sh in another terminal")
+        } else {
+            logger.info("  ──────────────────────────────────────────────────────────")
+            logger.info("  ⚠️  Communicating with REAL HARDWARE")
+        }
+        logger.info("════════════════════════════════════════════════════════════")
+        logger.info("")
+        
         val parityMode = when (parity.uppercase()) {
-            "NONE" -> 0
-            "ODD" -> 1
-            "EVEN" -> 2
-            "MARK" -> 3
-            "SPACE" -> 4
+            "NONE" -> SerialPort.NO_PARITY
+            "ODD" -> SerialPort.ODD_PARITY
+            "EVEN" -> SerialPort.EVEN_PARITY
+            "MARK" -> SerialPort.MARK_PARITY
+            "SPACE" -> SerialPort.SPACE_PARITY
             else -> {
                 logger.warn("Unknown parity '$parity', defaulting to EVEN")
-                2 // EVEN
+                SerialPort.EVEN_PARITY
             }
         }
         
-        val transport = RealSerialTransport(portName, baudRate, dataBits, parityMode, stopBits)
-        
-        // Connect to the serial port
-        if (!transport.connect()) {
-            logger.error("❌ Failed to connect to serial port $portName")
-            logger.warn("⚠️  Hardware communication will fail until port is available")
+        val stopBitsMode = when (stopBits) {
+            1 -> SerialPort.ONE_STOP_BIT
+            2 -> SerialPort.TWO_STOP_BITS
+            else -> SerialPort.ONE_STOP_BIT
         }
         
-        return transport
+        val config = SerialPortConfig(
+            portName = portName,
+            baudRate = baudRate,
+            dataBits = dataBits,
+            stopBits = stopBitsMode,
+            parity = parityMode,
+            readTimeout = readTimeout,
+            writeTimeout = writeTimeout
+        )
+        
+        val manager = SerialPortManager(config)
+        manager.enableWatchdog()
+        logger.info("🐕 Hardware watchdog enabled")
+        
+        return manager
+    }
+    
+    /**
+     * Expose SerialPortManager as HardwareWatchdogCapable for FIELD mode.
+     */
+    @Bean
+    @ConditionalOnProperty(
+        name = ["lpg.mode"],
+        havingValue = "FIELD",
+        matchIfMissing = false
+    )
+    fun fieldModeWatchdog(
+        transport: SerialTransport
+    ): HardwareWatchdogCapable? {
+        return transport as? HardwareWatchdogCapable
     }
     
     /**
      * EHL Communicator - Uses whichever transport is configured.
-     * Transport is already connected by the mode-specific bean.
      */
     @Bean
     fun ehlCommunicator(transport: SerialTransport): EhlCommunicator {
         logger.info("Creating EhlCommunicator with ${transport.javaClass.simpleName}")
-        return EhlCommunicator(transport)
+        
+        val communicator = EhlCommunicator(transport)
+        
+        if (!transport.isConnected) {
+            val connected = transport.connect()
+            if (connected) {
+                logger.info("✅ Transport connected successfully")
+            } else {
+                logger.error("❌ Failed to connect transport")
+                throw IllegalStateException("Failed to connect serial transport")
+            }
+        }
+        
+        return communicator
     }
 }

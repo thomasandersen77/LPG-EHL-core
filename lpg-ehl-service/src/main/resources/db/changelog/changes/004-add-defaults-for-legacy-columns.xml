@@ -9,7 +9,7 @@
         <comment>Add default values for legacy columns to support new entity structure</comment>
         
         <!-- Add defaults for legacy columns that are not in the new entity structure -->
-        <sql>
+        <sql dbms="postgresql">
             -- started_at: use timestamp as default
             ALTER TABLE transactions ALTER COLUMN started_at DROP NOT NULL;
             ALTER TABLE transactions ALTER COLUMN started_at SET DEFAULT now();
@@ -22,6 +22,20 @@
             ALTER TABLE transactions ALTER COLUMN volume_litres DROP NOT NULL;
             ALTER TABLE transactions ALTER COLUMN amount_cents DROP NOT NULL;
             ALTER TABLE transactions ALTER COLUMN price_per_litre_cents DROP NOT NULL;
+        </sql>
+        <sql dbms="h2">
+            -- started_at: use timestamp as default
+            ALTER TABLE transactions ALTER COLUMN started_at SET DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE transactions ALTER COLUMN started_at SET NULL;
+            
+            -- state: default to FINISHED since we only save finished transactions
+            ALTER TABLE transactions ALTER COLUMN state SET DEFAULT 'FINISHED';
+            ALTER TABLE transactions ALTER COLUMN state SET NULL;
+            
+            -- Make volume_litres and amount_cents nullable
+            ALTER TABLE transactions ALTER COLUMN volume_litres SET NULL;
+            ALTER TABLE transactions ALTER COLUMN amount_cents SET NULL;
+            ALTER TABLE transactions ALTER COLUMN price_per_litre_cents SET NULL;
         </sql>
     </changeSet>
 

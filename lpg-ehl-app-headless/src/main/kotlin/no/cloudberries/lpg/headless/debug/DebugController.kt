@@ -8,14 +8,11 @@ import no.cloudberries.lpg.protocol.EhlPacket
 import no.cloudberries.lpg.service.pump.PumpStateService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.context.annotation.Profile
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 /**
- * Debug API Controller for felt-testing via curl.
- * 
- * Kun aktiv med profil: --spring.profiles.active=debug-api
+ * Debug API Controller for testing via curl.
  * 
  * Eksempler:
  * ```
@@ -26,7 +23,6 @@ import org.springframework.web.bind.annotation.*
  * curl -X POST http://localhost:8080/api/debug/block/1
  * ```
  */
-@Profile("debug-api")
 @RestController
 @RequestMapping("/api/debug")
 class DebugController(
@@ -225,44 +221,8 @@ class DebugController(
     }
     
     /**
-     * Start pumping - mark that customer has started pumping.
-     * This cancels the 60s timeout.
-     */
-    @PostMapping("/start-pumping/{addr}")
-    fun startPumping(@PathVariable addr: Int): ResponseEntity<Any> {
-        logger.info("START_PUMPING request for address $addr")
-        
-        return try {
-            val result = pumpStateService.startPumping(addr)
-            
-            result.fold(
-                onSuccess = { status ->
-                    ResponseEntity.ok(CommandResponse(
-                        command = "START_PUMPING",
-                        address = addr,
-                        success = true,
-                        message = "Pumping startet",
-                        responseCode = status.state
-                    ))
-                },
-                onFailure = { error ->
-                    ResponseEntity.badRequest().body(ErrorResponse(
-                        error = "START_PUMPING_REJECTED",
-                        message = error.message ?: "Unknown error"
-                    ))
-                }
-            )
-        } catch (e: Exception) {
-            logger.error("START_PUMPING failed for address $addr: ${e.message}")
-            ResponseEntity.internalServerError().body(ErrorResponse(
-                error = "START_PUMPING_FAILED",
-                message = e.message ?: "Unknown error"
-            ))
-        }
-    }
-    
-    /**
      * Settle transaction - simulate payment.
+     * NOTE: LAB/DEBUG only - not part of production payment flow.
      */
     @PostMapping("/settle/{addr}")
     fun settle(

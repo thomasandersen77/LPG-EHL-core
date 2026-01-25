@@ -3,6 +3,7 @@ package no.cloudberries.lpg.emulator.service
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import java.net.URI
 import java.net.http.HttpClient
@@ -42,8 +43,15 @@ import jakarta.annotation.PreDestroy
  * - Retry on failure with exponential backoff
  * - Graceful shutdown on service stop
  * - Config pull on each heartbeat response
+ * 
+ * Only loaded when emulator.standalone.enabled=true.
  */
 @Service
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class StationHeartbeatService(
     @Value("\${station.id:S000}") private val stationId: String,
     @Value("\${edge.id:EDGE-LOCAL}") private val edgeId: String,

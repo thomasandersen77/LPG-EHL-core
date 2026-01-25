@@ -12,7 +12,8 @@ data class CliArgs(
     val logHex: Boolean = false,
     val dispenserAddress: Int = 1,
     val priceCents: Int = 1590,
-    val initiallyBlocked: Boolean = true
+    val initiallyBlocked: Boolean = true,
+    val heartbeatIntervalMs: Long = 5000  // Configurable heartbeat interval (default: 5 seconds)
 ) {
     companion object {
         fun parse(args: Array<String>): CliArgs {
@@ -25,6 +26,7 @@ data class CliArgs(
             var dispenserAddress = 1
             var priceCents = 1590
             var initiallyBlocked = true
+            var heartbeatIntervalMs = 5000L
 
             val iterator = args.iterator()
             while (iterator.hasNext()) {
@@ -47,6 +49,7 @@ data class CliArgs(
                     arg.startsWith("--address=") -> dispenserAddress = arg.substringAfter("--address=").toIntOrNull() ?: 1
                     arg.startsWith("--price=") -> priceCents = arg.substringAfter("--price=").toIntOrNull() ?: 1590
                     arg.startsWith("--blocked=") -> initiallyBlocked = arg.substringAfter("--blocked=").lowercase() != "false"
+                    arg.startsWith("--heartbeatIntervalMs=") -> heartbeatIntervalMs = arg.substringAfter("--heartbeatIntervalMs=").toLongOrNull() ?: 5000L
                     arg == "--help" || arg == "-h" -> {
                         printHelp()
                         kotlin.system.exitProcess(0)
@@ -60,7 +63,7 @@ data class CliArgs(
                 kotlin.system.exitProcess(1)
             }
 
-            return CliArgs(port, baud, mode, chunk, latencyMs, logHex, dispenserAddress, priceCents, initiallyBlocked)
+            return CliArgs(port, baud, mode, chunk, latencyMs, logHex, dispenserAddress, priceCents, initiallyBlocked, heartbeatIntervalMs)
         }
 
         private fun printHelp() {
@@ -79,12 +82,15 @@ data class CliArgs(
                 |  --latencyMs=<ms>    Add latency jitter to read loop (default: 0)
                 |  --logHex=<bool>     Log raw bytes as hex (default: false)
                 |
-                |Dispenser Options:
-                |  --address=<addr>    Dispenser address 1-8 (default: 1)
-                |  --price=<cents>     Price per liter in cents, e.g. 1590 = 15.90 kr/L (default: 1590)
-                |  --blocked=<bool>    Initial blocked state (default: true)
-                |
-                |  --help, -h          Show this help message
+|Dispenser Options:
+|  --address=<addr>    Dispenser address 1-8 (default: 1)
+|  --price=<cents>     Price per liter in cents, e.g. 1590 = 15.90 kr/L (default: 1590)
+|  --blocked=<bool>    Initial blocked state (default: true)
+|
+|Logging Options:
+|  --heartbeatIntervalMs=<ms>  Heartbeat log interval in ms (default: 5000)
+|
+|  --help, -h          Show this help message
                 |
                 |Examples:
                 |  # Basic EHL mode for socat testing:

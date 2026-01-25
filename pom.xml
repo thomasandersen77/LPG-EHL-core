@@ -26,8 +26,8 @@
     </modules>
 
     <properties>
-        <kotlin.version>1.9.25</kotlin.version>
-        <coroutines.version>1.8.0</coroutines.version>
+        <kotlin.version>2.1.0</kotlin.version>
+        <coroutines.version>1.10.1</coroutines.version>
         <spring-boot.version>3.2.1</spring-boot.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
@@ -158,8 +158,8 @@
                     </executions>
                     <configuration>
                         <jvmTarget>21</jvmTarget>
-                        <languageVersion>1.9</languageVersion>
-                        <apiVersion>1.9</apiVersion>
+                        <languageVersion>2.0</languageVersion>
+                        <apiVersion>2.0</apiVersion>
                     </configuration>
                 </plugin>
 

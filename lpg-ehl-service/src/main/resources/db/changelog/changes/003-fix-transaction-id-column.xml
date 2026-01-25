@@ -13,10 +13,12 @@
         <comment>Drop old id column and use transaction_id as primary key</comment>
         
         <!-- Drop existing primary key on 'id' column with CASCADE to handle foreign keys -->
-        <sql>ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_pkey CASCADE</sql>
+        <sql dbms="postgresql">ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_pkey CASCADE</sql>
+        <sql dbms="h2">ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_pkey</sql>
         
         <!-- Drop the old 'id' column with CASCADE -->
-        <sql>ALTER TABLE transactions DROP COLUMN IF EXISTS id CASCADE</sql>
+        <sql dbms="postgresql">ALTER TABLE transactions DROP COLUMN IF EXISTS id CASCADE</sql>
+        <sql dbms="h2">ALTER TABLE transactions DROP COLUMN IF EXISTS id</sql>
         
         <!-- Add primary key constraint to transaction_id -->
         <addPrimaryKey tableName="transactions" columnNames="transaction_id" constraintName="transactions_pkey"/>

@@ -134,20 +134,22 @@ class EhlEmulatorIntegrationTest {
         // Should also receive VOLUME response
         val volume = comm.receive()
         assertEquals(EhlCommand.VOLUME, volume.command)
-        assertEquals(4, volume.data.size)
+        assertEquals(5, volume.data.size)
         
-        // Parse volume and amount
-        val volDeci = ((volume.data[0].toInt() and 0xFF) shl 8) or (volume.data[1].toInt() and 0xFF)
-        val amount = ((volume.data[2].toInt() and 0xFF) shl 8) or (volume.data[3].toInt() and 0xFF)
+        // Parse volume from VB6 format: 5 ASCII bytes LSB-first representing centilitres
+        // Example: 45.50 L = 4550 cL = "04550" reversed = [0x30, 0x35, 0x35, 0x34, 0x30]
+        val volumeStr = String(volume.data.reversedArray())  // Reverse LSB-first to get "04550"
+        val centilitres = volumeStr.toInt()
+        val litres = centilitres / 100.0
         
         // Should have delivered approximately 1.5 liters
-        val litres = volDeci / 10.0
         assertTrue(litres > 1.0 && litres < 2.0, "Expected ~1.5L, got $litres L")
         
-        // At 10 kr/l, 1.5L should cost ~1500 øre
-        assertTrue(amount > 1000 && amount < 2000, "Expected ~1500 øre, got $amount øre")
+        // At 10 kr/l, 1.5L should cost ~1500 cents (15.00 kr)
+        val expectedAmountCents = (litres * 1000).toInt()  // 10.00 kr/L = 1000 cents/L
+        assertTrue(expectedAmountCents > 1000 && expectedAmountCents < 2000, "Expected ~1500 cents, got $expectedAmountCents cents")
         
-        println("Delivered: $litres L for $amount øre")
+        println("Delivered: $litres L")
     }
 
     @Test
@@ -166,9 +168,12 @@ class EhlEmulatorIntegrationTest {
         val volume = comm.receive()
         
         assertEquals(EhlCommand.VOLUME, volume.command)
+        assertEquals(5, volume.data.size)
         
-        val volDeci = ((volume.data[0].toInt() and 0xFF) shl 8) or (volume.data[1].toInt() and 0xFF)
-        val litres = volDeci / 10.0
+        // Parse volume from VB6 format: 5 ASCII bytes LSB-first representing centilitres
+        val volumeStr = String(volume.data.reversedArray())
+        val centilitres = volumeStr.toInt()
+        val litres = centilitres / 100.0
         
         // Should have delivered approximately 0.5 liters
         assertTrue(litres > 0.3 && litres < 0.7, "Expected ~0.5L, got $litres L")

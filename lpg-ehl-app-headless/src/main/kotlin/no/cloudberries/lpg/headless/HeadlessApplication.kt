@@ -29,16 +29,15 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication
 @ComponentScan(
     basePackages = [
-        "no.cloudberries.lpg.headless",      // Headless-spesifikk kode (config, service, startup)
-        "no.cloudberries.lpg.service",        // Business logic fra service-modulen
-        "no.cloudberries.lpg.communication",  // EhlCommunicator fra transport
-        "no.cloudberries.lpg.transport",      // Serial port transport
-        "no.cloudberries.lpg.pls"             // RealSerialTransport
-        // Note: no.cloudberries.lpg.emulator is NOT scanned - has web dependencies
-        // For LAB mode, emulator is created directly in TransportConfiguration
+        "no.cloudberries.lpg.headless",       // Headless config, startup
+        "no.cloudberries.lpg.api.controller", // REST controllers from webapp
+        "no.cloudberries.lpg.service",        // Business logic
+        "no.cloudberries.lpg.communication",  // EhlCommunicator
+        "no.cloudberries.lpg.transport",      // Serial transport
+        "no.cloudberries.lpg.pls"             // PLS protocol
     ]
+    // Note: no.cloudberries.lpg.api.config excluded - headless has its own config
 )
-// EntityScan and EnableJpaRepositories are defined in ServiceConfiguration
 @EnableScheduling
 class HeadlessApplication
 

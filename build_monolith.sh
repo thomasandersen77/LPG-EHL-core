@@ -2,14 +2,14 @@
 # build_monolith.sh - Build LPG-EHL Applications
 #
 # Output: 
-#   release/lpg-ehl-webapp.jar    - Web UI + REST API (Undertow)
-#   release/lpg-ehl-headless.jar  - Background Service + Debug API
-#   release/lpg-ehl-cli.jar       - Command Line Tools
+#   release/lpg-ehl-webapp.jar    - Web UI + REST API
+#   release/lpg-ehl-headless.jar  - Background Service (+ debug-api profil)
+#   release/pls-sim.jar           - PLS Simulator (for socat testing)
 #
 # Usage:
-#   ./build_monolith.sh              # Build with tests
-#   ./build_monolith.sh --skip-tests # Build without tests
-#   ./build_monolith.sh --verbose    # Show full Maven output
+#   ./build_monolith.sh              # Build all
+#   ./build_monolith.sh --skip-tests # Skip tests
+#   ./build_monolith.sh --verbose    # Show Maven output
 
 set -e
 
@@ -18,6 +18,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+CYAN='\033[0;36m'
 GRAY='\033[0;90m'
 BOLD='\033[1m'
 NC='\033[0m'
@@ -106,7 +107,7 @@ PKG_ARGS="-DskipTests -q"
 
 run_maven "WebApp package" package -pl lpg-ehl-webapp -am $PKG_ARGS
 run_maven "Headless package" package -pl lpg-ehl-app-headless -am $PKG_ARGS
-run_maven "CLI package" package -pl lpg-ehl-cli -am $PKG_ARGS
+run_maven "PLS Sim package" package -pl lpg-ehl-serialport-sim -am $PKG_ARGS
 
 echo -e "${GREEN}✓${NC}"
 
@@ -119,11 +120,11 @@ mkdir -p "$RELEASE_DIR"
 # Find and copy JARs
 WEBAPP_JAR=$(find "$SCRIPT_DIR/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
 HEADLESS_JAR=$(find "$SCRIPT_DIR/lpg-ehl-app-headless/target" -name "lpg-ehl-app-headless-*.jar" -not -name "*-plain.jar" | head -1)
-CLI_JAR=$(find "$SCRIPT_DIR/lpg-ehl-cli/target" -name "lpg-ehl-cli-*.jar" -not -name "*-plain.jar" | head -1)
+PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
 
 cp "$WEBAPP_JAR" "$RELEASE_DIR/lpg-ehl-webapp.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-webapp.jar"
 cp "$HEADLESS_JAR" "$RELEASE_DIR/lpg-ehl-headless.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-headless.jar"
-cp "$CLI_JAR" "$RELEASE_DIR/lpg-ehl-cli.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-cli.jar"
+cp "$PLS_SIM_JAR" "$RELEASE_DIR/pls-sim.jar" && chmod +x "$RELEASE_DIR/pls-sim.jar"
 
 echo -e "${GREEN}✓${NC}"
 
@@ -135,7 +136,7 @@ BUILD_TIME=$(printf "%d:%02d" $((BUILD_DURATION / 60)) $((BUILD_DURATION % 60)))
 # Sizes
 WEBAPP_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-webapp.jar" | cut -f1)
 HEADLESS_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-headless.jar" | cut -f1)
-CLI_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-cli.jar" | cut -f1)
+PLS_SIM_SIZE=$(du -h "$RELEASE_DIR/pls-sim.jar" | cut -f1)
 
 # Clean up build log on success
 rm -f "$BUILD_LOG"
@@ -143,154 +144,29 @@ rm -f "$BUILD_LOG"
 echo ""
 echo -e "${GREEN}✓ BUILD COMPLETE${NC} ${GRAY}($BUILD_TIME)${NC}"
 echo ""
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ARTIFACT DETAILS
-# ═══════════════════════════════════════════════════════════════════════════════
-
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  📦 RELEASE ARTIFACTS${NC}"
+echo -e "${BOLD}  📦 ARTIFACTS${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-
-# ─────────────────────────────────────────────────────────────────────────────
-# WEBAPP
-# ─────────────────────────────────────────────────────────────────────────────
-echo -e "${YELLOW}┌─────────────────────────────────────────────────────────────┐${NC}"
-echo -e "${YELLOW}│${NC} ${BOLD}🖥️  WEBAPP${NC} ${GRAY}($WEBAPP_SIZE)${NC}"
-echo -e "${YELLOW}│${NC} ${GRAY}release/lpg-ehl-webapp.jar${NC}"
-echo -e "${YELLOW}├─────────────────────────────────────────────────────────────┤${NC}"
-echo -e "${YELLOW}│${NC}"
-echo -e "${YELLOW}│${NC} ${BOLD}Innhold:${NC}"
-echo -e "${YELLOW}│${NC}   • React frontend (Control Panel UI)"
-echo -e "${YELLOW}│${NC}   • REST API + Swagger UI"
-echo -e "${YELLOW}│${NC}   • Undertow webserver (port 8080)"
-echo -e "${YELLOW}│${NC}   • WebSocket real-time updates"
-echo -e "${YELLOW}│${NC}   • EHL protokoll + emulator"
-echo -e "${YELLOW}│${NC}"
-echo -e "${YELLOW}│${NC} ${BOLD}Start (LAB mode med emulator):${NC}"
-echo -e "${YELLOW}│${NC}"
-echo -e "${YELLOW}│${NC}   java -jar release/lpg-ehl-webapp.jar"
-echo -e "${YELLOW}│${NC}"
-echo -e "${YELLOW}│${NC}   ${GRAY}→ http://localhost:8080${NC}"
-echo -e "${YELLOW}│${NC}   ${GRAY}→ http://localhost:8080/swagger-ui.html${NC}"
-echo -e "${YELLOW}│${NC}"
-echo -e "${YELLOW}│${NC} ${BOLD}Start (FIELD mode med fysisk pumpe):${NC}"
-echo -e "${YELLOW}│${NC}"
-echo -e "${YELLOW}│${NC}   java -jar release/lpg-ehl-webapp.jar \\"
-echo -e "${YELLOW}│${NC}     --lpg.mode=FIELD \\"
-echo -e "${YELLOW}│${NC}     --ehl.serial.port=/dev/ttyS1 \\"
-echo -e "${YELLOW}│${NC}     --server.port=8080"
-echo -e "${YELLOW}│${NC}"
-echo -e "${YELLOW}│${NC} ${BOLD}Miljøvariabler:${NC}"
-echo -e "${YELLOW}│${NC}   LPG_MODE=LAB|FIELD         ${GRAY}# LAB=emulator, FIELD=hardware${NC}"
-echo -e "${YELLOW}│${NC}   EHL_SERIAL_PORT=/dev/ttyS1 ${GRAY}# Seriell port (FIELD mode)${NC}"
-echo -e "${YELLOW}│${NC}   SERVER_PORT=8080           ${GRAY}# HTTP port${NC}"
-echo -e "${YELLOW}│${NC}   DB_HOST=localhost          ${GRAY}# PostgreSQL host${NC}"
-echo -e "${YELLOW}│${NC}   DB_PASSWORD=secret         ${GRAY}# PostgreSQL passord${NC}"
-echo -e "${YELLOW}└─────────────────────────────────────────────────────────────┘${NC}"
+echo -e "  ${YELLOW}release/lpg-ehl-webapp.jar${NC}    ${GRAY}($WEBAPP_SIZE)${NC}"
+echo -e "  ${GREEN}release/lpg-ehl-headless.jar${NC}  ${GRAY}($HEADLESS_SIZE)${NC}"
+echo -e "  ${CYAN}release/pls-sim.jar${NC}           ${GRAY}($PLS_SIM_SIZE)${NC}"
 echo ""
-
-# ─────────────────────────────────────────────────────────────────────────────
-# HEADLESS
-# ─────────────────────────────────────────────────────────────────────────────
-echo -e "${GREEN}┌─────────────────────────────────────────────────────────────┐${NC}"
-echo -e "${GREEN}│${NC} ${BOLD}🤖 HEADLESS${NC} ${GRAY}($HEADLESS_SIZE)${NC}"
-echo -e "${GREEN}│${NC} ${GRAY}release/lpg-ehl-headless.jar${NC}"
-echo -e "${GREEN}├─────────────────────────────────────────────────────────────┤${NC}"
-echo -e "${GREEN}│${NC}"
-echo -e "${GREEN}│${NC} ${BOLD}Innhold:${NC}"
-echo -e "${GREEN}│${NC}   • Ingen webserver (minimal footprint)"
-echo -e "${GREEN}│${NC}   • EHL protokoll + seriell kommunikasjon"
-echo -e "${GREEN}│${NC}   • Database-persistering"
-echo -e "${GREEN}│${NC}   • Scheduled tasks (polling, watchdog)"
-echo -e "${GREEN}│${NC}   • Valgfri Debug API (Undertow)"
-echo -e "${GREEN}│${NC}"
-echo -e "${GREEN}│${NC} ${BOLD}Start (LAB mode, ingen webserver):${NC}"
-echo -e "${GREEN}│${NC}"
-echo -e "${GREEN}│${NC}   java -jar release/lpg-ehl-headless.jar"
-echo -e "${GREEN}│${NC}"
-echo -e "${GREEN}│${NC} ${BOLD}Start (FIELD mode med Debug API for curl-testing):${NC}"
-echo -e "${GREEN}│${NC}"
-echo -e "${GREEN}│${NC}   java -jar release/lpg-ehl-headless.jar \\"
-echo -e "${GREEN}│${NC}     --spring.profiles.active=debug-api,local \\"
-echo -e "${GREEN}│${NC}     --lpg.mode=FIELD \\"
-echo -e "${GREEN}│${NC}     --ehl.serial.port=/dev/ttyS1"
-echo -e "${GREEN}│${NC}"
-echo -e "${GREEN}│${NC}   ${GRAY}Debug API endepunkter (kun med debug-api profil):${NC}"
-echo -e "${GREEN}│${NC}   ${GRAY}  curl http://IP:8080/api/debug/health${NC}"
-echo -e "${GREEN}│${NC}   ${GRAY}  curl http://IP:8080/api/debug/state/1${NC}"
-echo -e "${GREEN}│${NC}   ${GRAY}  curl -X POST http://IP:8080/api/debug/linetest/1${NC}"
-echo -e "${GREEN}│${NC}   ${GRAY}  curl -X POST http://IP:8080/api/debug/unblock/1${NC}"
-echo -e "${GREEN}│${NC}   ${GRAY}  curl -X POST http://IP:8080/api/debug/block/1${NC}"
-echo -e "${GREEN}│${NC}"
-echo -e "${GREEN}│${NC} ${BOLD}Profiler:${NC}"
-echo -e "${GREEN}│${NC}   ${GRAY}(ingen)${NC}      → Headless, ingen webserver"
-echo -e "${GREEN}│${NC}   debug-api   → Undertow på port 8080 for curl"
-echo -e "${GREEN}│${NC}   local       → Lokal database-config"
-echo -e "${GREEN}│${NC}"
-echo -e "${GREEN}│${NC} ${BOLD}Miljøvariabler:${NC}"
-echo -e "${GREEN}│${NC}   LPG_MODE=LAB|FIELD         ${GRAY}# LAB=emulator, FIELD=hardware${NC}"
-echo -e "${GREEN}│${NC}   EHL_SERIAL_PORT=/dev/ttyS1 ${GRAY}# Seriell port (FIELD mode)${NC}"
-echo -e "${GREEN}│${NC}   DEBUG_API_PORT=8080        ${GRAY}# Port for debug-api profil${NC}"
-echo -e "${GREEN}│${NC}   DB_HOST=localhost          ${GRAY}# PostgreSQL host${NC}"
-echo -e "${GREEN}│${NC}   DB_PASSWORD=secret         ${GRAY}# PostgreSQL passord${NC}"
-echo -e "${GREEN}└─────────────────────────────────────────────────────────────┘${NC}"
-echo ""
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CLI
-# ─────────────────────────────────────────────────────────────────────────────
-echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
-echo -e "${BLUE}│${NC} ${BOLD}⚡ CLI${NC} ${GRAY}($CLI_SIZE)${NC}"
-echo -e "${BLUE}│${NC} ${GRAY}release/lpg-ehl-cli.jar${NC}"
-echo -e "${BLUE}├─────────────────────────────────────────────────────────────┤${NC}"
-echo -e "${BLUE}│${NC}"
-echo -e "${BLUE}│${NC} ${BOLD}Innhold:${NC}"
-echo -e "${BLUE}│${NC}   • Spring Shell interaktiv CLI"
-echo -e "${BLUE}│${NC}   • EHL protokoll-kommandoer"
-echo -e "${BLUE}│${NC}   • Database-operasjoner"
-echo -e "${BLUE}│${NC}"
-echo -e "${BLUE}│${NC} ${BOLD}Start (interaktiv shell):${NC}"
-echo -e "${BLUE}│${NC}"
-echo -e "${BLUE}│${NC}   java -jar release/lpg-ehl-cli.jar"
-echo -e "${BLUE}│${NC}"
-echo -e "${BLUE}│${NC} ${BOLD}Eksempel-kommandoer:${NC}"
-echo -e "${BLUE}│${NC}   java -jar release/lpg-ehl-cli.jar help"
-echo -e "${BLUE}│${NC}   java -jar release/lpg-ehl-cli.jar linetest --addr=1"
-echo -e "${BLUE}│${NC}"
-echo -e "${BLUE}│${NC} ${BOLD}Miljøvariabler:${NC}"
-echo -e "${BLUE}│${NC}   LPG_MODE=LAB|FIELD         ${GRAY}# LAB=emulator, FIELD=hardware${NC}"
-echo -e "${BLUE}│${NC}   EHL_SERIAL_PORT=/dev/ttyS1 ${GRAY}# Seriell port (FIELD mode)${NC}"
-echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
-echo ""
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# QUICK START
-# ═══════════════════════════════════════════════════════════════════════════════
-
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  🚀 QUICK START${NC}"
+echo -e "${BOLD}  🚀 BRUK${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${BOLD}Utvikling (LAB mode med emulator):${NC}"
-echo -e "    java -jar release/lpg-ehl-webapp.jar"
-echo -e "    ${GRAY}→ Åpne http://localhost:8080${NC}"
+echo -e "  ${BOLD}1. Start socat + simulator:${NC}"
+echo -e "     ./scripts/start-socat-sim.sh"
 echo ""
-echo -e "  ${BOLD}Felt-test (FIELD mode med Debug API):${NC}"
-echo -e "    java -jar release/lpg-ehl-headless.jar \\"
-echo -e "      --spring.profiles.active=debug-api \\"
-echo -e "      --lpg.mode=FIELD \\"
-echo -e "      --ehl.serial.port=/dev/ttyS1"
+echo -e "  ${BOLD}2. Start i IntelliJ:${NC}"
+echo -e "     • Webapp (SOCAT)        → http://localhost:8080"
+echo -e "     • Headless (Debug API)  → curl localhost:8081"
 echo ""
-echo -e "    ${GRAY}# Test fra laptop:${NC}"
-echo -e "    ${GRAY}curl http://ARK-IP:8080/api/debug/health${NC}"
-echo -e "    ${GRAY}curl -X POST http://ARK-IP:8080/api/debug/unblock/1${NC}"
-echo ""
-echo -e "  ${BOLD}Produksjon (FIELD mode, headless):${NC}"
-echo -e "    java -jar release/lpg-ehl-headless.jar \\"
-echo -e "      --lpg.mode=FIELD \\"
-echo -e "      --ehl.serial.port=/dev/ttyS1"
+echo -e "  ${BOLD}   Eller via JAR:${NC}"
+echo -e "     java -jar release/lpg-ehl-webapp.jar \\"
+echo -e "       --spring.config.location=file:./application-h2.yaml \\"
+echo -e "       --ehl.transport.mode=SOCAT --ehl.serial.port=/tmp/ttyV1"
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""

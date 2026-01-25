@@ -1,0 +1,260 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# LPG EHL - External H2 Configuration for Development and Testing
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This file is placed OUTSIDE the JAR for easy configuration changes without
+# rebuilding. Perfect for changing serial parameters during iterative testing.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+# USAGE MODES
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# 1. HEADLESS (no web server, polling daemon only):
+#    java -jar release/lpg-ehl-headless.jar \
+#      --spring.config.location=file:./application-h2.yaml
+#
+# 2. HEADLESS + DEBUG API (REST endpoints for curl testing):
+#    java -jar release/lpg-ehl-headless.jar \
+#      --spring.config.location=file:./application-h2.yaml \
+#      --spring.profiles.active=h2,debug-api
+#
+# 3. WEBAPP (full GUI with WebSocket logging):
+#    java -jar release/lpg-ehl-webapp.jar \
+#      --spring.config.location=file:./application-h2.yaml
+#
+# 4. EMULATOR (TCP server for Windows Dispenser Control testing):
+#    java -jar release/lpg-ehl-emulator.jar \
+#      --spring.config.location=file:./application-h2.yaml
+#
+# 5. WEBAPP + EMULATOR (run both for full testing with Dispenser Control):
+#    # Terminal 1: Start webapp
+#    java -jar release/lpg-ehl-webapp.jar --spring.config.location=file:./application-h2.yaml --spring.profiles.active=h2
+#    # Terminal 2: Start emulator TCP server (port 9000)
+#    java -jar release/lpg-ehl-emulator.jar --spring.config.location=file:./application-h2.yaml --spring.profiles.active=h2
+#
+# 6. WEBAPP + SOCAT (H2 database med ekte seriell via SOCAT):
+#    java -jar release/lpg-ehl-webapp.jar \
+#      --spring.config.location=file:./application-h2.yaml \
+#      --spring.profiles.active=h2,field
+#
+#    Sett opp SOCAT først:
+#    socat -d -d pty,raw,echo=0,link=/tmp/ttyV1 pty,raw,echo=0,link=/tmp/ttyV2
+#
+# TIP: Use the launcher scripts in scripts/ folder:
+#    ./scripts/run-h2-headless.sh       # Headless mode
+#    ./scripts/run-h2-headless.sh --api # Headless + debug API
+#    ./scripts/run-h2-webapp.sh         # Webapp only
+#    ./scripts/run-h2-full.sh           # Webapp + Emulator TCP server
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+spring:
+  config:
+    activate:
+      on-profile: h2
+  application:
+    name: lpg-ehl
+  security:
+    user:
+      name: admin
+      password: admin123
+  
+  # H2 In-Memory Database Configuration
+  # Data is reset on restart - perfect for testing
+  datasource:
+    url: jdbc:h2:mem:lpgdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+  
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+  
+  # H2 Console - http://localhost:8080/h2-console (webapp only)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
+  
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EXTERNAL SERVICES (disabled for offline testing)
+# ═══════════════════════════════════════════════════════════════════════════════
+azure:
+  enabled: false
+
+nets:
+  cloud-connect:
+    host: localhost
+    port: 6001
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WEBAPP CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+security:
+  api-token: ${API_AUTH_TOKEN:dev-token-12345}
+  cors:
+    allowed-origins: http://localhost:3001,http://localhost:8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOGGING CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+# 
+# Nivåer: ERROR < WARN < INFO < DEBUG < TRACE
+#
+# For detaljert protokoll-logging, sett:
+#   no.cloudberries.lpg.communication: DEBUG
+#   no.cloudberries.lpg.protocol: DEBUG
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg: INFO
+    no.cloudberries.lpg.communication: DEBUG    # TX/RX bytes
+    no.cloudberries.lpg.protocol: DEBUG         # EHL packet parsing
+    no.cloudberries.lpg.emulator: INFO          # Emulator events
+    org.hibernate.SQL: WARN
+    org.springframework: WARN
+    liquibase: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%15.15thread] %logger{25} - %msg%n"
+  file:
+    name: ./logs/lpg-ehl.log
+    max-size: 10MB
+    max-history: 30
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SERIAL PORT CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+# 
+# Standard EHL Protocol: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
+#
+# Common port paths:
+#   Linux:   /dev/ttyS0, /dev/ttyUSB0, /dev/ttyAMA0 (Raspberry Pi)
+#   macOS:   /dev/cu.usbserial-xxxx, /tmp/ttyV1 (socat PTY)
+#   Windows: COM1, COM3, etc.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+ehl:
+  transport:
+    # Transport mode: EMULATOR, SOCAT, or HARDWARE
+    #   EMULATOR - In-memory emulator, no hardware needed (default for webapp)
+    #   SOCAT    - Virtual PTY via socat, for simulator testing
+    #   HARDWARE - Real serial port (production)
+    mode: ${EHL_TRANSPORT_MODE:EMULATOR}
+  
+  serial:
+    # Serial port device path (for SOCAT and HARDWARE modes)
+    port: ${EHL_SERIAL_PORT:/dev/ttyS0}
+    baud-rate: ${EHL_BAUD_RATE:9600}
+    data-bits: 8
+    parity: EVEN
+    stop-bits: 1
+    # Timeouts (ms)
+    read-timeout-ms: 3000
+    write-timeout-ms: 1000
+  
+  emulator:
+    # Emulator configuration (when mode=EMULATOR)
+    enabled: true
+    dispenser-address: 1
+    price-per-liter-cents: 1590  # 15.90 NOK/L
+    latency-ms: 20               # Simulated serial delay
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EMULATOR TCP SERVER CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+# 
+# The emulator module runs a TCP server that accepts connections from Windows
+# "Dispenser Control" application. It translates legacy text commands like
+# <TANK_DISP_UNBLOCK> to EHL binary protocol.
+#
+# Connect from Windows Dispenser Control to: [HOST_IP]:9000
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+emulator:
+  address: ${EMULATOR_ADDRESS:1}
+  price-per-litre-cents: ${EMULATOR_PRICE_PER_LITRE_CENTS:1590}
+  litres-per-second: ${EMULATOR_LITRES_PER_SECOND:0.5}
+  # TCP server port for Windows Dispenser Control
+  port: ${EMULATOR_PORT:9000}
+
+# LPG API client (emulator -> webapp API)
+lpg-api:
+  base-url: ${LPG_API_BASE_URL:http://localhost:8080}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LPG APPLICATION CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+lpg:
+  mode: ${LPG_MODE:LAB}  # LAB (emulator testing) or FIELD (real hardware)
+  dispenser:
+    address: ${LPG_DISPENSER_ADDRESS:1}
+  polling:
+    interval-ms: ${LPG_POLLING_INTERVAL_MS:2000}
+  price:
+    per-liter: ${LPG_PRICE_PER_LITER:15.90}
+  station:
+    id: ${STATION_ID:STATION-001}
+    name: ${STATION_NAME:Test Stasjon}
+
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# FIELD PROFILE - Real hardware/SOCAT transport
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Bruk: --spring.profiles.active=h2,field
+#
+# Kombinerer H2 database med ekte seriell kommunikasjon via SOCAT eller hardware.
+# Perfekt for testing mot din simulator over virtuell PTY.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+spring:
+  config:
+    activate:
+      on-profile: field
+
+ehl:
+  transport:
+    mode: SOCAT
+  serial:
+    port: ${EHL_SERIAL_PORT:/tmp/ttyV1}
+
+lpg:
+  mode: FIELD

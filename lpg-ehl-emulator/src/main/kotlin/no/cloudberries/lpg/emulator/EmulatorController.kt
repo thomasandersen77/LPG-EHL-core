@@ -1,11 +1,21 @@
 package no.cloudberries.lpg.emulator
 
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
+/**
+ * REST controller for standalone emulator TCP server.
+ * Only loaded when emulator.standalone.enabled=true.
+ */
 @RestController
 @RequestMapping("/api/v1/emulator")
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class EmulatorController(
     private val emulatorService: EmulatorService,
     private val scenarioService: EmulatorScenarioService,

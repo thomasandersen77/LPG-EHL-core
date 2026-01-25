@@ -147,11 +147,24 @@ class PumpStateService(
         )
     }
     
+    // STATE byte flags for dispenser status (from EHL protocol)
+    companion object {
+        const val STATE_FLAG_TRANSACTION_COMPLETE = 0x08  // Payment pending - transaction not settled
+        const val STATE_FLAG_PUMPING = 0x04               // Currently pumping
+        const val STATE_FLAG_AUTHORIZED = 0x02            // Authorized for pumping
+        const val STATE_FLAG_NOZZLE_LIFTED = 0x01         // Nozzle is lifted
+    }
+    
     /**
      * Unblock pump ("Fri pumpe") - Start pumping.
      * 
      * Sender UNBLOCK-kommando til dispenser via EhlCommunicator.
      * TX/RX HEX logges automatisk til Protocol-fanen.
+     * 
+     * VIKTIG: Validerer respons for å sikre at UNBLOCK faktisk ble akseptert:
+     * - Sjekker at respons er OK
+     * - Henter STATE og verifiserer at TRANSACTION_COMPLETE flag (0x08) ikke er satt
+     * - Oppretter transaksjon KUN etter bekreftet UNBLOCK
      */
     fun unblock(address: Int = 1): Result<PumpStatus> {
         val state = pumpStates.getOrPut(address) { PumpState(address = address, pricePerLitreKr = currentPriceKr) }
@@ -165,28 +178,93 @@ class PumpStateService(
         }
         
         // Send UNBLOCK-kommando via EhlCommunicator (HEX logges automatisk)
+        val unblockResponse: EhlPacket
         try {
             val unblockPacket = EhlPacket(address, EhlCommand.UNBLOCK, ByteArray(0))
             
-            protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             protocolLogger.info("⛽ FRI PUMPE - Sender UNBLOCK til dispenser #$address")
             
-            val response = runBlocking {
+            unblockResponse = runBlocking {
                 ehlCommunicator.sendAndReceive(unblockPacket, 3000)
             }
             
-            protocolLogger.info("✅ UNBLOCK OK - Respons: ${response.command}")
-            protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            protocolLogger.info("📥 UNBLOCK Respons: ${unblockResponse.command}")
             
         } catch (e: Exception) {
             protocolLogger.error("❌ UNBLOCK FEILET: ${e.message}")
             return Result.failure(e)
         }
         
+        // Steg 1: Valider at respons er OK
+        if (unblockResponse.command != EhlCommand.OK) {
+            protocolLogger.warn("⚠️ UNBLOCK avvist: Forventet OK, fikk ${unblockResponse.command}")
+            protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            return Result.failure(IllegalStateException("UNBLOCK rejected by dispenser: ${unblockResponse.command}"))
+        }
+        
+        // Steg 2: Hent STATE for å verifisere at dispenser faktisk er unblocked
+        val stateResponse: EhlPacket = try {
+            val statePacket = EhlPacket(address, EhlCommand.STATE, ByteArray(0))
+            protocolLogger.info("🔍 Verifiserer dispenser-state...")
+            
+            val response = runBlocking {
+                ehlCommunicator.sendAndReceive(statePacket, 3000)
+            }
+            
+            protocolLogger.info("📥 STATE Respons: ${response.command}, data=${response.data.joinToString(" ") { "%02X".format(it) }}")
+            response
+            
+        } catch (e: Exception) {
+            protocolLogger.warn("⚠️ Kunne ikke hente STATE etter UNBLOCK: ${e.message}")
+            // Fortsett likevel - UNBLOCK ble akseptert, men returner tom STATE for å hoppe over validering
+            EhlPacket(address, EhlCommand.OK, ByteArray(0))  // Return OK (not STATE) to skip validation
+        }
+        
+        // Steg 3: Sjekk TRANSACTION_COMPLETE flag (0x08) i STATE-respons
+        if (stateResponse.command == EhlCommand.STATE && stateResponse.data.isNotEmpty()) {
+            val stateByte = stateResponse.data[0].toInt() and 0xFF
+            
+            if ((stateByte and STATE_FLAG_TRANSACTION_COMPLETE) != 0) {
+                protocolLogger.error("❌ UNBLOCK AVVIST: Dispenser har ubetalt transaksjon (STATE=0x%02X, TRANSACTION_COMPLETE flag satt)".format(stateByte))
+                protocolLogger.info("💳 Forrige transaksjon må betales før ny pumping kan starte")
+                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                return Result.failure(IllegalStateException("Dispenser has pending payment - settle transaction before unblocking"))
+            }
+            
+            // Log state flags for debugging
+            val flagsDesc = buildString {
+                if ((stateByte and STATE_FLAG_PUMPING) != 0) append("PUMPING ")
+                if ((stateByte and STATE_FLAG_AUTHORIZED) != 0) append("AUTHORIZED ")
+                if ((stateByte and STATE_FLAG_NOZZLE_LIFTED) != 0) append("NOZZLE_LIFTED ")
+            }
+            protocolLogger.info("✅ STATE validert: 0x%02X (%s)".format(stateByte, flagsDesc.ifEmpty { "IDLE" }))
+        }
+        
+        protocolLogger.info("✅ UNBLOCK BEKREFTET - Dispenser klar for pumping")
+        protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        
+        // === UNBLOCK ER NÅ BEKREFTET - FØRST NÅ OPPRETTER VI TRANSAKSJON ===
+        
         // Cancel any pending timeout job
         state.timeoutJob?.cancel()
         state.timeoutJob = null
         state.unblockTime = Instant.now()
+        
+        // Pumpe er nå UNBLOCKED og klar til pumping
+        state.state = "READY_TO_PUMP"  // Ny state: Venter på at kunde starter pumping
+        state.volumeLitres = 0.0
+        state.amountKr = 0.0
+        state.pricePerLitreKr = currentPriceKr
+        
+        // Create transaction in database with status STARTED - KUN etter bekreftet UNBLOCK
+        try {
+            val transaction = transactionService.createStartedTransaction(address, currentPriceKr)
+            state.pendingTransactionId = transaction.transactionId
+            protocolLogger.info("📝 Transaksjon opprettet: ID=${transaction.transactionId}, status=STARTED")
+        } catch (e: Exception) {
+            logger.error("❌ Kunne ikke opprette transaksjon: ${e.message}")
+        }
         
         // Find active authorization if any
         authorizationService?.let { authService ->
@@ -199,13 +277,21 @@ class PumpStateService(
             }
         }
         
+        logger.info("═══════════════════════════════════════════════════════════")
+        logger.info("⏱️ 60s TIMEOUT STARTED: Pump $address")
+        logger.info("   Venter på at kunde starter pumping...")
+        logger.info("═══════════════════════════════════════════════════════════")
+        
         // Start 60-second timeout - auto BLOCK if pumping doesn't start
         state.timeoutJob = scope.launch {
             delay(60000)  // 60 seconds
             
             // Check if pumping has started
             if (state.state != "PUMPING") {
-                logger.warn("⏰ 60s timeout - Pumping ikke startet, sender BLOCK til pumpe $address")
+                logger.info("═══════════════════════════════════════════════════════════")
+                logger.info("⏰ 60s TIMEOUT EXPIRED: Pump $address")
+                logger.info("   Pumping ikke startet - sender BLOCK")
+                logger.info("═══════════════════════════════════════════════════════════")
                 
                 try {
                     val blockPacket = EhlPacket(address, EhlCommand.BLOCK, ByteArray(0))
@@ -213,8 +299,25 @@ class PumpStateService(
                         ehlCommunicator.sendAndReceive(blockPacket, 3000)
                     }
                     
+                    // Cancel STARTED transaction with 0 volume
+                    val transactionId = state.pendingTransactionId
+                    if (transactionId != null) {
+                        try {
+                            transactionService.updateTransactionVolume(
+                                transactionId,
+                                0.0,
+                                0.0,
+                                "CANCELLED"
+                            )
+                            logger.info("📝 Transaction $transactionId marked as CANCELLED (60s timeout)")
+                        } catch (e: Exception) {
+                            logger.warn("Could not cancel transaction: ${e.message}")
+                        }
+                    }
+                    
                     state.state = "IDLE"
                     state.unblockTime = null
+                    state.pendingTransactionId = null
                     
                     // Cancel authorization if exists
                     state.authorizationId?.let { authId ->
@@ -222,27 +325,12 @@ class PumpStateService(
                     }
                     state.authorizationId = null
                     
-                    protocolLogger.info("❌ Pumpe $address blokkert etter 60s timeout")
+                    logger.info("🛑 BLOCK SENT: Pump $address blocked after 60s timeout")
                     broadcastStatus(state)
                 } catch (e: Exception) {
                     logger.error("❌ Kunne ikke sende BLOCK etter timeout: ${e.message}")
                 }
             }
-        }
-        
-        // Pumpe er nå UNBLOCKED og klar til pumping
-        state.state = "READY_TO_PUMP"  // Ny state: Venter på at kunde starter pumping
-        state.volumeLitres = 0.0
-        state.amountKr = 0.0
-        state.pricePerLitreKr = currentPriceKr
-        
-        // Create transaction in database with status STARTED
-        try {
-            val transaction = transactionService.createStartedTransaction(address, currentPriceKr)
-            state.pendingTransactionId = transaction.transactionId
-            protocolLogger.info("📝 Transaksjon opprettet: ID=${transaction.transactionId}, status=STARTED")
-        } catch (e: Exception) {
-            logger.error("❌ Kunne ikke opprette transaksjon: ${e.message}")
         }
         
         logger.info("🔓 PUMPE FRIGJORT: Pump $address klar til fylling (60s timeout startet)")
@@ -252,31 +340,22 @@ class PumpStateService(
     }
     
     /**
-     * Start pumping (kalles når kunde fysisk starter pumping ved å trykke på knapp).
+     * Simulate start pumping - for GUI /control panel in LAB MODE.
      * 
-     * Dette markerer overgangen fra READY_TO_PUMP til PUMPING.
-     * Kansellerer 60s timeout siden pumping er startet.
+     * In LAB MODE: Called by frontend to simulate nozzle lift.
+     * In FIELD/SOCAT MODE: Not used - pumping is triggered by hardware state detection.
+     * 
+     * @see pollStateForReadyPumps for hardware-driven detection
      */
-    fun startPumping(address: Int = 1): Result<PumpStatus> {
+    fun simulateStartPumping(address: Int = 1): Result<PumpStatus> {
         val state = pumpStates.getOrPut(address) { PumpState(address = address, pricePerLitreKr = currentPriceKr) }
         
         if (state.state != "READY_TO_PUMP") {
-            return Result.failure(IllegalStateException("Pump must be in READY_TO_PUMP state to start pumping (current: ${state.state})"))
+            return Result.failure(IllegalStateException("Pump must be in READY_TO_PUMP state (current: ${state.state})"))
         }
         
-        // Cancel timeout job - pumping har startet
-        state.timeoutJob?.cancel()
-        state.timeoutJob = null
-        
-        // Start pumping
-        state.state = "PUMPING"
-        state.nozzleLifted = true
-        state.pumpingStartTime = Instant.now()
-        lastLoggedMilestone[address] = 0.0
-        
-        logger.info("⛽ PUMPING STARTED: Pump $address - kunde har startet fylling")
-        protocolLogger.info("⛽️ Pumping startet - 60s timeout kansellert")
-        broadcastStatus(state)
+        logger.info("🎮 GUI SIMULATION: Start pumping requested for pump $address")
+        transitionToPumping(state)
         
         return Result.success(getStatus(address))
     }
@@ -509,6 +588,63 @@ class PumpStateService(
     }
     
     /**
+     * Set pump to AUTHORIZED_WAITING state after card swipe.
+     * 
+     * This state indicates:
+     * - Card has been swiped
+     * - Authorization created
+     * - 60s timeout started
+     * - Pump is NOT unblocked yet - waiting for "FRI DISPENSER" button
+     * 
+     * UNBLOCK is only sent when user explicitly calls /pump/{address}/unblock
+     */
+    fun setAuthorizedWaiting(address: Int, authorizationId: UUID) {
+        val state = pumpStates.getOrPut(address) { PumpState(address = address, pricePerLitreKr = currentPriceKr) }
+        
+        // Cancel any existing timeout
+        state.timeoutJob?.cancel()
+        
+        state.state = "AUTHORIZED_WAITING"
+        state.authorizationId = authorizationId
+        state.volumeLitres = 0.0
+        state.amountKr = 0.0
+        state.pricePerLitreKr = currentPriceKr
+        
+        logger.info("═══════════════════════════════════════════════════════════")
+        logger.info("💳 KORTDRAGNING: Pump $address state -> AUTHORIZED_WAITING")
+        logger.info("   Auth ID: $authorizationId")
+        logger.info("   Venter på FRI DISPENSER (60s timeout)")
+        logger.info("═══════════════════════════════════════════════════════════")
+        
+        // Start 60-second timeout for authorization
+        state.timeoutJob = scope.launch {
+            delay(60000)  // 60 seconds
+            
+            // Check if still in AUTHORIZED_WAITING (user hasn't clicked FRI DISPENSER)
+            if (state.state == "AUTHORIZED_WAITING") {
+                logger.info("═══════════════════════════════════════════════════════════")
+                logger.info("⏰ 60s TIMEOUT EXPIRED: Pump $address")
+                logger.info("   Bruker trykket ikke FRI DISPENSER - kansellerer autorisasjon")
+                logger.info("═══════════════════════════════════════════════════════════")
+                
+                // Cancel authorization
+                state.authorizationId?.let { authId ->
+                    authorizationService?.cancel(authId, "60s timeout - FRI DISPENSER ikke trykket")
+                }
+                
+                // Reset to IDLE
+                state.state = "IDLE"
+                state.authorizationId = null
+                
+                logger.info("❌ Autorisasjon kansellert - pump $address tilbake til IDLE")
+                broadcastStatus(state)
+            }
+        }
+        
+        broadcastStatus(state)
+    }
+    
+    /**
      * Confirm payment for pending transaction on pump.
      * Finds latest PENDING transaction for this dispenser and marks it as PAID.
      */
@@ -602,6 +738,65 @@ class PumpStateService(
         
         logger.info("🚀 PRICE UPDATE: New price set to $priceKr kr/L (RoadTax: $roadTaxEnabled)")
         eventPublisher.publishPriceUpdate(priceKr)
+    }
+    
+    /**
+     * Scheduled task to poll dispenser state when pump is in READY_TO_PUMP.
+     * Detects when customer starts pumping (raw state 0x06/0x07 = PUMPING).
+     * Runs every 500ms.
+     */
+    @Scheduled(fixedRate = 500)
+    fun pollStateForReadyPumps() {
+        pumpStates.values.filter { it.state == "READY_TO_PUMP" }.forEach { state ->
+            try {
+                val statePacket = EhlPacket(state.address, EhlCommand.STATE, ByteArray(0))
+                val response = runBlocking {
+                    ehlCommunicator.sendAndReceive(statePacket, 1000)
+                }
+                
+                if (response.data.isNotEmpty()) {
+                    val rawState = response.data[0].toInt() and 0xFF
+                    
+                    // Check for PUMPING: bits 0x04 (DELIVERY_ACTIVE) + 0x02 (NOZZLE_LIFTED)
+                    // Raw state 0x06 or 0x07 indicates pumping has started
+                    val deliveryActive = (rawState and 0x04) != 0
+                    val nozzleLifted = (rawState and 0x02) != 0
+                    
+                    if (deliveryActive && nozzleLifted) {
+                        logger.info("⛽ HARDWARE PUMPING DETECTED: Raw state 0x%02X for pump %d".format(rawState, state.address))
+                        transitionToPumping(state)
+                    }
+                }
+            } catch (e: Exception) {
+                // Timeout or error - continue polling
+                logger.debug("State poll timeout for pump ${state.address}: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * Internal method to transition from READY_TO_PUMP to PUMPING.
+     * Called when hardware detects pumping has started.
+     */
+    private fun transitionToPumping(state: PumpState) {
+        if (state.state != "READY_TO_PUMP") return
+        
+        // Cancel 60s timeout - pumping has started
+        state.timeoutJob?.cancel()
+        state.timeoutJob = null
+        
+        val previousState = state.state
+        state.state = "PUMPING"
+        state.nozzleLifted = true
+        state.pumpingStartTime = Instant.now()
+        lastLoggedMilestone[state.address] = 0.0
+        
+        logger.info("═══════════════════════════════════════════════════════════")
+        logger.info("⛽ STATE TRANSITION: $previousState → PUMPING (pump ${state.address})")
+        logger.info("   60s timeout cancelled - customer started pumping")
+        logger.info("═══════════════════════════════════════════════════════════")
+        
+        broadcastStatus(state)
     }
     
     /**

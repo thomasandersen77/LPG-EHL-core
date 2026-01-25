@@ -15,7 +15,7 @@ import kotlin.random.Random
  * Simulates payment processing without real terminal hardware.
  */
 @Component
-@Profile("lab", "local", "default")
+@Profile("lab", "local", "default", "h2")
 @Primary
 class MockPaymentGateway : PaymentGateway {
     

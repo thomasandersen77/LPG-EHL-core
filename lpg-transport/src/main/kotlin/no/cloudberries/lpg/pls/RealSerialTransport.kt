@@ -8,6 +8,14 @@ import java.io.IOException
 /**
  * Real serial port transport using jSerialComm.
  * 
+ * @deprecated Use SerialPortManager instead. SerialPortManager provides:
+ * - Robust write handling with partial write retries
+ * - Automatic disconnect on I/O failure (enables clean reconnect)
+ * - Hardware watchdog capability for self-healing
+ * - Unified config model (SerialPortConfig) for LAB and FIELD mode
+ * 
+ * This class is kept for backwards compatibility and will be removed in a future release.
+ * 
  * For produksjon på Debian-baserte edge devices (ARK-3600 eller lignende).
  * Kommuniserer med fysisk RS-485 dispenser via /dev/ttyS0 eller lignende.
  * 
@@ -20,6 +28,10 @@ import java.io.IOException
  * 
  * Serial parametere: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
  */
+@Deprecated(
+    message = "Use SerialPortManager instead - provides watchdog, robust writes, and unified config",
+    replaceWith = ReplaceWith("SerialPortManager(SerialPortConfig.forEhlProtocol(portName))", "no.cloudberries.lpg.communication.SerialPortManager", "no.cloudberries.lpg.communication.SerialPortConfig")
+)
 class RealSerialTransport(
     private val portName: String,
     private val baudRate: Int = 9600,

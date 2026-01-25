@@ -26,7 +26,7 @@ data class EmulatorStatus(
  * timeouts etc.
  */
 @Service
-@Profile("local", "dev")
+@Profile("local", "dev", "h2")
 class EmulatorService {
 
     private val log = LoggerFactory.getLogger(javaClass)

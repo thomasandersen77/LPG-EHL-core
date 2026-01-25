@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+// Build: 2026-01-22T22:50 - Fixed AUTHORIZED_WAITING state display
 
 // API configuration
 // Both webapp frontend and API run on port 8080
@@ -35,14 +36,15 @@ const pumpApi = {
     return res.json();
   },
   cardSwipe: async (address: number = 1, maxAmountKr: number = 2000) => {
+    // NOTE: immediate parameter removed - card-swipe should NEVER auto-unblock
+    // User must click "FRI DISPENSER" button to send UNBLOCK
     const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/card-swipe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         maxAmountKr, 
         triggeredBy: 'WEBAPP_GUI', 
-        paymentMethod: 'SIMULATION',
-        immediate: true  // GUI-modus: Send UNBLOCK direkte
+        paymentMethod: 'SIMULATION'
       })
     });
     return res.json();
@@ -139,6 +141,18 @@ export function ControlPanel() {
     }
   });
 
+  // Unblock mutation (FRI DISPENSER - called AFTER card swipe)
+  const unblockMutation = useMutation({
+    mutationFn: () => pumpApi.unblock(1),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pump-status'] });
+      setErrorMessage(null);
+    },
+    onError: (error: any) => {
+      setErrorMessage(error.message || 'Kunne ikke frigjøre pumpen');
+    }
+  });
+
   // Logs state
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activeChannel, setActiveChannel] = useState<LogChannel | 'all'>('all');
@@ -169,8 +183,22 @@ export function ControlPanel() {
           setLogs(prev => [...prev.slice(-499), data as LogEntry]);
         }
         
-        // Handle pump_update and price_update - refresh pump status immediately
-        if (data.type === 'pump_update' || data.type === 'price_update') {
+        // Handle pump_update - update cache directly for real-time display
+        if (data.type === 'pump_update') {
+          queryClient.setQueryData(['pump-status'], (old: PumpStatus | undefined) => ({
+            ...old,
+            state: data.state,
+            address: data.address,
+            volumeLitres: data.volumeLitres,
+            amountKr: data.amountKr,
+            pricePerLitreKr: data.pricePerLitreKr,
+            nozzleLifted: data.nozzleLifted,
+            hasPendingTransaction: data.hasPendingTransaction
+          } as PumpStatus));
+        }
+        
+        // Handle price_update - refresh status
+        if (data.type === 'price_update') {
           queryClient.invalidateQueries({ queryKey: ['pump-status'] });
         }
       } catch (e) {
@@ -191,9 +219,9 @@ export function ControlPanel() {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
   
-  // 60-second countdown for READY_TO_PUMP state
+  // 60-second countdown for AUTHORIZED_WAITING and READY_TO_PUMP states
   useEffect(() => {
-    if (pumpStatus?.state === 'READY_TO_PUMP') {
+    if (pumpStatus?.state === 'AUTHORIZED_WAITING' || pumpStatus?.state === 'READY_TO_PUMP') {
       setCountdown(60);
       
       const interval = setInterval(() => {
@@ -221,6 +249,8 @@ export function ControlPanel() {
   const getStateColor = (state?: string) => {
     switch (state) {
       case 'IDLE': return 'bg-gray-500';
+      case 'AUTHORIZED_WAITING': return 'bg-yellow-500 animate-pulse';
+      case 'READY_TO_PUMP': return 'bg-green-500';
       case 'AUTHORIZED': return 'bg-yellow-500';
       case 'PUMPING': return 'bg-green-500 animate-pulse';
       case 'STOPPED': return 'bg-blue-500';
@@ -233,6 +263,8 @@ export function ControlPanel() {
   const getStateText = (state?: string) => {
     switch (state) {
       case 'IDLE': return 'Klar';
+      case 'AUTHORIZED_WAITING': return 'Kort registrert';
+      case 'READY_TO_PUMP': return 'Pumpe frigjort';
       case 'AUTHORIZED': return 'Autorisert';
       case 'PUMPING': return 'Leverer...';
       case 'STOPPED': return 'Stoppet';
@@ -361,22 +393,51 @@ export function ControlPanel() {
                   </div>
                 )}
 
-                {/* READY_TO_PUMP: Show FRI DISPENSER button with countdown */}
+                {/* AUTHORIZED_WAITING: Card swiped, waiting for FRI DISPENSER */}
+                {pumpStatus?.state === 'AUTHORIZED_WAITING' && (
+                  <div className="space-y-3">
+                    <div className="text-center py-3">
+                      <div className="text-4xl mb-2">💳</div>
+                      <p className="text-yellow-400 font-bold text-lg">Kort registrert!</p>
+                      <p className="text-gray-400 text-sm mt-2">Reservert beløp: {maxAmount} kr</p>
+                      <p className="text-gray-400 text-sm">Trykk FRI DISPENSER for å starte</p>
+                      {countdown !== null && countdown > 0 && (
+                        <div className="mt-3">
+                          <div className="text-3xl font-bold text-yellow-400">{countdown}s</div>
+                          <p className="text-xs text-gray-400 mt-1">Tid igjen før autorisasjon utløper</p>
+                        </div>
+                      )}
+                      {countdown === 0 && (
+                        <div className="mt-3 text-red-400 font-bold">
+                          ⏰ Timeout - autorisasjon kansellert
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => unblockMutation.mutate()}
+                      disabled={unblockMutation.isPending || countdown === 0}
+                      className={`w-full py-4 rounded-xl font-bold text-xl transition-colors ${
+                        countdown === 0 
+                          ? 'bg-gray-600 cursor-not-allowed' 
+                          : 'bg-green-600 hover:bg-green-700'
+                      }`}
+                    >
+                      {unblockMutation.isPending ? '...' : '🔓 FRI DISPENSER'}
+                    </button>
+                  </div>
+                )}
+
+                {/* READY_TO_PUMP: Pump unblocked, ready for pumping */}
                 {pumpStatus?.state === 'READY_TO_PUMP' && (
                   <div className="space-y-3">
                     <div className="text-center py-3">
                       <div className="text-4xl mb-2">✅</div>
                       <p className="text-green-400 font-bold text-lg">Pumpe frigjort!</p>
-                      <p className="text-gray-400 text-sm mt-2">Reservert beløp: {maxAmount} kr</p>
+                      <p className="text-gray-400 text-sm mt-2">Løft dysen og start fylling</p>
                       {countdown !== null && countdown > 0 && (
                         <div className="mt-3">
                           <div className="text-3xl font-bold text-yellow-400">{countdown}s</div>
                           <p className="text-xs text-gray-400 mt-1">Tid igjen til automatisk BLOCK</p>
-                        </div>
-                      )}
-                      {countdown === 0 && (
-                        <div className="mt-3 text-red-400 font-bold">
-                          ⏰ Timeout - pumpe blokkert
                         </div>
                       )}
                     </div>
@@ -386,10 +447,10 @@ export function ControlPanel() {
                       className={`w-full py-4 rounded-xl font-bold text-xl transition-colors ${
                         countdown === 0 
                           ? 'bg-gray-600 cursor-not-allowed' 
-                          : 'bg-green-600 hover:bg-green-700'
+                          : 'bg-blue-600 hover:bg-blue-700'
                       }`}
                     >
-                      {startPumpingMutation.isPending ? '...' : '🔓 FRI DISPENSER'}
+                      {startPumpingMutation.isPending ? '...' : '⛽ START PUMPING (simuler)'}
                     </button>
                   </div>
                 )}

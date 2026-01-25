@@ -125,33 +125,31 @@ class SerialPortHandler(
     private fun processFrame(frame: ByteArray) {
         if (mode == FrameMode.EHL) {
             // Binary EHL protocol
-            if (logHex) {
-                log.debug("EHL frame received: {}", frame.toHexString())
-            }
-
             val ehlFrame = EhlFrameCodec.decode(frame)
             if (ehlFrame == null) {
-                log.warn("Invalid EHL frame - ignoring")
+                log.warn("Invalid EHL frame - ignoring: {}", frame.toHexString())
                 return
             }
 
-            log.debug("EHL command: 0x{} from addr 0x{}", ehlFrame.cmd.toHex(), ehlFrame.addr.toHex())
+            // INFO-level RX logging for observability
+            val addrInt = ehlFrame.addr.toInt() and 0xFF
+            val cmdName = cmdToName(ehlFrame.cmd)
+            log.info("⬅️  RX EHL: addr={} cmd={} (0x{}) dataLen={} hex={}",
+                addrInt, cmdName, ehlFrame.cmd.toHex(), ehlFrame.data.size, frame.toHexString())
 
             val result = state.processEhlCommand(ehlFrame)
-            val response = when (result) {
-                is EhlCommandResult.OkAck -> {
-                    EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_OK)
-                }
-                is EhlCommandResult.StateResponse -> {
-                    EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_STATE, result.data)
-                }
-                is EhlCommandResult.VolumeResponse -> {
-                    EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_VOLUME, result.data)
-                }
-                is EhlCommandResult.PriceResponse -> {
-                    EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_PRICE, result.data)
-                }
+            val (responseCmd, responseData, responseAddr) = when (result) {
+                is EhlCommandResult.OkAck -> Triple(EhlFrameCodec.CMD_OK, ByteArray(0), result.addr)
+                is EhlCommandResult.StateResponse -> Triple(EhlFrameCodec.CMD_STATE, result.data, result.addr)
+                is EhlCommandResult.VolumeResponse -> Triple(EhlFrameCodec.CMD_VOLUME, result.data, result.addr)
+                is EhlCommandResult.PriceResponse -> Triple(EhlFrameCodec.CMD_PRICE, result.data, result.addr)
             }
+            val response = EhlFrameCodec.encode(responseAddr, responseCmd, responseData)
+
+            // INFO-level TX logging for observability
+            val respCmdName = cmdToName(responseCmd)
+            log.info("➡️  TX EHL: addr={} cmd={} (0x{}) dataLen={} hex={}",
+                addrInt, respCmdName, responseCmd.toHex(), responseData.size, response.toHexString())
 
             sendResponse(response)
 
@@ -176,6 +174,20 @@ class SerialPortHandler(
     }
 
     private fun Byte.toHex(): String = "%02X".format(this)
+
+    /** Map command byte to readable name */
+    private fun cmdToName(cmd: Byte): String = when (cmd) {
+        EhlFrameCodec.CMD_OK -> "OK"
+        EhlFrameCodec.CMD_LINETEST -> "LINETEST"
+        EhlFrameCodec.CMD_STATE -> "STATE"
+        EhlFrameCodec.CMD_VOLUME -> "VOLUME"
+        EhlFrameCodec.CMD_PRICE -> "PRICE"
+        EhlFrameCodec.CMD_BLOCK -> "BLOCK"
+        EhlFrameCodec.CMD_UNBLOCK -> "UNBLOCK"
+        EhlFrameCodec.CMD_STOP -> "STOP"
+        EhlFrameCodec.CMD_RESET -> "RESET"
+        else -> "UNKNOWN"
+    }
 
     /**
      * Build response according to mode (not used for EHL).

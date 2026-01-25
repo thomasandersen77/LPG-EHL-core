@@ -32,6 +32,9 @@ fun main(args: Array<String>) {
     log.info("    Address:   {}", cliArgs.dispenserAddress)
     log.info("    Price:     {} kr/L", cliArgs.priceCents / 100.0)
     log.info("    Blocked:   {}", cliArgs.initiallyBlocked)
+    log.info("")
+    log.info("  Logging:")
+    log.info("    Heartbeat: {} ms", cliArgs.heartbeatIntervalMs)
     log.info("══════════════════════════════════════════════════════════")
     log.info("")
 
@@ -57,6 +60,7 @@ fun main(args: Array<String>) {
     
     Runtime.getRuntime().addShutdownHook(Thread {
         log.info("Shutdown signal received")
+        plsState.shutdown()  // Stop auto-pumping thread
         handler.stop()
         shutdownLatch.countDown()
     })
@@ -64,6 +68,23 @@ fun main(args: Array<String>) {
     try {
         handler.start()
         log.info("PLS Simulator running. Press Ctrl+C to stop.")
+
+        // Periodic heartbeat (INFO) - shows simulator is alive + state
+        val heartbeatIntervalMs = cliArgs.heartbeatIntervalMs
+        val heartbeatThread = Thread({
+            try {
+                while (true) {
+                    Thread.sleep(heartbeatIntervalMs)
+                    log.info(plsState.heartbeatLine())
+                }
+            } catch (_: InterruptedException) {
+                // Shutdown signal
+            } catch (e: Exception) {
+                log.warn("Heartbeat stopped: {}", e.message)
+            }
+        }, "pls-sim-heartbeat")
+        heartbeatThread.isDaemon = true
+        heartbeatThread.start()
         
         // Wait indefinitely until shutdown
         shutdownLatch.await()

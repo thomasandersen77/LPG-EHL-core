@@ -10,12 +10,12 @@ databaseChangeLog:
             replaceIfExists: true
             selectQuery: |
               SELECT 
-                DATE(timestamp) as summary_date,
+                CAST(timestamp AS DATE) as summary_date,
                 dispenser_address,
                 COUNT(*) as transaction_count,
                 SUM(volume_deciliters) as total_volume_deciliters,
                 SUM(amount_ore) as total_amount_ore,
                 AVG(price_per_liter) as avg_price_per_liter
               FROM transactions
-              GROUP BY DATE(timestamp), dispenser_address
+              GROUP BY CAST(timestamp AS DATE), dispenser_address
               ORDER BY summary_date DESC, dispenser_address
