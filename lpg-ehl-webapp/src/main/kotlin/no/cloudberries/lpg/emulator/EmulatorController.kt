@@ -1,11 +1,13 @@
 package no.cloudberries.lpg.emulator
 
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Profile
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/v1/emulator")
+@Profile("local", "dev", "h2")
 class EmulatorController(
     private val emulatorService: EmulatorService
 ) {

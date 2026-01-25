@@ -32,6 +32,9 @@ fun main(args: Array<String>) {
     log.info("    Address:   {}", cliArgs.dispenserAddress)
     log.info("    Price:     {} kr/L", cliArgs.priceCents / 100.0)
     log.info("    Blocked:   {}", cliArgs.initiallyBlocked)
+    log.info("")
+    log.info("  Logging:")
+    log.info("    Heartbeat: {} ms", cliArgs.heartbeatIntervalMs)
     log.info("══════════════════════════════════════════════════════════")
     log.info("")
 
@@ -67,10 +70,11 @@ fun main(args: Array<String>) {
         log.info("PLS Simulator running. Press Ctrl+C to stop.")
 
         // Periodic heartbeat (INFO) - shows simulator is alive + state
+        val heartbeatIntervalMs = cliArgs.heartbeatIntervalMs
         val heartbeatThread = Thread({
             try {
                 while (true) {
-                    Thread.sleep(5000)
+                    Thread.sleep(heartbeatIntervalMs)
                     log.info(plsState.heartbeatLine())
                 }
             } catch (_: InterruptedException) {

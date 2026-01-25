@@ -69,5 +69,10 @@ databaseChangeLog:
                   name: effective_from
                   descending: true
         - sql:
-            sql: "INSERT INTO price_history (id, product_code, product_name, price_per_liter, vat_rate, effective_from, created_by) VALUES (random_uuid(), 'LPG', 'LPG (Flytende petroleumsgass)', 15.90, 0.25, CURRENT_TIMESTAMP, 'system')"
-            comment: "Initialize with current default LPG price"
+            dbms: postgresql
+            sql: "INSERT INTO price_history (id, product_code, product_name, price_per_liter, vat_rate, effective_from, created_by) VALUES (gen_random_uuid(), 'LPG', 'LPG (Flytende petroleumsgass)', 15.90, 0.25, CURRENT_TIMESTAMP, 'system')"
+            comment: "Initialize with current default LPG price (PostgreSQL)"
+        - sql:
+            dbms: h2
+            sql: "INSERT INTO price_history (id, product_code, product_name, price_per_liter, vat_rate, effective_from, created_by) VALUES (RANDOM_UUID(), 'LPG', 'LPG (Flytende petroleumsgass)', 15.90, 0.25, CURRENT_TIMESTAMP, 'system')"
+            comment: "Initialize with current default LPG price (H2)"

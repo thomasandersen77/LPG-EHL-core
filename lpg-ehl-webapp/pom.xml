@@ -194,7 +194,6 @@
                 <executions>
                     <execution>
                         <goals>
-                            <!-- Repackage goal creates executable Fat JAR -->
                             <goal>repackage</goal>
                         </goals>
                     </execution>

@@ -199,11 +199,21 @@ class PlsState(
                 EhlCommandResult.VolumeResponse(frame.addr, volumeBytes)
             }
             EhlFrameCodec.CMD_PRICE -> {
-                // Core expects 4 ASCII digits in LSB-first order (cents)
-                val priceStr = "%04d".format(getPrice().coerceIn(0, 9999))
-                val priceBytes = priceStr.reversed().map { it.code.toByte() }.toByteArray()
-                log.debug("💰 PRICE request from dispenser $addrInt -> ${getPrice()/100.0} kr/L (raw=$priceStr)")
-                EhlCommandResult.PriceResponse(frame.addr, priceBytes)
+                if (frame.data.isNotEmpty()) {
+                    // SET PRICE: data contains 4 ASCII digits in LSB-first order (cents)
+                    // e.g. [0x30, 0x39, 0x35, 0x31] = "0951" reversed = "1590" = 15.90 kr/L
+                    val priceStr = frame.data.reversed().map { (it.toInt() and 0xFF).toChar() }.joinToString("")
+                    val priceCents = priceStr.toIntOrNull() ?: getPrice()
+                    setPrice(priceCents)
+                    log.info("💰 PRICE SET from controller: ${priceCents/100.0} kr/L (raw=$priceStr)")
+                    EhlCommandResult.OkAck(frame.addr)
+                } else {
+                    // GET PRICE: return current price as 4 ASCII digits in LSB-first order (cents)
+                    val priceStr = "%04d".format(getPrice().coerceIn(0, 9999))
+                    val priceBytes = priceStr.reversed().map { it.code.toByte() }.toByteArray()
+                    log.debug("💰 PRICE GET from controller -> ${getPrice()/100.0} kr/L (raw=$priceStr)")
+                    EhlCommandResult.PriceResponse(frame.addr, priceBytes)
+                }
             }
             EhlFrameCodec.CMD_BLOCK -> {
                 setBlocked(addrInt, true)

@@ -9,7 +9,6 @@ databaseChangeLog:
               - column:
                   name: id
                   type: uuid
-                  defaultValueComputed: RANDOM_UUID()
                   constraints:
                     primaryKey: true
                     nullable: false
@@ -52,8 +51,13 @@ databaseChangeLog:
                   name: effective_from
                   descending: true
         - sql:
-            sql: "INSERT INTO road_tax_settings (tax_per_liter_ore, effective_from, created_by, description) VALUES (200, CURRENT_TIMESTAMP, 'system', 'Veitrafikkavgift 2026 - Initial default')"
-            comment: "Initialize with default Norwegian road tax rate (2.00 kr/L)"
+            dbms: postgresql
+            sql: "INSERT INTO road_tax_settings (id, tax_per_liter_ore, effective_from, created_by, description) VALUES (gen_random_uuid(), 200, CURRENT_TIMESTAMP, 'system', 'Veitrafikkavgift 2026 - Initial default')"
+            comment: "Initialize with default Norwegian road tax rate (PostgreSQL)"
+        - sql:
+            dbms: h2
+            sql: "INSERT INTO road_tax_settings (id, tax_per_liter_ore, effective_from, created_by, description) VALUES (RANDOM_UUID(), 200, CURRENT_TIMESTAMP, 'system', 'Veitrafikkavgift 2026 - Initial default')"
+            comment: "Initialize with default Norwegian road tax rate (H2)"
 
   - changeSet:
       id: 008-add-road-tax-to-transactions

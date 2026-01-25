@@ -8,14 +8,11 @@ import no.cloudberries.lpg.protocol.EhlPacket
 import no.cloudberries.lpg.service.pump.PumpStateService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.context.annotation.Profile
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 /**
- * Debug API Controller for felt-testing via curl.
- * 
- * Kun aktiv med profil: --spring.profiles.active=debug-api
+ * Debug API Controller for testing via curl.
  * 
  * Eksempler:
  * ```
@@ -26,7 +23,6 @@ import org.springframework.web.bind.annotation.*
  * curl -X POST http://localhost:8080/api/debug/block/1
  * ```
  */
-@Profile("debug-api")
 @RestController
 @RequestMapping("/api/debug")
 class DebugController(

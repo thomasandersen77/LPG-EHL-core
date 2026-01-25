@@ -2,44 +2,41 @@ spring:
   application:
     name: lpg-ehl-headless
   main:
-    # DEFAULT: No web server (headless mode)
-    # Activate debug-api profile to enable Undertow web server
-    web-application-type: none
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
+    # Web server enabled by default (Undertow)
+    web-application-type: servlet
   
-  # Database Configuration
+  # H2 Persistent Database - DEFAULT
+  # Data is stored in ./data/lpgdb.mv.db and persists across restarts
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lpg_ehl}
-    username: ${DB_USER:lpg_user}
-    password: ${DB_PASSWORD:lpg_dev_password}
-    driver-class-name: org.postgresql.Driver
+    url: jdbc:h2:file:./data/lpgdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
+      maximum-pool-size: 5
+      minimum-idle: 1
       connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
   
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
-        jdbc:
-          batch_size: 20
-        order_inserts: true
-        order_updates: true
+  
+  # H2 Console - http://localhost:8080/h2-console
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
   
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
-    default-schema: public
-    liquibase-schema: public
-    drop-first: false
   
   jackson:
     serialization:
@@ -97,75 +94,62 @@ logging:
     max-history: 30
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# EHL PROTOCOL CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════════════════
-# 
-# TRI-MODE ARKITEKTUR (ehl.transport.mode):
-#
-#   EMULATOR:
-#     - InMemorySerialPort + EhlDispenserEmulator
-#     - Ingen fysisk hardware nødvendig
-#     - Perfekt for utvikling og testing
-#
-#   SOCAT:
-#     - RealSerialTransport + virtuell PTY (socat)
-#     - PLS Simulator på andre enden av PTY
-#     - Realistisk serial testing uten hardware
-#     - Bruk: ./scripts/start-socat-sim.sh
-#
-#   HARDWARE (Default for headless):
-#     - RealSerialTransport + fysisk RS-485
-#     - Kommuniserer med ekte LPG-pumpe
-#     - Kun for produksjon på ARK-3600
-#
-# ═══════════════════════════════════════════════════════════════════════════════
-# SERIAL PORT CONFIGURATION
+# EHL SERIAL PORT CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Port name examples:
+# Port examples:
 #   Linux:   /dev/ttyS0, /dev/ttyUSB0, /dev/ttyAMA0 (Raspberry Pi)
-#   macOS:   /dev/cu.usbserial-0001 or /tmp/ttyV1 (socat PTY)
+#   macOS:   /dev/cu.usbserial-0001
+#   Socat:   /tmp/ttyV1 (run ./scripts/start-socat.sh first)
 #   Windows: COM1, COM3, etc.
 #
 # Standard EHL Protocol: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
-  transport:
-    # Transport mode: EMULATOR, SOCAT, or HARDWARE
-    # HEADLESS DEFAULT: HARDWARE (for production deployment)
-    mode: ${EHL_TRANSPORT_MODE:HARDWARE}
   emulator:
-    # Legacy property - still works for backwards compatibility
-    enabled: ${EHL_EMULATOR_ENABLED:false}
     dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
     price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
     latency-ms: ${EHL_LATENCY_MS:20}
   serial:
-    # Serial port device path (for SOCAT and HARDWARE modes)
-    port: ${EHL_SERIAL_PORT:/dev/ttyS0}
-    # Baud rate (standard EHL: 9600)
+    # Serial port device path (for FIELD mode)
+    port: ${EHL_SERIAL_PORT:/tmp/ttyV1}
     baud-rate: ${EHL_BAUD_RATE:9600}
-    # Data bits (5, 6, 7, 8 - standard: 8)
     data-bits: ${EHL_DATA_BITS:8}
-    # Parity: NONE, ODD, EVEN, MARK, SPACE (standard EHL: EVEN)
     parity: ${EHL_PARITY:EVEN}
-    # Stop bits: 1 or 2 (standard: 1)
     stop-bits: ${EHL_STOP_BITS:1}
+    read-timeout-ms: 3000
+    write-timeout-ms: 1000
 
-# LPG Application Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+# LPG APPLICATION CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# TWO MODES:
+#   LAB (default):  Uses in-memory emulator - no hardware needed
+#   FIELD:          Uses real serial port (hardware or socat PTY)
+#
+# For FIELD mode with socat testing:
+#   1. Run: ./scripts/start-socat.sh
+#   2. Start app with: --lpg.mode=FIELD --ehl.serial.port=/tmp/ttyV1
+#
+# ═══════════════════════════════════════════════════════════════════════════════
 lpg:
-  mode: ${LPG_MODE:LAB}  # LAB (emulator) eller FIELD (ekte hardware) - default LAB for testing
+  mode: ${LPG_MODE:LAB}  # LAB (emulator) or FIELD (real serial)
   dispenser:
-    address: ${LPG_DISPENSER_ADDRESS:1}  # Dispenser address to poll
+    address: ${LPG_DISPENSER_ADDRESS:1}
   polling:
-    interval-ms: ${LPG_POLLING_INTERVAL_MS:2000}  # Poll interval in milliseconds (default 2 seconds)
+    interval-ms: ${LPG_POLLING_INTERVAL_MS:2000}
   price:
     per-liter: ${LPG_PRICE_PER_LITER:15.90}
   station:
     id: ${STATION_ID:STATION-001}
     name: ${STATION_NAME:Test Station}
 
-# Shutdown Configuration
+# Web Server Configuration
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
 spring.lifecycle:
   timeout-per-shutdown-phase: 30s
