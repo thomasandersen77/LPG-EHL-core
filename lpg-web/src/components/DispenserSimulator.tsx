@@ -1,78 +1,41 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { dispenserApi } from '../api/dispenser';
-import type { DispenserStateDto } from '../types/api';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 
-type PaymentMethod = 'CARD' | 'CREDIT';
+// API base URL
+// Both webapp frontend and API run on port 8080
+const API_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || 
+  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080');
+
+// Pump API
+const pumpApi = {
+  getStatus: async (address: number = 1) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/${address}/status`);
+    return res.json();
+  }
+};
 
 export function DispenserSimulator() {
-  const queryClient = useQueryClient();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CARD');
-  const [includeRoadTax, setIncludeRoadTax] = useState<boolean>(true);
-  const [settlementMessage, setSettlementMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Poll state every 500ms when delivering
-  const { data: state, isLoading, error } = useQuery<DispenserStateDto>({
-    queryKey: ['dispenser-state'],
-    queryFn: dispenserApi.getState,
+  // Poll pump status
+  const { data: pumpStatus, isLoading, error } = useQuery({
+    queryKey: ['pump-status-sim'],
+    queryFn: () => pumpApi.getStatus(1),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data?.state === 'DELIVERING' ? 500 : 2000;
-    },
+      return data?.state === 'PUMPING' ? 500 : 2000;
+    }
   });
-
-  const handleStartWithPayment = () => {
-    // Clear any previous messages
-    setErrorMessage(null);
-    setSettlementMessage(null);
-    // For demo purposes, all payment types start the pump immediately
-    // In production, CARD/CREDIT would require payment authorization first
-    unblockMutation.mutate(paymentMethod);
+  
+  const state = {
+    state: pumpStatus?.state === 'PUMPING' ? 'DELIVERING' : 
+           pumpStatus?.state === 'PAYMENT_PENDING' ? 'FINISHED' :
+           pumpStatus?.state === 'READY_TO_PUMP' ? 'READY' :
+           pumpStatus?.state || 'IDLE',
+    connected: true,
+    litres: pumpStatus?.volumeLitres || 0,
+    amountToPay: pumpStatus?.amountKr || 0,
+    pricePerLitre: pumpStatus?.pricePerLitreKr || 0
   };
-
-  const unblockMutation = useMutation({
-    mutationFn: dispenserApi.unblock,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
-      setErrorMessage(null);
-    },
-    onError: (error: any) => {
-      // Handle unpaid transaction error
-      if (error.response?.status === 409) {
-        const data = error.response.data;
-        setErrorMessage(data.message || 'Du må betale for forrige fylling før du kan starte på nytt');
-      } else {
-        setErrorMessage('Kunne ikke starte pumping');
-      }
-    },
-  });
-
-  const stopMutation = useMutation({
-    mutationFn: dispenserApi.stop,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
-    },
-  });
-
-  const settleMutation = useMutation({
-    mutationFn: () => dispenserApi.settle(1, paymentMethod),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dispenser-state'] });
-      setSettlementMessage('Betaling fullført! ✅');
-      setErrorMessage(null);
-      // Clear success message after 3 seconds
-      setTimeout(() => setSettlementMessage(null), 3000);
-    },
-    onError: (error: any) => {
-      if (error.response?.status === 404) {
-        setErrorMessage('Ingen ubetalt transaksjon funnet');
-      } else {
-        setErrorMessage('Betalingsfeil: ' + (error.response?.data?.message || 'Ukjent feil'));
-      }
-      setTimeout(() => setErrorMessage(null), 5000);
-    },
-  });
 
   const getStateColor = (currentState?: string) => {
     switch (currentState) {
@@ -118,9 +81,19 @@ export function DispenserSimulator() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold mb-2">LPG Pumpe Simulator</h1>
-          <p className="text-gray-400">Norges Gass - Demo System</p>
+        <div className="text-center mb-8">
+          <h1 className="text-5xl font-bold mb-2">📊 Pumpe Status</h1>
+          <p className="text-gray-400">Sanntids visning - Pumpe #1</p>
+        </div>
+
+        {/* Control Link */}
+        <div className="text-center mb-8">
+          <Link 
+            to="/control"
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-colors"
+          >
+            🔧 Gå til Kontrollpanel
+          </Link>
         </div>
 
         {/* Main Display */}
@@ -165,142 +138,59 @@ export function DispenserSimulator() {
           {/* Price Info */}
           <div className="bg-gray-700 rounded-xl p-4 mb-8">
             <div className="flex justify-between items-center">
-              <span className="text-gray-400">Pris per liter (basispris):</span>
+              <span className="text-gray-400">Pris per liter:</span>
               <span className="text-xl font-bold">{state?.pricePerLitre.toFixed(2)} kr/L</span>
             </div>
-            {state?.roadTaxPerLiterOre && state.roadTaxPerLiterOre > 0 && (
-              <div className="mt-3 pt-3 border-t border-gray-600">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-400">🚗 Veitrafikkavgift:</span>
-                  <span className={`font-bold ${includeRoadTax ? 'text-yellow-400' : 'text-gray-500 line-through'}`}>
-                    {(state.roadTaxPerLiterOre / 100).toFixed(2)} kr/L
-                  </span>
-                </div>
-                <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-600">
-                  <div className="flex justify-between">
-                    <span>Totalpris:</span>
-                    <span className="font-bold text-white">
-                      {includeRoadTax 
-                        ? (state.pricePerLitre + state.roadTaxPerLiterOre / 100).toFixed(2)
-                        : state.pricePerLitre.toFixed(2)} kr/L
-                    </span>
-                  </div>
-                  {!includeRoadTax && (
-                    <div className="text-xs text-orange-400 mt-1 text-right">
-                      ⚠️ Avgift ikke inkludert
-                    </div>
-                  )}
-                </div>
+          </div>
+
+          {/* Status Messages - READ ONLY */}
+          <div className="space-y-4">
+            {pumpStatus?.state === 'IDLE' && (
+              <div className="text-center py-6 bg-gray-700/50 rounded-xl border border-gray-600">
+                <div className="text-5xl mb-3">⏳</div>
+                <p className="text-gray-400 text-lg font-bold">Venter på kunde</p>
+                <p className="text-gray-500 text-sm mt-2">Bruk kontrollpanelet for å starte</p>
               </div>
             )}
-          </div>
-
-          {/* Payment Method Selector */}
-          <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-2">Betalingsmetode</label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              disabled={state?.state === 'DELIVERING'}
-              className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <option value="CARD">💳 Kort (simulert)</option>
-              <option value="CREDIT">🏪 Stasjonskreditt</option>
-            </select>
-          </div>
-
-          {/* Road Tax Toggle */}
-          {state?.roadTaxPerLiterOre && state.roadTaxPerLiterOre > 0 && (
-            <div className="mb-6">
-              <label className="flex items-center gap-3 cursor-pointer bg-gray-700 rounded-lg px-4 py-3 border border-gray-600 hover:bg-gray-650 transition">
-                <input 
-                  type="checkbox" 
-                  checked={includeRoadTax}
-                  onChange={(e) => setIncludeRoadTax(e.target.checked)}
-                  disabled={state?.state === 'DELIVERING'}
-                  className="w-5 h-5 rounded accent-yellow-500 disabled:opacity-50"
-                />
-                <div className="flex-1">
-                  <span className="text-white font-medium">🚗 Inkluder veitrafikkavgift</span>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {includeRoadTax 
-                      ? `+${(state.roadTaxPerLiterOre / 100).toFixed(2)} kr/L` 
-                      : 'Avgift ikke inkludert'}
-                  </div>
-                </div>
-              </label>
-            </div>
-          )}
-
-          {/* Status Indicators */}
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className={`p-3 rounded-lg text-center text-sm ${state?.dayMode ? 'bg-yellow-900/30 text-yellow-300' : 'bg-gray-700 text-gray-500'}`}>
-              {state?.dayMode ? '☀️ Dagmodus' : '🌙 Nattmodus'}
-            </div>
-            <div className={`p-3 rounded-lg text-center text-sm ${paymentMethod === 'CARD' ? 'bg-blue-900/30 text-blue-300' : 'bg-purple-900/30 text-purple-300'}`}>
-              {paymentMethod === 'CARD' ? '💳 Kort' : '🏪 Kreditt'}
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {errorMessage && (
-            <div className="mb-6 bg-red-900/30 border border-red-500 rounded-xl p-4 text-center">
-              <p className="text-red-300 font-bold">⚠️ {errorMessage}</p>
-            </div>
-          )}
-
-          {/* Success Message */}
-          {settlementMessage && (
-            <div className="mb-6 bg-green-900/30 border border-green-500 rounded-xl p-4 text-center">
-              <p className="text-green-300 font-bold">{settlementMessage}</p>
-            </div>
-          )}
-
-          {/* Control Buttons */}
-          <div className="grid grid-cols-3 gap-4">
-            <button
-              onClick={handleStartWithPayment}
-              disabled={state?.state === 'DELIVERING' || state?.state === 'FINISHED' || unblockMutation.isPending}
-              className={`${
-                state?.state === 'FINISHED' 
-                  ? 'bg-red-600 cursor-not-allowed' 
-                  : state?.state === 'DELIVERING' || unblockMutation.isPending
-                  ? 'bg-gray-600 cursor-not-allowed'
-                  : 'bg-green-600 hover:bg-green-700'
-              } text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg`}
-            >
-              {unblockMutation.isPending ? '...' : state?.state === 'FINISHED' ? '🚫 Betal først' : '▶ Start'}
-            </button>
-
-            <button
-              onClick={() => stopMutation.mutate()}
-              disabled={state?.state !== 'DELIVERING' || stopMutation.isPending}
-              className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg"
-            >
-              {stopMutation.isPending ? '...' : '■ Stopp'}
-            </button>
-
-            <button
-              onClick={() => settleMutation.mutate()}
-              disabled={state?.state === 'DELIVERING' || settleMutation.isPending}
-              className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg"
-            >
-              {settleMutation.isPending ? '...' : '💳 Simuler betaling'}
-            </button>
+            
+            {pumpStatus?.state === 'READY_TO_PUMP' && (
+              <div className="text-center py-6 bg-green-900/30 rounded-xl border border-green-500">
+                <div className="text-5xl mb-3">✅</div>
+                <p className="text-green-400 text-lg font-bold">Pumpe frigjort!</p>
+                <p className="text-gray-400 text-sm mt-2">Venter på at kunde starter pumping</p>
+              </div>
+            )}
+            
+            {pumpStatus?.state === 'PUMPING' && (
+              <div className="text-center py-6 bg-blue-900/30 rounded-xl border border-blue-500 animate-pulse">
+                <div className="text-5xl mb-3">⛽</div>
+                <p className="text-blue-400 text-lg font-bold">Pumping pågår...</p>
+                <p className="text-gray-400 text-sm mt-2">Levering i gang</p>
+              </div>
+            )}
+            
+            {pumpStatus?.state === 'PAYMENT_PENDING' && (
+              <div className="text-center py-6 bg-orange-900/30 rounded-xl border border-orange-500">
+                <div className="text-5xl mb-3">💳</div>
+                <p className="text-orange-400 text-lg font-bold">Venter på betaling</p>
+                <p className="text-gray-400 text-sm mt-2">Transaksjonen venter på bekreftelse</p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Info Panel */}
         <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-          <h3 className="text-xl font-bold mb-4">Instruksjoner</h3>
-          <ul className="space-y-2 text-gray-300">
-            <li>• <strong>Start:</strong> Begynn levering av drivstoff</li>
-            <li>• <strong>Stopp:</strong> Avslutt leveringen og vis totalt beløp</li>
-            <li>• <strong>Reset:</strong> Tilbakestill pumpen til inaktiv tilstand</li>
-            <li className="text-sm text-gray-500 mt-4">
-              Simulert hastighet: 0.5 L/s
-            </li>
-          </ul>
+          <h3 className="text-xl font-bold mb-4">ℹ️ Om denne siden</h3>
+          <p className="text-gray-400 mb-4">
+            Dette er en sanntidsvisning av pumpe #1. For å kontrollere pumpen (starte, stoppe, bekrefte betaling), bruk kontrollpanelet.
+          </p>
+          <Link 
+            to="/control"
+            className="block text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+          >
+            🔧 Åpne Kontrollpanel
+          </Link>
         </div>
       </div>
     </div>

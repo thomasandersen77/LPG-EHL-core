@@ -1,0 +1,107 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-add-pump-authorization-table
+      author: warp-agent
+      comment: "Legger til pump_authorization tabell for kortdragning/autorisasjon"
+      changes:
+        - createTable:
+            tableName: pump_authorization
+            columns:
+              - column:
+                  name: authorization_id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: dispenser_address
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: "PENDING"
+              - column:
+                  name: max_amount_kr
+                  type: DOUBLE
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 2000.0
+              - column:
+                  name: price_per_liter_kr
+                  type: DOUBLE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: triggered_by
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: payment_method
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: "SIMULATION"
+              - column:
+                  name: card_number_masked
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: transaction_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+              - column:
+                  name: actual_volume_liters
+                  type: DOUBLE
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 0.0
+              - column:
+                  name: actual_amount_kr
+                  type: DOUBLE
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 0.0
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: "CURRENT_TIMESTAMP"
+              - column:
+                  name: authorized_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: true
+              - column:
+                  name: completed_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: true
+              - column:
+                  name: error_message
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: true
+        
+        - createIndex:
+            indexName: idx_pump_auth_dispenser_status
+            tableName: pump_authorization
+            columns:
+              - column:
+                  name: dispenser_address
+              - column:
+                  name: status
+        
+        - createIndex:
+            indexName: idx_pump_auth_status
+            tableName: pump_authorization
+            columns:
+              - column:
+                  name: status

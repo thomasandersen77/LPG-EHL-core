@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Console appender with cleaner pattern -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{20} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- WebSocket appender for Control Panel logs -->
+    <appender name="WEBSOCKET" class="no.cloudberries.lpg.api.logging.WebSocketLogAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>DEBUG</level>
+        </filter>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </root>
+
+    <!-- ===== SILENCE NOISE ===== -->
+    <!-- Hibernate SQL spam -->
+    <logger name="org.hibernate.SQL" level="WARN" />
+    <logger name="org.hibernate.type.descriptor.sql" level="WARN" />
+    <logger name="org.hibernate.orm.jdbc.bind" level="WARN" />
+    
+    <!-- Spring Security -->
+    <logger name="org.springframework.security" level="INFO" />
+    
+    <!-- Tomcat/Catalina -->
+    <logger name="org.apache.catalina" level="INFO" />
+    <logger name="org.apache.coyote" level="INFO" />
+    
+    <!-- HikariCP connection pool -->
+    <logger name="com.zaxxer.hikari" level="INFO" />
+    
+    <!-- Liquibase -->
+    <logger name="liquibase" level="INFO" />
+
+    <!-- Azure Sync Service -->
+    <logger name="no.cloudberries.lpg.api.service.AzureSyncService" level="INFO" />
+
+    <!-- ===== AMPLIFY SIGNALS ===== -->
+    <!-- MASTER: All cloudberries logs at INFO with WebSocket broadcast -->
+    <logger name="no.cloudberries.lpg" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="WEBSOCKET" />
+    </logger>
+    
+    <!-- Protocol and communication - DEBUG for detailed HEX visibility -->
+    <logger name="no.cloudberries.lpg.protocol" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="WEBSOCKET" />
+    </logger>
+    <logger name="no.cloudberries.lpg.communication" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="WEBSOCKET" />
+    </logger>
+    
+    <!-- Emulator state machine - DEBUG -->
+    <logger name="no.cloudberries.lpg.emulator" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="WEBSOCKET" />
+    </logger>
+    
+    <!-- API controllers and services -->
+    <logger name="no.cloudberries.lpg.api" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="WEBSOCKET" />
+    </logger>
+</configuration>

@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/001-initial-schema.yaml
+  - include:
+      file: db/changelog/changes/002-fix-daily-summary-view.yaml
+  - include:
+      file: db/changelog/changes/006-add-payment-status-column.yaml
+  - include:
+      file: db/changelog/changes/007-add-price-history-table.yaml
+  - include:
+      file: db/changelog/changes/008-add-road-tax-settings.yaml
+  - include:
+      file: db/changelog/changes/009-add-pump-authorization-table.yaml

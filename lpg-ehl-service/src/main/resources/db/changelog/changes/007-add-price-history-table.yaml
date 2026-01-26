@@ -1,0 +1,78 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-add-price-history-table
+      author: warp-ai
+      changes:
+        - createTable:
+            tableName: price_history
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: product_code
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: product_name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: price_per_liter
+                  type: decimal(10,2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: vat_rate
+                  type: decimal(5,4)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: effective_from
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: effective_until
+                  type: timestamp
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: varchar(100)
+                  constraints:
+                    nullable: true
+        - createIndex:
+            indexName: idx_price_history_product_effective
+            tableName: price_history
+            columns:
+              - column:
+                  name: product_code
+              - column:
+                  name: effective_from
+        - createIndex:
+            indexName: idx_price_history_effective_from
+            tableName: price_history
+            columns:
+              - column:
+                  name: effective_from
+                  descending: true
+        - sql:
+            dbms: postgresql
+            sql: "INSERT INTO price_history (id, product_code, product_name, price_per_liter, vat_rate, effective_from, created_by) VALUES (gen_random_uuid(), 'LPG', 'LPG (Flytende petroleumsgass)', 15.90, 0.25, CURRENT_TIMESTAMP, 'system')"
+            comment: "Initialize with current default LPG price (PostgreSQL)"
+        - sql:
+            dbms: h2
+            sql: "INSERT INTO price_history (id, product_code, product_name, price_per_liter, vat_rate, effective_from, created_by) VALUES (RANDOM_UUID(), 'LPG', 'LPG (Flytende petroleumsgass)', 15.90, 0.25, CURRENT_TIMESTAMP, 'system')"
+            comment: "Initialize with current default LPG price (H2)"

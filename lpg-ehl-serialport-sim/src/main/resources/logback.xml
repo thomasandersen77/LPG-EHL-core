@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{20} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 
+        PLS Simulator logging levels:
+        - INFO (default): Only startup/shutdown and state changes (BLOCK/UNBLOCK)
+        - DEBUG: Detailed protocol traffic (STATE, VOLUME, PRICE, TX/RX)
+        
+        To enable DEBUG logging, use: java -Dsim.log.level=DEBUG -jar pls-sim.jar ...
+    -->
+    <logger name="no.cloudberries.lpg.pls.sim" level="${sim.log.level:-INFO}"/>
+    
+    <!-- jSerialComm -->
+    <logger name="com.fazecast.jSerialComm" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

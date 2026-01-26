@@ -172,14 +172,183 @@ val communicator = EhlCommunicator(port)
 
 See [docs/EMULATOR.md](docs/EMULATOR.md) for complete documentation.
 
+## Multi-Module Architecture (Hexagonal/Modular Monolith)
+
+### Module Structure
+```
+lpg-ehl/
+├── lpg-ehl-core/           # Protocol layer (NO Spring dependencies)
+│   ├── protocol/           # EHL packet encoding/decoding
+│   ├── transaction/        # Transaction state machine
+│   └── communication/      # Serial port abstraction
+│
+├── lpg-transport/          # Serial/TCP transport (NO business logic)
+│
+├── lpg-ehl-service/        # Business logic + Database (Spring Data JPA)
+│   ├── model/              # JPA Entities (Transaction, DispenserStatus...)
+│   ├── repository/         # Spring Data repositories
+│   ├── service/            # TransactionService, PriceService, AzureSyncService
+│   ├── credit/             # Customer, CreditAccount entities + repos
+│   ├── payment/            # PaymentGateway interface + implementations
+│   └── resources/db/       # Liquibase migrations (owned by service module)
+│
+├── lpg-ehl-emulator/       # LAB mode dispenser simulator
+│
+├── lpg-ehl-webapp/         # Web API + React frontend (THIN WRAPPER)
+│   ├── controller/         # REST Controllers only
+│   ├── websocket/          # WebSocket handlers
+│   └── config/             # Security, Web config
+│
+├── lpg-ehl-app-headless/   # Headless production (no web server)
+│   └── Depends on service, runs without Tomcat
+│
+├── lpg-ehl-cli/            # Spring Shell CLI for testing
+│   └── Interactive dispenser commands
+│
+└── lpg-web/                # React frontend source (builds to webapp)
+```
+
+### Module Dependencies (Layered)
+```
+                    ┌─────────────────┐
+                    │   lpg-ehl-cli   │  (Spring Shell)
+                    └────────┬────────┘
+                             │
+┌─────────────────┐  ┌───────┴───────┐  ┌─────────────────┐
+│ lpg-ehl-webapp  │  │lpg-ehl-headless│  │                 │
+│ (Web + React)   │  │   (No Web)     │  │                 │
+└────────┬────────┘  └───────┬────────┘  │                 │
+         │                   │           │                 │
+         └─────────┬─────────┘           │                 │
+                   │                     │                 │
+           ┌───────▼───────┐             │                 │
+           │lpg-ehl-service│◄────────────┘                 │
+           │(Business Logic)│                              │
+           │ + Liquibase DB │                              │
+           └───────┬────────┘                              │
+                   │                                       │
+    ┌──────────────┼──────────────┐                        │
+    │              │              │                        │
+┌───▼───┐   ┌──────▼──────┐  ┌────▼─────┐                  │
+│  core │   │lpg-transport│  │lpg-ehl-  │                  │
+│(proto)│   │ (Serial/TCP)│  │ emulator │                  │
+└───────┘   └─────────────┘  └──────────┘                  │
+```
+
+### Port Configuration
+- **lpg-ehl-webapp**: Port 8080 (production Web API + React)
+- **lpg-ehl-emulator**: Port 9001 (LAB mode test GUI)
+- **EHL Protocol TCP**: Port 9000 (serial-over-TCP)
+
+### Database
+- **PostgreSQL**: Port 5432
+- **Liquibase migrations**: `lpg-ehl-service/src/main/resources/db/changelog/`
+- **Key tables**: `transactions`, `price_history`, `dispenser_status`, `customers`, `credit_accounts`
+
+### JAR Sizes (Production)
+| Module | Size | Purpose |
+|--------|------|----------|
+| lpg-ehl-core | 304K | Protocol (no Spring) |
+| lpg-transport | 8K | Serial/TCP transport |
+| lpg-ehl-service | 240K | Business logic + DB |
+| lpg-ehl-webapp | 116M | Full Web API + React |
+| lpg-ehl-headless | 66M | Headless (Raspberry Pi) |
+| lpg-ehl-cli | 67M | Interactive Shell |
+
+## WebSocket Real-Time Logging
+
+### Architecture
+Log streaming via WebSocket to `/control` GUI:
+
+**Backend (lpg-ehl-emulator)**:
+- `LogBufferAppender.kt`: Custom Logback appender
+- `LogWebSocketHandler.kt`: WebSocket handler with 3 channels
+- `LoggingConfiguration.kt`: Wires Spring beans to Logback at startup
+
+**Frontend (lpg-web)**:
+- `ControlPanel.tsx`: WebSocket client subscribing to log channels
+- Connects to `ws://localhost:9001/ws/logs`
+
+**Log Channels**:
+1. **api**: REST API calls (PumpController, PriceController)
+2. **emulator**: State machine logs (EhlDispenserEmulator)
+3. **protocol**: TX/RX HEX packets (EhlCommunicator)
+
+**Subscription**:
+```json
+{"action": "subscribe", "channels": ["api", "emulator", "protocol"]}
+```
+
+**Log Entry Format**:
+```json
+{
+  "channel": "protocol",
+  "timestamp": "2026-01-12T16:00:00Z",
+  "level": "INFO",
+  "logger": "EhlCommunicator",
+  "message": "TX: 20 06 01 4B 6C 36"
+}
+```
+
+## Price Management
+
+### PriceService (Centralized Price Updates)
+**Location**: `lpg-ehl-api/src/main/kotlin/.../service/PriceService.kt`
+
+**Responsibilities**:
+1. Save price changes to `price_history` table
+2. Update emulator price (if running in LAB MODE)
+3. Broadcast to WebSocket clients (real-time GUI update)
+4. Update PumpStateService.currentPriceKr (for new transactions)
+
+**Flow**:
+```
+PriceController.updatePrice() 
+  → PriceService.updatePrice()
+    → Database: price_history.save()
+    → Emulator: setPrice()
+    → WebSocket: broadcastPriceUpdate()
+    → PumpStateService: currentPriceKr updated
+```
+
+**Database Schema**:
+```sql
+CREATE TABLE price_history (
+  id UUID PRIMARY KEY,
+  product_code VARCHAR(50),
+  product_name VARCHAR(255),
+  price_per_liter DECIMAL(10,2),
+  vat_rate DECIMAL(5,4),
+  effective_from TIMESTAMP,
+  effective_until TIMESTAMP,
+  created_by VARCHAR(100)
+);
+```
+
+**Startup Behavior**:
+- `PumpStateService.initializePriceFromDatabase()` restores last price on boot
+- Falls back to emulator default (15.90 kr/L) if no history exists
+- Broadcasts initial price to GUI via WebSocket
+
+### Price Endpoints
+- `GET /api/v1/prices` - Get current prices
+- `POST /api/v1/prices/update` - Update price (saves to DB + broadcasts)
+
+## IntelliJ Compound Run Configuration
+
+**Compound Configuration**: "Full Stack (API + Emulator)"
+- Starts both Spring Boot applications simultaneously
+- API on 8080, Emulator on 9001
+- Allows testing with both prod endpoints and mock dispenser
+
 ## Future Extensions
 
 The architecture is designed to support:
-- RS-485 serial communication layer
-- Async message handling with coroutines
-- Database persistence for transactions
-- REST API service layer
-- WebSocket real-time updates
-- Payment system integration
+- ✅ RS-485 serial communication layer (implemented)
+- ✅ Async message handling with coroutines (implemented)
+- ✅ Database persistence for transactions (PostgreSQL + Liquibase)
+- ✅ REST API service layer (Spring Boot)
+- ✅ WebSocket real-time updates (LogWebSocketHandler)
+- ✅ Payment system integration (Nets Cloud Connect - SSL/TLS)
 
-When adding these, maintain separation between protocol (low-level), transaction (business logic), and infrastructure layers.
+When adding features, maintain separation between protocol (low-level), transaction (business logic), and infrastructure layers.

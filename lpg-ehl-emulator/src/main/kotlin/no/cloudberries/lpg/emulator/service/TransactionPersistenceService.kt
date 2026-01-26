@@ -3,9 +3,15 @@ package no.cloudberries.lpg.emulator.service
 import no.cloudberries.lpg.emulator.api.LpgApiClient
 import no.cloudberries.lpg.emulator.api.SaveTransactionRequest
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 
 @Service
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class TransactionPersistenceService(
     private val lpgApiClient: LpgApiClient
 ) {

@@ -1,6 +1,7 @@
 package no.cloudberries.lpg.emulator
 
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap
 
@@ -23,8 +24,14 @@ data class EmulatorStatus(
 /**
  * Service for controlling emulator scenarios and behavior.
  * This allows testing of various error conditions and edge cases.
+ * Only loaded when emulator.standalone.enabled=true.
  */
 @Service
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class EmulatorScenarioService {
 
     private val log = LoggerFactory.getLogger(javaClass)

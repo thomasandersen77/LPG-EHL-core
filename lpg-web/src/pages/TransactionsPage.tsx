@@ -61,7 +61,6 @@ export function TransactionsPage() {
           onChange={(e) => handleFilterChange('paymentType', e.target.value)}
         >
           <option value="ALL">Alle betalingsmetoder</option>
-          <option value="CASH">Kontant</option>
           <option value="CARD">Kort</option>
           <option value="CREDIT">Kreditt</option>
         </select>
@@ -107,8 +106,7 @@ export function TransactionsPage() {
                       </span>
                     ) : (
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                        ${tx.paymentType === 'CASH' ? 'bg-green-100 text-green-800' : 
-                          tx.paymentType === 'CARD' ? 'bg-blue-100 text-blue-800' : 
+                        ${tx.paymentType === 'CARD' ? 'bg-blue-100 text-blue-800' : 
                           'bg-purple-100 text-purple-800'}`}>
                         {tx.paymentType}
                       </span>
@@ -125,18 +123,18 @@ export function TransactionsPage() {
                     {tx.paymentStatus === 'PENDING' ? (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => settleMutation.mutate({ transactionId: tx.transactionId, paymentMethod: 'CASH' })}
-                          disabled={settleMutation.isPending}
-                          className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 text-xs font-medium"
-                        >
-                          💵 Kontant
-                        </button>
-                        <button
                           onClick={() => settleMutation.mutate({ transactionId: tx.transactionId, paymentMethod: 'CARD' })}
                           disabled={settleMutation.isPending}
                           className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-xs font-medium"
                         >
                           💳 Kort
+                        </button>
+                        <button
+                          onClick={() => settleMutation.mutate({ transactionId: tx.transactionId, paymentMethod: 'CREDIT' })}
+                          disabled={settleMutation.isPending}
+                          className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 text-xs font-medium"
+                        >
+                          🏪 Kreditt
                         </button>
                       </div>
                     ) : (

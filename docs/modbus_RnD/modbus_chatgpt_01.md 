@@ -1,0 +1,136 @@
+Jeg er ganske enig i hovedkonklusjonen din (og “Gemini-konklusjonen”), men med to viktige presiseringer:
+	1.	EHL-delen din er reell og ser riktig ut – den er en egen seriell protokoll med egen framing og XOR-sjekksum. I analysen din er ramma eksplisitt beskrevet som [STX][LEN][ADR][CMD][DATA…][CHK][ETX], med STX = 0x10 for kommandoer / 0x20 for svar og ETX = 0x36, og CHK = XOR.  ￼
+→ Så: EHL er ikke “Modbus i forkledning”. Det er et eget språk.
+	2.	ModbusTCP.xml du har funnet sier bare “hvordan man snakker Modbus TCP” – ikke hva man skal si (registerkartet). XML-en dokumenterer en “Modbus TCP master driver” med funksjonene (read coils, write single coil, read holding register osv.) og at porten vanligvis er 502.  ￼  ￼
+→ Den bekrefter “det finnes Modbus TCP i løsningen”, men gir ingen adresser alene.
+
+Så: Har du “rett” i at du kun trenger Adam Power Controller + Modbus-kode?
+
+Som retning: ja – veldig plausibelt. Den mest sannsynlige virkeligheten (gitt ADAM + ModbusTCP.dll + din EHL-protokoll) er en hybrid:
+	•	EHL (seriell): dialog med pumpelogikk/status/volum/pris/kommandoer (BLOCK/UNBLOCK osv.).  ￼
+	•	Modbus TCP til ADAM (ethernet): “muskel”-delen: releer/IO som fysisk gir strøm/enable eller leser en digital input (knapp/enable/feil-linje), avhengig av hvordan skapet er koblet.
+
+Det matcher også hvordan slike oppsett ofte blir bygd: PC snakker “pumpeprotokoll” (EHL) og i tillegg styrer/leser IO via en ADAM-boks (Modbus).
+
+Men: den ene tingen du fortsatt trenger før du kan “spikre” det 100% er registerkartet:
+	•	Hvilken Unit ID (slave address)
+	•	Hvilke coil-adresser (eller holding/input registers) som representerer “Pump1 enable”, “Pump1 stop”, “Emergency”, “Start button”, osv.
+
+⸻
+
+Hvordan du finner riktige Modbus-adresser (praktisk oppskrift)
+
+Du har egentlig 4 spor – ranger dem slik jeg ville gjort:
+
+Spor A (best): Finn kallene i VB6/Python som bruker ModbusTCP.Master
+
+Du vil lete etter mønstre som:
+	•	WriteSingleCoils(id, unit, startAddress, onOff)
+	•	ReadCoils(id, unit, startAddress, numInputs, …)
+	•	ReadDiscreteInputs(...)
+
+XML-dokumentasjonen viser nøyaktig parameter-navnene (unit, startAddress) du bør søke etter.  ￼  ￼
+
+Det du trenger å hente ut er konkrete tall: unit=??, startAddress=??
+
+Hvis VB6/Python-koden ikke inneholder det (men bare “wrapper” det), kan det ligge i config/ini/registry eller hardkodet et annet sted.
+
+Spor B: Finn config-filer / ini / registry-bruk i VB6
+
+Mange VB6-løsninger har:
+	•	GetSetting/SaveSetting (registry)
+	•	.ini-filer i samme mappe
+	•	hardkodet IP/port/unit
+
+Du har allerede funnet port 502 i “verdenen” (standard).  ￼
+Neste er: IP + UnitID + adresser.
+
+Spor C: ADAM-modellens manual (register map)
+
+ADAM-bokser har alltid en registeroversikt. Når du vet eksakt modell (f.eks ADAM-6050/6060/…): manualen gir deg coil/input mapping.
+
+Spor D: Dekompilere DLL (nyttig, men ofte “meh”)
+
+Å dekompilere ModbusTCP.dll kan gi deg:
+	•	protokollhåndtering
+	•	kanskje defaults
+Men svært ofte gir den ikke registerkartet, fordi kartet ligger i app-koden som kaller DLLen (VB6), eller i config.
+
+⸻
+
+Hvordan dette henger sammen med arkitekturen din
+
+Du har allerede en veldig ryddig separasjon:
+	•	lpg-ehl-core: protokoll + transport + domain-ish logikk
+	•	lpg-ehl-api: Spring Boot tjenestelag
+	•	emulator + cli
+
+Jeg ville lagt Modbus/ADAM som et parallelt “hardware control”-ben, ikke inni EHL-protokollpakkene.
+
+Anbefalt plassering (maven/gradle modul)
+
+Lag en ny modul på samme nivå som lpg-ehl-pls:
+
+lpg-ehl-adam (eller lpg-ehl-modbus)
+
+Hvorfor egen modul?
+	•	EHL-protokollen er “pumpespråket”
+	•	ADAM/Modbus er “IO/power control”
+	•	Du kan mocke/simulere ADAM uavhengig av EHL
+
+Hvordan den skal henge sammen med core
+
+I lpg-ehl-core lager du et interface, f.eks:
+	•	PumpPowerController (domain-ish port)
+	•	enablePump(pumpId)
+	•	disablePump(pumpId)
+	•	readInputs() / isEmergencyStopActive() etc.
+
+Så:
+	•	lpg-ehl-adam: implementerer PumpPowerController via Modbus TCP (adapter)
+	•	lpg-ehl-api: orkestrerer flyten (betalingsgodkjenning → unblock i EHL → enable via ADAM → poll volume via EHL → stop/disable)
+
+⸻
+
+Kan du simulere dette med socat slik du gjorde med PLS?
+
+Delvis – men Modbus TCP trenger egentlig ikke socat.
+	•	Hvis ADAM-siden er Modbus TCP (noe både ModbusTCP.xml og “ModbusTCP.dll”-navnet peker mot): da går det over vanlig TCP socket (port 502 typisk).  ￼
+→ Da simulerer du best ved å kjøre en Modbus TCP slave simulator som lytter på en port.
+	•	socat er supert når du trenger å fake seriell/tty (Modbus RTU / EHL / “late som COM-port”).
+→ For Modbus TCP: du kan bruke socat til port-forwarding hvis du vil, men du må ikke.
+
+⸻
+
+Anbefaling: slik bør du implementere Modbus/ADAM nå (smidig, lav risiko)
+
+Dette er den “mentor”-versjonen jeg ville styrt etter:
+	1.	Start med en tynn Modbus TCP master-klient i Kotlin
+	•	Bruk et modent Java-bibliotek (modbus4j eller j2mod).
+	•	Implementer kun det du trenger først: writeSingleCoil + readDiscreteInputs / readCoils.
+	2.	Lag en “register map” som ren konfig
+	•	Ikke hardkod coil-adresser i kode.
+	•	Lag AdamRegisterMap som kan lastes fra YAML/JSON:
+	•	pump1EnableCoil=…
+	•	pump1StopCoil=…
+	•	emergencyInput=…
+	•	Dette gjør at når dere oppdager “åja, det var coil 17 ikke 16”, så endrer du config – ikke kode.
+	3.	Lag en Modbus TCP slave-simulator som del av emulator-labben
+	•	En liten “fake ADAM” som holder en intern coil-state map.
+	•	Kjør den lokalt i CI/integrasjonstest.
+	4.	Koble sammen flyten i API-laget
+	•	“Authorize payment” → EHL.unblock() → ADAM.enablePump() → poll EHL volume → EHL.block() + ADAM.disablePump()
+	5.	Deretter: finn registerkartet fra VB6/Python
+	•	Når du har de faktiske adressene, fyller du inn config og alt bare “klikker”.
+
+⸻
+
+Mini-korrigering til Gemini-teksten (så du ikke tar med feil videre)
+
+Gemini-teksten sa at EHL brukte STX 0x02 / ETX 0x03. Det stemmer ikke med analysen du har: der er STX 0x10/0x20 og ETX 0x36 og XOR checksum.  ￼
+Dette er ikke for å være pirkete – men fordi detaljene her er akkurat det som gjør at du kan si “EHL er implementert korrekt”.
+
+⸻
+
+Hvis du vil, kan jeg i neste steg:
+	•	trekke ut konkrete Modbus-adresser ved å “grave” målrettet i VB6- og Python-zipene (f.eks. finne nøyaktig WriteSingleCoils(... startAddress=?? ...)), og så foreslå en første AdamRegisterMap.yml basert på funnene.

@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: lpg-ehl-cli
+  main:
+    banner-mode: off  # Disable Spring Boot banner for cleaner CLI
+    web-application-type: none  # Disable web server
+  shell:
+    interactive:
+      enabled: true
+    command:
+      version:
+        enabled: false  # Disable default version command
+      help:
+        enabled: true
+
+# EHL Protocol Configuration
+ehl:
+  emulator:
+    enabled: ${EHL_EMULATOR_ENABLED:true}  # DEFAULT: LAB MODE (safe for dev)
+    dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
+    price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
+    latency-ms: ${EHL_LATENCY_MS:20}  # Simulated serial port latency
+  serial:
+    port: ${EHL_SERIAL_PORT:/dev/ttyS0}  # Only used when enabled=false
+    baud-rate: ${EHL_BAUD_RATE:9600}
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg: INFO
+    no.cloudberries.lpg.protocol: DEBUG
+    no.cloudberries.lpg.communication: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n"

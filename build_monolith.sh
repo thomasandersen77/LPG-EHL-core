@@ -1,160 +1,172 @@
 #!/bin/bash
-# build_monolith.sh - Build LPG-EHL Monolith (Spring Boot + React)
+# build_monolith.sh - Build LPG-EHL Applications
 #
-# This script creates a single executable JAR file containing:
-# - lpg-ehl-core (Kotlin protocol implementation)
-# - lpg-ehl-api (Spring Boot REST API)
-# - lpg-web (React frontend as static files)
-#
-# Output: release/lpg-ehl-monolith-VERSION.jar
+# Output: 
+#   release/lpg-ehl-webapp.jar    - Web UI + REST API
+#   release/lpg-ehl-headless.jar  - Background Service (+ debug-api profil)
+#   release/pls-sim.jar           - PLS Simulator (for socat testing)
 #
 # Usage:
-#   ./build_monolith.sh
-#
-# Requirements:
-#   - Node.js 18+ (for React build)
-#   - Maven 3.8+ (for Spring Boot build)
-#   - Java 21 (Temurin recommended)
+#   ./build_monolith.sh              # Build all
+#   ./build_monolith.sh --skip-tests # Skip tests
+#   ./build_monolith.sh --verbose    # Show Maven output
 
-set -e  # Exit on error
+set -e
 
-# Colors for output
+# Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+CYAN='\033[0;36m'
+GRAY='\033[0;90m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Parse arguments
+SKIP_TESTS=false
+VERBOSE=false
+for arg in "$@"; do
+    case $arg in
+        --skip-tests) SKIP_TESTS=true ;;
+        --verbose) VERBOSE=true ;;
+    esac
+done
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  LPG-EHL Monolith Build${NC}"
-echo -e "${BLUE}========================================${NC}"
+BUILD_LOG="$SCRIPT_DIR/.build.log"
+BUILD_START=$(date +%s)
+
+# Helper: Run Maven command (quiet unless error or verbose)
+run_maven() {
+    local description="$1"
+    shift
+    
+    if [ "$VERBOSE" = true ]; then
+        ./mvnw "$@"
+    else
+        if ! ./mvnw "$@" > "$BUILD_LOG" 2>&1; then
+            echo ""
+            echo -e "${RED}✗ BUILD FAILED: $description${NC}"
+            echo ""
+            echo -e "${YELLOW}Last 30 lines of output:${NC}"
+            tail -30 "$BUILD_LOG"
+            echo ""
+            echo -e "${GRAY}Full log: $BUILD_LOG${NC}"
+            exit 1
+        fi
+    fi
+}
+
+# Header
+echo ""
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  🛢️  LPG-EHL Build System${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "  ${GRAY}Java:${NC}  $(java -version 2>&1 | head -1 | cut -d'"' -f2)"
+echo -e "  ${GRAY}Maven:${NC} $(./mvnw -version 2>/dev/null | head -1 | cut -d' ' -f3)"
+echo -e "  ${GRAY}Tests:${NC} $([ "$SKIP_TESTS" = true ] && echo 'Skipped' || echo 'Enabled')"
 echo ""
 
 # Step 1: Build React Frontend
-echo -e "${GREEN}[1/5]${NC} Building React frontend (lpg-web)..."
-cd lpg-web
+echo -n -e "  ${GRAY}[1/4]${NC} Building React frontend... "
+FRONTEND_DIR="$SCRIPT_DIR/lpg-web"
+WEBAPP_STATIC="$SCRIPT_DIR/lpg-ehl-webapp/src/main/resources/static"
 
-if [ ! -d "node_modules" ]; then
-    echo "  Installing npm dependencies..."
-    npm install
+if [ -d "$FRONTEND_DIR" ]; then
+    cd "$FRONTEND_DIR"
+    npm install --silent > /dev/null 2>&1 || npm install > /dev/null 2>&1
+    npm run build > /dev/null 2>&1
+    
+    rm -rf "$WEBAPP_STATIC"/* 2>/dev/null || true
+    mkdir -p "$WEBAPP_STATIC"
+    cp -r "$FRONTEND_DIR/dist/"* "$WEBAPP_STATIC/"
+    STATIC_FILES=$(find "$WEBAPP_STATIC" -type f | wc -l | tr -d ' ')
+    echo -e "${GREEN}✓${NC} ${GRAY}($STATIC_FILES files)${NC}"
+    cd "$SCRIPT_DIR"
 else
-    echo "  Dependencies already installed (skipping npm install)"
+    echo -e "${YELLOW}⚠ Skipped${NC}"
 fi
 
-echo "  Running production build..."
-npm run build
+# Step 2: Maven Build
+echo -n -e "  ${GRAY}[2/4]${NC} Compiling all modules... "
+MVN_ARGS="clean install"
+[ "$SKIP_TESTS" = true ] && MVN_ARGS="$MVN_ARGS -DskipTests"
 
-# Verify build output
-if [ ! -d "dist" ]; then
-    echo -e "${RED}ERROR: Frontend build failed - dist/ directory not found${NC}"
-    exit 1
-fi
+run_maven "Maven compile" $MVN_ARGS -q
+echo -e "${GREEN}✓${NC}"
 
-echo -e "  ${GREEN}✓${NC} Frontend built successfully"
-echo ""
+# Step 3: Package JARs
+echo -n -e "  ${GRAY}[3/4]${NC} Packaging JAR files... "
 
-# Step 2: Clean old static files
-echo -e "${GREEN}[2/5]${NC} Cleaning old static files from Spring Boot..."
-cd "$SCRIPT_DIR"
-STATIC_DIR="lpg-ehl-api/src/main/resources/static"
+PKG_ARGS="-DskipTests -q"
 
-if [ -d "$STATIC_DIR" ]; then
-    echo "  Removing $STATIC_DIR/*"
-    rm -rf "$STATIC_DIR"/*
-else
-    echo "  Creating $STATIC_DIR"
-    mkdir -p "$STATIC_DIR"
-fi
+run_maven "WebApp package" package -pl lpg-ehl-webapp -am $PKG_ARGS
+run_maven "Headless package" package -pl lpg-ehl-app-headless -am $PKG_ARGS
+run_maven "PLS Sim package" package -pl lpg-ehl-serialport-sim -am $PKG_ARGS
 
-echo -e "  ${GREEN}✓${NC} Static directory cleaned"
-echo ""
+echo -e "${GREEN}✓${NC}"
 
-# Step 3: Copy React build to Spring Boot static resources
-echo -e "${GREEN}[3/5]${NC} Copying React build to Spring Boot static resources..."
-echo "  Source: lpg-web/dist/"
-echo "  Target: $STATIC_DIR/"
-
-cp -r lpg-web/dist/* "$STATIC_DIR/"
-
-# Verify copy
-FILE_COUNT=$(find "$STATIC_DIR" -type f | wc -l | tr -d ' ')
-echo -e "  ${GREEN}✓${NC} Copied $FILE_COUNT files"
-echo ""
-
-# Step 4: Build Spring Boot Fat JAR
-echo -e "${GREEN}[4/5]${NC} Building Spring Boot monolith JAR..."
-cd "$SCRIPT_DIR"
-
-echo "  Running Maven package via parent reactor (skipping tests for faster build)..."
-./mvnw -pl lpg-ehl-api -am clean package -DskipTests
-
-# Find the built JAR
-JAR_FILE=$(find "$SCRIPT_DIR/lpg-ehl-api/target" -name "lpg-ehl-api-*.jar" -not -name "*-plain.jar" | head -1)
-
-if [ -z "$JAR_FILE" ]; then
-    echo -e "${RED}ERROR: JAR file not found in target/${NC}"
-    exit 1
-fi
-
-JAR_SIZE=$(du -h "$JAR_FILE" | cut -f1)
-echo -e "  ${GREEN}✓${NC} JAR built successfully: $(basename "$JAR_FILE") ($JAR_SIZE)"
-echo ""
-
-# Step 5: Move JAR to release directory
-echo -e "${GREEN}[5/5]${NC} Preparing release..."
-cd "$SCRIPT_DIR"
+# Step 4: Create Release Artifacts
+echo -n -e "  ${GRAY}[4/4]${NC} Creating release artifacts... "
 
 RELEASE_DIR="release"
 mkdir -p "$RELEASE_DIR"
 
-RELEASE_JAR="$RELEASE_DIR/lpg-ehl-monolith.jar"
+# Find and copy JARs
+WEBAPP_JAR=$(find "$SCRIPT_DIR/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
+HEADLESS_JAR=$(find "$SCRIPT_DIR/lpg-ehl-app-headless/target" -name "lpg-ehl-app-headless-*.jar" -not -name "*-plain.jar" | head -1)
+PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
 
-# Copy JAR to release with better naming (using full path)
-cp "$JAR_FILE" "$RELEASE_JAR"
+cp "$WEBAPP_JAR" "$RELEASE_DIR/lpg-ehl-webapp.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-webapp.jar"
+cp "$HEADLESS_JAR" "$RELEASE_DIR/lpg-ehl-headless.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-headless.jar"
+cp "$PLS_SIM_JAR" "$RELEASE_DIR/pls-sim.jar" && chmod +x "$RELEASE_DIR/pls-sim.jar"
 
-# Make JAR executable (already set in pom.xml, but ensure permissions)
-chmod +x "$RELEASE_JAR"
+echo -e "${GREEN}✓${NC}"
 
-echo -e "  ${GREEN}✓${NC} Release JAR created (executable)"
-echo ""
+# Build time
+BUILD_END=$(date +%s)
+BUILD_DURATION=$((BUILD_END - BUILD_START))
+BUILD_TIME=$(printf "%d:%02d" $((BUILD_DURATION / 60)) $((BUILD_DURATION % 60)))
 
-# Build summary
-echo -e "${BLUE}========================================${NC}"
-echo -e "${GREEN}✓ Build Complete!${NC}"
-echo -e "${BLUE}========================================${NC}"
+# Sizes
+WEBAPP_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-webapp.jar" | cut -f1)
+HEADLESS_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-headless.jar" | cut -f1)
+PLS_SIM_SIZE=$(du -h "$RELEASE_DIR/pls-sim.jar" | cut -f1)
+
+# Clean up build log on success
+rm -f "$BUILD_LOG"
+
 echo ""
-echo -e "${YELLOW}Release Information:${NC}"
-echo "  File:     $(basename "$RELEASE_JAR")"
-echo "  Location: $RELEASE_JAR"
-echo "  Size:     $(du -h "$RELEASE_JAR" | cut -f1)"
+echo -e "${GREEN}✓ BUILD COMPLETE${NC} ${GRAY}($BUILD_TIME)${NC}"
 echo ""
-echo -e "${YELLOW}What's included:${NC}"
-echo "  ✓ lpg-ehl-core (Kotlin protocol implementation)"
-echo "  ✓ lpg-ehl-api (Spring Boot REST API)"
-echo "  ✓ lpg-web (React frontend)"
-echo "  ✓ All dependencies (Fat JAR)"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}  📦 ARTIFACTS${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${YELLOW}How to run:${NC}"
-echo "  Local test:"
-echo "    java -jar $RELEASE_JAR"
-echo "    # or"
-echo "    ./$RELEASE_JAR  # (executable on Linux)"
+echo -e "  ${YELLOW}release/lpg-ehl-webapp.jar${NC}    ${GRAY}($WEBAPP_SIZE)${NC}"
+echo -e "  ${GREEN}release/lpg-ehl-headless.jar${NC}  ${GRAY}($HEADLESS_SIZE)${NC}"
+echo -e "  ${CYAN}release/pls-sim.jar${NC}           ${GRAY}($PLS_SIM_SIZE)${NC}"
 echo ""
-echo "  Deploy to ARK machine:"
-echo "    scp $RELEASE_JAR user@ark-machine:/opt/lpg-ehl/"
-echo "    ssh user@ark-machine"
-echo "    sudo systemctl stop lpg-ehl"
-echo "    sudo cp /opt/lpg-ehl/lpg-ehl-monolith.jar /opt/lpg-ehl/lpg-ehl.jar"
-echo "    sudo systemctl start lpg-ehl"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}  🚀 BRUK${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${YELLOW}IntelliJ Development:${NC}"
-echo "  Run LpgEhlApiApplication in IntelliJ to test the monolith locally."
-echo "  Frontend will be served at: http://localhost:8080"
-echo "  API endpoints at: http://localhost:8080/api/*"
-echo "  Swagger UI at: http://localhost:8080/swagger-ui.html"
+echo -e "  ${BOLD}1. Start socat + simulator:${NC}"
+echo -e "     ./scripts/start-socat-sim.sh"
 echo ""
-echo -e "${GREEN}Ready for deployment! 🚀${NC}"
+echo -e "  ${BOLD}2. Start i IntelliJ:${NC}"
+echo -e "     • Webapp (SOCAT)        → http://localhost:8080"
+echo -e "     • Headless (Debug API)  → curl localhost:8081"
+echo ""
+echo -e "  ${BOLD}   Eller via JAR:${NC}"
+echo -e "     java -jar release/lpg-ehl-webapp.jar \\"
+echo -e "       --spring.config.location=file:./application-h2.yaml \\"
+echo -e "       --ehl.transport.mode=SOCAT --ehl.serial.port=/tmp/ttyV1"
+echo ""
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo ""

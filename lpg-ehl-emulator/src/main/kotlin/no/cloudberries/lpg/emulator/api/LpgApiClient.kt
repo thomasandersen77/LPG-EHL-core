@@ -2,6 +2,7 @@ package no.cloudberries.lpg.emulator.api
 
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.net.URI
 import java.net.http.HttpClient
@@ -10,6 +11,11 @@ import java.net.http.HttpResponse
 import java.time.Duration
 
 @Component
+@ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class LpgApiClient(
     @Value("\${lpg-api.base-url}") private val baseUrl: String
 ) {

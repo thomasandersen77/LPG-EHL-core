@@ -1,0 +1,57 @@
+# Local Development Profile
+# Note: datasource config is inherited from application.yaml which uses environment variables
+# This allows the same profile to work both locally and in Docker
+spring:
+  security:
+    user:
+      name: admin
+      password: admin123
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Validate schema against entities, use Liquibase for changes
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  liquibase:
+    enabled: true
+    drop-first: true # Clean database on startup as requested
+
+# Emulator connection (local development)
+emulator:
+  base-url: ${EMULATOR_BASE_URL:http://localhost:8090}
+  connect-timeout-ms: 3000
+  read-timeout-ms: 5000
+
+# Azure - Use Azurite for local development
+azure:
+  enabled: ${AZURE_ENABLED:true}
+  storage:
+    connection-string: ${AZURE_CONNECTION_STRING:UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://localhost:10001}
+    queue-name: ${AZURE_QUEUE_NAME:lpg-transactions}
+  sync:
+    interval-seconds: ${AZURE_SYNC_INTERVAL:30}  # More frequent for local testing
+    batch-size: ${AZURE_SYNC_BATCH_SIZE:5}
+    max-retries: ${AZURE_SYNC_MAX_RETRIES:3}
+
+# Security - Simple token for local dev
+security:
+  api-token: dev-token-12345
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:3001,http://localhost:8080,http://localhost:5173
+
+# Actuator - Show full details locally
+management:
+  endpoint:
+    health:
+      show-details: always
+
+# Logging - More verbose for development
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

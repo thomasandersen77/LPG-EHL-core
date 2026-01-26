@@ -352,9 +352,29 @@ class TransactionWatchdog(
                 } catch (e: CancellationException) {
                     throw e  // Propagate cancellation
                 } catch (e: Exception) {
-                    logger.error("Error in watchdog poll cycle", e)
-                    // Continue monitoring despite errors
-                    delay(effectivePollInterval.toMillis())
+                    logger.error(
+                        "FATAL ERROR: Volume provider threw exception for dispenser ${config.dispenserId} - Emergency stopping",
+                        e
+                    )
+                    
+                    // Attempt emergency stop
+                    val stopped = try {
+                        emergencyStopCommand()
+                    } catch (stopException: Exception) {
+                        logger.error("Emergency stop failed after volume provider exception", stopException)
+                        false
+                    }
+                    
+                    if (!stopped) {
+                        // FAIL-SAFE: Stop command failed after provider exception
+                        failSafeCallback(
+                            "Stop command failed after volume provider exception: ${e.message}",
+                            config.dispenserId
+                        )
+                    }
+                    
+                    absoluteTimeoutJob.cancel()
+                    return@coroutineScope WatchdogResult.Error(e)
                 }
             }
             
