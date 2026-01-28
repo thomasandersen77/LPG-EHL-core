@@ -13,17 +13,17 @@ import jakarta.annotation.PostConstruct
 /**
  * Configuration for EHL protocol communication.
  * 
- * ARKITEKTUR: Dual-mode system styrt av ehl.emulator.enabled:
+ * ARKITEKTUR: Two-mode system controlled by lpg.mode:
  * 
- * LAB MODE (ehl.emulator.enabled=true, DEFAULT):
- *   - EmulatorSerialPortAdapter laster automatisk
- *   - Kommuniserer med in-memory EhlDispenserEmulator
- *   - Trygt for utvikling - ingen fysisk hardware påvirkes
+ * LAB MODE (lpg.mode=LAB, DEFAULT):
+ *   - InMemorySerialPort + EhlDispenserEmulator
+ *   - No physical hardware required
+ *   - Safe for development and testing
  * 
- * FIELD MODE (ehl.emulator.enabled=false):
- *   - RealSerialPortAdapter laster automatisk
- *   - Kommuniserer med fysisk RS-485 serial port
- *   - For produksjon på ARK-3600 eller lignende
+ * FIELD MODE (lpg.mode=FIELD):
+ *   - SerialPortManager + real serial port
+ *   - Communicates with physical hardware or socat PTY
+ *   - For production on ARK-3600 or field testing
  * 
  * KRITISK: EhlCommunicator vet IKKE hvilken modus den kjører i.
  * Den sender bare bytes til SerialTransport-interfacet.
@@ -33,15 +33,29 @@ class CommunicationConfig {
     
     private val logger = LoggerFactory.getLogger(CommunicationConfig::class.java)
     
-    @Value("\${ehl.emulator.enabled:true}")
-    private var emulatorEnabled: Boolean = true
+    @Value("\${lpg.mode:LAB}")
+    private lateinit var lpgMode: String
+    
+    @Value("\${ehl.transport.mode:}")
+    private var oldTransportMode: String = ""
     
     @PostConstruct
     fun logMode() {
-        val mode = if (emulatorEnabled) "🧪 LAB MODE" else "🏭 FIELD MODE"
+        // Warn if using deprecated parameter
+        if (oldTransportMode.isNotBlank()) {
+            logger.warn("")
+            logger.warn("⚠️  DEPRECATED: --ehl.transport.mode=$oldTransportMode is no longer used")
+            logger.warn("⚠️  Please use --lpg.mode=LAB or --lpg.mode=FIELD instead")
+            logger.warn("")
+        }
+        
+        val isLabMode = lpgMode.uppercase() == "LAB"
+        val modeEmoji = if (isLabMode) "🧪" else "🏭"
+        val modeName = if (isLabMode) "LAB MODE" else "FIELD MODE"
+        
         logger.info("")
         logger.info("═══════════════════════════════════════════════════════════")
-        logger.info("  EHL KOMMUNIKASJON: $mode")
+        logger.info("  EHL KOMMUNIKASJON: $modeEmoji $modeName")
         logger.info("═══════════════════════════════════════════════════════════")
         logger.info("")
     }
@@ -52,9 +66,9 @@ class CommunicationConfig {
      */
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-        name = ["ehl.emulator.enabled"],
-        havingValue = "true",
-        matchIfMissing = true
+        name = ["lpg.mode"],
+        havingValue = "LAB",
+        matchIfMissing = true  // LAB is default
     )
     fun dispenserEmulator(
         @Value("\${ehl.emulator.dispenser-address:1}") dispenserAddress: Int,

@@ -160,28 +160,41 @@ logging:
     max-history: 30
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SERIAL PORT CONFIGURATION
+# LPG APPLICATION CONFIGURATION (UNIFIED FOR WEBAPP + HEADLESS)
 # ═══════════════════════════════════════════════════════════════════════════════
-# 
-# Standard EHL Protocol: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
 #
-# Common port paths:
-#   Linux:   /dev/ttyS0, /dev/ttyUSB0, /dev/ttyAMA0 (Raspberry Pi)
-#   macOS:   /dev/cu.usbserial-xxxx, /tmp/ttyV1 (socat PTY)
-#   Windows: COM1, COM3, etc.
+# TWO MODES:
+#   LAB (default):  In-memory emulator - no hardware needed
+#   FIELD:          Real serial port (hardware or socat PTY)
+#
+# For FIELD mode with socat:
+#   1. Terminal 1: ./start-simulator.sh
+#   2. Terminal 2: java -jar release/lpg-ehl-webapp.jar \
+#                    --spring.config.location=file:./application-h2.yaml \
+#                    --lpg.mode=FIELD --ehl.serial.port=/tmp/ttyV1
 #
 # ═══════════════════════════════════════════════════════════════════════════════
+lpg:
+  mode: ${LPG_MODE:LAB}  # LAB (emulator) or FIELD (real serial)
+  dispenser:
+    address: ${LPG_DISPENSER_ADDRESS:1}
+  polling:
+    interval-ms: ${LPG_POLLING_INTERVAL_MS:2000}
+  price:
+    per-liter: ${LPG_PRICE_PER_LITER:15.90}
+  station:
+    id: ${STATION_ID:STATION-001}
+    name: ${STATION_NAME:Test Station}
+
 ehl:
-  transport:
-    # Transport mode: EMULATOR, SOCAT, or HARDWARE
-    #   EMULATOR - In-memory emulator, no hardware needed (default for webapp)
-    #   SOCAT    - Virtual PTY via socat, for simulator testing
-    #   HARDWARE - Real serial port (production)
-    mode: ${EHL_TRANSPORT_MODE:EMULATOR}
+  emulator:
+    dispenser-address: 1
+    price-per-liter-cents: 1590  # 15.90 NOK/L
+    latency-ms: 20               # Simulated serial delay
   
   serial:
-    # Serial port device path (for SOCAT and HARDWARE modes)
-    port: ${EHL_SERIAL_PORT:/dev/ttyS0}
+    # Serial port device path (for FIELD mode)
+    port: ${EHL_SERIAL_PORT:/tmp/ttyV1}
     baud-rate: ${EHL_BAUD_RATE:9600}
     data-bits: 8
     parity: EVEN
@@ -189,13 +202,6 @@ ehl:
     # Timeouts (ms)
     read-timeout-ms: 3000
     write-timeout-ms: 1000
-  
-  emulator:
-    # Emulator configuration (when mode=EMULATOR)
-    enabled: true
-    dispenser-address: 1
-    price-per-liter-cents: 1590  # 15.90 NOK/L
-    latency-ms: 20               # Simulated serial delay
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # EMULATOR TCP SERVER CONFIGURATION
@@ -218,43 +224,3 @@ emulator:
 # LPG API client (emulator -> webapp API)
 lpg-api:
   base-url: ${LPG_API_BASE_URL:http://localhost:8080}
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# LPG APPLICATION CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════════════════
-lpg:
-  mode: ${LPG_MODE:LAB}  # LAB (emulator testing) or FIELD (real hardware)
-  dispenser:
-    address: ${LPG_DISPENSER_ADDRESS:1}
-  polling:
-    interval-ms: ${LPG_POLLING_INTERVAL_MS:2000}
-  price:
-    per-liter: ${LPG_PRICE_PER_LITER:15.90}
-  station:
-    id: ${STATION_ID:STATION-001}
-    name: ${STATION_NAME:Test Stasjon}
-
----
-# ═══════════════════════════════════════════════════════════════════════════════
-# FIELD PROFILE - Real hardware/SOCAT transport
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# Bruk: --spring.profiles.active=h2,field
-#
-# Kombinerer H2 database med ekte seriell kommunikasjon via SOCAT eller hardware.
-# Perfekt for testing mot din simulator over virtuell PTY.
-#
-# ═══════════════════════════════════════════════════════════════════════════════
-spring:
-  config:
-    activate:
-      on-profile: field
-
-ehl:
-  transport:
-    mode: SOCAT
-  serial:
-    port: ${EHL_SERIAL_PORT:/tmp/ttyV1}
-
-lpg:
-  mode: FIELD

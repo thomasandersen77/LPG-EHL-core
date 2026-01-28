@@ -450,6 +450,30 @@ class PumpStateService(
             state.hasPendingTransaction = true
             state.state = "PAYMENT_PENDING"
             logger.info("🛑 PUMPING STOP: Volume: ${state.volumeLitres}L, Amount: ${state.amountKr} kr")
+            
+            // AUTO-SETTLE for simulated card payments (kortdragning flow)
+            // If this was triggered by a kortdragning (has authorizationId), automatically settle
+            if (state.authorizationId != null) {
+                logger.info("💳 AUTO-SETTLE: Kortdragning detected - automatically settling payment")
+                
+                // Small delay to ensure UI sees PAYMENT_PENDING state
+                try {
+                    Thread.sleep(500)
+                } catch (e: InterruptedException) {
+                    // Ignore
+                }
+                
+                // Automatically confirm payment
+                val result = confirmPayment(address, "SIMULATION")
+                if (result.isSuccess) {
+                    logger.info("✅ AUTO-SETTLE COMPLETED: Pump ready for next customer")
+                    
+                    // Reset emulator to IDLE if in LAB MODE
+                    dispenserEmulator?.markTransactionPaid()
+                } else {
+                    logger.error("❌ AUTO-SETTLE FAILED: ${result.exceptionOrNull()?.message}")
+                }
+            }
         } else {
             logger.info("🛑 PUMPING STOP: No volume delivered for pump $address")
         }
@@ -582,6 +606,9 @@ class PumpStateService(
         state.pendingTransactionId = null
         state.authorizationId = null
         lastLoggedMilestone.remove(address)
+        
+        // Reset emulator if in LAB MODE
+        dispenserEmulator?.clearTransaction()
         
         logger.info("🔄 Pump $address reset to IDLE")
         broadcastStatus(state)

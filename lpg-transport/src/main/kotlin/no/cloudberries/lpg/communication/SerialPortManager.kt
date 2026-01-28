@@ -174,10 +174,13 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
 
     /**
      * Read available bytes from the serial port.
+     * BLOCKS until at least 1 byte is available or timeout is reached.
+     * This relies on TIMEOUT_READ_SEMI_BLOCKING mode configured in connect().
+     * 
      * Disconnects on read failure to ensure clean reconnect.
      *
      * @param maxBytes Maximum number of bytes to read
-     * @return Bytes read, or empty array if no data available
+     * @return Bytes read, or empty array if timeout with no data
      * @throws IOException if not connected or read fails
      */
     override fun readAvailable(maxBytes: Int): ByteArray {
@@ -189,12 +192,12 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
             }
 
             try {
-                val available = port.bytesAvailable()
-                if (available <= 0) {
-                    return ByteArray(0)
-                }
-
-                val buffer = ByteArray(minOf(available, maxBytes))
+                // With TIMEOUT_READ_SEMI_BLOCKING, readBytes will block until:
+                // 1. At least 1 byte is read, OR
+                // 2. Timeout is reached (config.readTimeout ms)
+                // 
+                // DO NOT check bytesAvailable() first - that defeats the purpose of blocking read!
+                val buffer = ByteArray(maxBytes)
                 val bytesRead = port.readBytes(buffer, buffer.size)
                 
                 if (bytesRead < 0) {
@@ -203,13 +206,16 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
                     disconnectInternal()
                     throw IOException("Failed to read from serial port ${config.portName}")
                 }
+                
+                if (bytesRead == 0) {
+                    // Timeout with no data - this is normal, return empty array
+                    return ByteArray(0)
+                }
 
                 val result = buffer.copyOf(bytesRead)
                 
                 // WATCHDOG: Update timestamp when we receive valid data
-                if (bytesRead > 0) {
-                    lastDataReceivedTime = System.currentTimeMillis()
-                }
+                lastDataReceivedTime = System.currentTimeMillis()
                 
                 logger.debug("Read $bytesRead bytes from ${config.portName}: ${result.toHexString()}")
                 return result

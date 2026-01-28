@@ -59,9 +59,11 @@ data class LogEvent(
 )
 
 enum class LogChannel {
-    API,      // REST API logs
-    EMULATOR, // Emulator state machine logs
-    PROTOCOL  // EHL protocol packet logs
+    API,      // REST API logs (controllers, REST endpoints)
+    SERVICE,  // Service layer logs (PumpStateService, PumpAuthorizationService, TransactionService)
+    EMULATOR, // Emulator logs (EhlDispenserEmulator - LAB mode only)
+    PROTOCOL, // EHL protocol packet logs (TX/RX HEX, SerialPortManager)
+    ALL       // Meta-channel for subscribing to all logs
 }
 
 enum class LogLevel {

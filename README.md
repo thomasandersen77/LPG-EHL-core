@@ -24,7 +24,8 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 ## 📚 Documentation
 
 ### 🚀 Getting Started
-- **[IntelliJ IDEA Setup](docs/development/INTELLIJ_SETUP.md)** - Quick start for debugging in IntelliJ (Recommended)
+- **[QUICK START GUIDE](QUICK_START.md)** ⭐ **START HER!** - Raskeste vei til å få systemet opp og kjøre
+- **[IntelliJ IDEA Setup](docs/development/INTELLIJ_SETUP.md)** - Quick start for debugging in IntelliJ
 - **[IntelliJ Full Stack](docs/development/INTELLIJ_FULL_STACK.md)** - Run entire system with one button
 - **[Demo Guide](docs/development/DEMO_GUIDE.md)** - Complete demo setup for presentations
 

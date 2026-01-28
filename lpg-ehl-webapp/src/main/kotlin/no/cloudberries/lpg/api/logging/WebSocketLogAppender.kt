@@ -49,7 +49,7 @@ class WebSocketLogAppender : AppenderBase<ILoggingEvent>() {
     
     private fun determineChannel(loggerName: String): LogChannel {
         return when {
-            // Protocol logs (HEX packets) - matches both protocol and communication packages
+            // Protocol logs (HEX packets, serial communication)
             loggerName.contains("protocol", ignoreCase = true) -> LogChannel.PROTOCOL
             loggerName.contains("communication", ignoreCase = true) -> LogChannel.PROTOCOL
             loggerName.contains("Codec") -> LogChannel.PROTOCOL
@@ -58,15 +58,24 @@ class WebSocketLogAppender : AppenderBase<ILoggingEvent>() {
             loggerName.contains("Communicator") -> LogChannel.PROTOCOL
             loggerName.contains("SerialPort") -> LogChannel.PROTOCOL
             
-            // Emulator logs
-            loggerName.contains("Emulator") -> LogChannel.EMULATOR
-            loggerName.contains("Dispenser") -> LogChannel.EMULATOR
-            loggerName.contains("PumpState") -> LogChannel.EMULATOR
-            loggerName.contains("Pump") -> LogChannel.EMULATOR
+            // Emulator logs (LAB mode only - EhlDispenserEmulator)
+            loggerName.contains("EhlDispenserEmulator") -> LogChannel.EMULATOR
+            loggerName.contains("InMemorySerialPort") -> LogChannel.EMULATOR
+            loggerName.contains("no.cloudberries.lpg.emulator") -> LogChannel.EMULATOR
             
-            // API logs (controllers, services)
+            // Service layer logs (business logic - both LAB and FIELD)
+            loggerName.contains("PumpStateService") -> LogChannel.SERVICE
+            loggerName.contains("PumpAuthorizationService") -> LogChannel.SERVICE
+            loggerName.contains("TransactionService") -> LogChannel.SERVICE
+            loggerName.contains("PriceService") -> LogChannel.SERVICE
+            loggerName.contains("no.cloudberries.lpg.service") -> LogChannel.SERVICE
+            
+            // API logs (REST controllers)
             loggerName.contains("Controller") -> LogChannel.API
-            loggerName.contains("Service") -> LogChannel.API
+            loggerName.contains("no.cloudberries.lpg.api.controller") -> LogChannel.API
+            
+            // Default to SERVICE for other service-related logs
+            loggerName.contains("Service") -> LogChannel.SERVICE
             
             // Default to API
             else -> LogChannel.API

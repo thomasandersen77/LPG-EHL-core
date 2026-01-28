@@ -182,11 +182,16 @@ class WebSocketEventPublisher(
         
         sessions.values.forEach { sessionInfo ->
             try {
-                // Send to all if no specific subscription, or if channel matches
-                if (sessionInfo.subscribedChannels.isEmpty() || channel in sessionInfo.subscribedChannels) {
-                    if (sessionInfo.session.isOpen) {
-                        sessionInfo.session.sendMessage(TextMessage(json))
-                    }
+                // Send to all if:
+                // 1. No specific subscription (default to all)
+                // 2. Subscribed to ALL channel
+                // 3. Subscribed to this specific channel
+                val shouldSend = sessionInfo.subscribedChannels.isEmpty() ||
+                                 LogChannel.ALL in sessionInfo.subscribedChannels ||
+                                 channel in sessionInfo.subscribedChannels
+                
+                if (shouldSend && sessionInfo.session.isOpen) {
+                    sessionInfo.session.sendMessage(TextMessage(json))
                 }
             } catch (e: Exception) {
                 logger.debug("Failed to send to session ${sessionInfo.session.id}: ${e.message}")

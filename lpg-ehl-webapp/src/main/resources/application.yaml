@@ -117,45 +117,42 @@ server:
   compression:
     enabled: true
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # EHL PROTOCOL CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════════════════
-# 
-# TRI-MODE ARKITEKTUR (ehl.transport.mode):
+# ═════════════════════════════════════════════════════════════════════════════
 #
-#   EMULATOR (Default):
-#     - InMemorySerialPort + EhlDispenserEmulator
-#     - Ingen fysisk hardware nødvendig
-#     - Perfekt for utvikling og testing
+# TWO MODES (controlled by lpg.mode):
+#   LAB (default):  Uses in-memory emulator - no hardware needed
+#   FIELD:          Uses real serial port (hardware or socat PTY)
 #
-#   SOCAT:
-#     - RealSerialTransport + virtuell PTY (socat)
-#     - PLS Simulator på andre enden av PTY
-#     - Realistisk serial testing uten hardware
-#     - Bruk: ./scripts/start-socat-sim.sh
+# For FIELD mode with socat testing:
+#   1. Run: ./start-simulator.sh (starts socat + simulator)
+#   2. Start app with: --lpg.mode=FIELD --ehl.serial.port=/tmp/ttyV1
 #
-#   HARDWARE:
-#     - RealSerialTransport + fysisk RS-485
-#     - Kommuniserer med ekte LPG-pumpe
-#     - Kun for produksjon på ARK-3600
-#
-# LEGACY STØTTE: ehl.emulator.enabled fungerer fortsatt for bakoverkompatibilitet
-#
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+lpg:
+  mode: ${LPG_MODE:LAB}  # LAB (emulator) or FIELD (real serial)
+  dispenser:
+    address: ${LPG_DISPENSER_ADDRESS:1}
+  polling:
+    interval-ms: ${LPG_POLLING_INTERVAL_MS:2000}
+  price:
+    per-liter: ${LPG_PRICE_PER_LITER:15.90}
+  station:
+    id: ${STATION_ID:STATION-001}
+    name: ${STATION_NAME:Test Station}
+
 ehl:
-  transport:
-    # Transport mode: EMULATOR, SOCAT, or HARDWARE
-    mode: ${EHL_TRANSPORT_MODE:EMULATOR}
   emulator:
-    # Legacy property - still works for backwards compatibility
-    enabled: ${EHL_EMULATOR_ENABLED:true}
     dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
     price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
-    latency-ms: ${EHL_LATENCY_MS:20}  # Simulert serial port latency
+    latency-ms: ${EHL_LATENCY_MS:20}
   serial:
-    # Serial port device path (for SOCAT and HARDWARE modes)
+    # Serial port device path (for FIELD mode)
     port: ${EHL_SERIAL_PORT:/tmp/ttyV1}
     baud-rate: ${EHL_BAUD_RATE:9600}
-    data-bits: 8
-    parity: EVEN  # 8E1 (8 data bits, even parity, 1 stop bit)
-    stop-bits: 1
+    data-bits: ${EHL_DATA_BITS:8}
+    parity: ${EHL_PARITY:EVEN}
+    stop-bits: ${EHL_STOP_BITS:1}
+    read-timeout-ms: 3000
+    write-timeout-ms: 1000
