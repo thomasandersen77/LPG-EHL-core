@@ -12,6 +12,7 @@ import { PaymentTerminalPage } from './pages/PaymentTerminalPage';
 import { AzureStoragePage } from './pages/AzureStoragePage';
 import { FuelingPage } from './pages/FuelingPage';
 import { PriceAdminPage } from './pages/PriceAdminPage';
+import { SerialPortConfigPage } from './pages/SerialPortConfigPage';
 import { Layout } from './components/Layout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppModeProvider, useAppMode } from './contexts/AppModeContext';
@@ -76,6 +77,7 @@ function AppContent() {
           <Route path="price-admin" element={<PriceAdminPage />} />
           {isLab && <Route path="emulator-debug" element={<EmulatorDebugPage />} />}
           {isLab && <Route path="azure-storage" element={<AzureStoragePage />} />}
+          <Route path="serial-config" element={<SerialPortConfigPage />} />
         </Route>
       </Routes>
     </>

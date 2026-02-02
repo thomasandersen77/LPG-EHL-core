@@ -10,16 +10,21 @@ import kotlin.concurrent.thread
 /**
  * Manages PLS state for dispensers with auto-pumping simulation.
  * 
- * @param defaultAddress Default dispenser address (1-8)
+ * Supports both standard addresses (1-8) and legacy addresses (32+n).
+ * Based on Alejandro's field testing findings.
+ * 
+ * @param defaultAddress Default dispenser address (1-8 or 33-40 for legacy)
  * @param priceCents Price per liter in cents (e.g., 1590 = 15.90 kr/L)
  * @param initiallyBlocked Whether dispensers start in blocked state
  * @param flowRateMlPerSecond Simulated flow rate in ml/second (default: 500 = 0.5 L/s)
+ * @param legacyAddressEnabled If true, also responds to legacy address (32 + defaultAddress)
  */
 class PlsState(
     private val defaultAddress: Int = 1,
     private val priceCents: Int = 1590,
     initiallyBlocked: Boolean = true,
-    private val flowRateMlPerSecond: Int = 500
+    private val flowRateMlPerSecond: Int = 500,
+    private val legacyAddressEnabled: Boolean = true
 ) {
     private val log = LoggerFactory.getLogger(PlsState::class.java)
     
@@ -32,10 +37,21 @@ class PlsState(
     @Volatile private var pumpingThread: Thread? = null
     @Volatile private var running = true
 
+    // Legacy address = 32 + defaultAddress (Alejandro's finding)
+    private val legacyAddress: Int = 32 + defaultAddress
+    
     init {
         // Initialize default dispenser with configured state
         dispenserBlocked[defaultAddress] = initiallyBlocked
-        log.info("PLS State initialized: address=$defaultAddress, price=${priceCents/100.0} kr/L, blocked=$initiallyBlocked, flowRate=${flowRateMlPerSecond}ml/s")
+        if (legacyAddressEnabled) {
+            dispenserBlocked[legacyAddress] = initiallyBlocked
+        }
+        
+        val addressInfo = if (legacyAddressEnabled) 
+            "address=$defaultAddress (+ legacy=$legacyAddress)" 
+        else 
+            "address=$defaultAddress"
+        log.info("PLS State initialized: $addressInfo, price=${priceCents/100.0} kr/L, blocked=$initiallyBlocked, flowRate=${flowRateMlPerSecond}ml/s")
         
         // Start auto-pumping simulation thread
         startAutoPumpingThread()
@@ -45,6 +61,13 @@ class PlsState(
             pumpingActive.set(true)
             log.info("▶️ Auto-pumping enabled at startup (unblocked mode)")
         }
+    }
+    
+    /**
+     * Check if address matches this dispenser (standard or legacy).
+     */
+    fun matchesAddress(address: Int): Boolean {
+        return address == defaultAddress || (legacyAddressEnabled && address == legacyAddress)
     }
     
     /**
@@ -158,15 +181,29 @@ class PlsState(
 
     /**
      * Process EHL binary command frame.
+     * 
+     * Supports all commands tested by Alejandro:
+     * - STATE (0x4B) - Returns pump status
+     * - ERROR_QUERY (0x4C) - Returns error status (no errors = empty data)
+     * - VOLUME (0x45) - Returns current volume
+     * - TANKBIT (0xC5) - Returns tank level status
+     * 
+     * Also responds to legacy addresses (32 + defaultAddress).
      */
-    fun processEhlCommand(frame: EhlFrame): EhlCommandResult {
+    fun processEhlCommand(frame: EhlFrame): EhlCommandResult? {
         val cmd = frame.cmd
         // Binary address (Core/VB6 sends raw address byte, not ASCII)
         val addrInt = frame.addr.toInt() and 0xFF
+        
+        // Check if we should respond to this address
+        if (!matchesAddress(addrInt)) {
+            log.debug("🚫 Ignoring command for address $addrInt (not our address)")
+            return null  // Don't respond to wrong address
+        }
 
         return when (cmd) {
             EhlFrameCodec.CMD_LINETEST -> {
-                log.debug("🔗 LINETEST from dispenser $addrInt")
+                log.debug("🔗 LINETEST from address $addrInt")
                 EhlCommandResult.OkAck(frame.addr)
             }
             EhlFrameCodec.CMD_STATE -> {
@@ -187,57 +224,68 @@ class PlsState(
                     0x06 -> "PUMPING"
                     else -> "UNKNOWN"
                 }
-                log.debug("📊 STATE request from dispenser $addrInt -> $statusName (0x${String.format("%02X", statusByte.toInt() and 0xFF)}, vol=${volumeMl}ml)")
+                log.debug("📊 STATE addr=$addrInt -> $statusName (0x${statusByte.toHex()}, vol=${volumeMl}ml)")
                 EhlCommandResult.StateResponse(frame.addr, byteArrayOf(statusByte))
+            }
+            EhlFrameCodec.CMD_ERROR_QUERY -> {
+                // Alejandro tested: ERROR_QUERY (0x4C) - returns error status
+                // Return empty data = no errors
+                log.debug("⚠️ ERROR_QUERY addr=$addrInt -> No errors")
+                EhlCommandResult.ErrorQueryResponse(frame.addr, byteArrayOf(0x00))  // No errors
             }
             EhlFrameCodec.CMD_VOLUME -> {
                 // Core expects 5 ASCII digits in LSB-first order (centiliters)
                 val volumeCl = (getVolumeMl() / 10).toInt().coerceIn(0, 99999)
                 val volumeStr = "%05d".format(volumeCl)
                 val volumeBytes = volumeStr.reversed().map { it.code.toByte() }.toByteArray()
-                log.debug("⛽ VOLUME request from dispenser $addrInt -> ${getVolumeMl()/1000.0} L (cl=$volumeCl, raw=$volumeStr)")
+                log.debug("⛽ VOLUME addr=$addrInt -> ${getVolumeMl()/1000.0} L (cl=$volumeCl)")
                 EhlCommandResult.VolumeResponse(frame.addr, volumeBytes)
             }
-            EhlFrameCodec.CMD_PRICE -> {
+            EhlFrameCodec.CMD_TANKBIT -> {
+                // Alejandro tested: TANKBIT (0xC5) - returns tank level status
+                // Return 0x01 = tank OK (not empty)
+                log.debug("🚨 TANKBIT addr=$addrInt -> Tank OK")
+                EhlCommandResult.TankbitResponse(frame.addr, byteArrayOf(0x01))  // Tank OK
+            }
+            EhlFrameCodec.CMD_PRICE, EhlFrameCodec.CMD_PRICE_ALT -> {
                 if (frame.data.isNotEmpty()) {
                     // SET PRICE: data contains 4 ASCII digits in LSB-first order (cents)
-                    // e.g. [0x30, 0x39, 0x35, 0x31] = "0951" reversed = "1590" = 15.90 kr/L
                     val priceStr = frame.data.reversed().map { (it.toInt() and 0xFF).toChar() }.joinToString("")
                     val priceCents = priceStr.toIntOrNull() ?: getPrice()
                     setPrice(priceCents)
-                    log.info("💰 PRICE SET from controller: ${priceCents/100.0} kr/L (raw=$priceStr)")
+                    log.info("💰 PRICE SET addr=$addrInt: ${priceCents/100.0} kr/L")
                     EhlCommandResult.OkAck(frame.addr)
                 } else {
                     // GET PRICE: return current price as 4 ASCII digits in LSB-first order (cents)
                     val priceStr = "%04d".format(getPrice().coerceIn(0, 9999))
                     val priceBytes = priceStr.reversed().map { it.code.toByte() }.toByteArray()
-                    log.debug("💰 PRICE GET from controller -> ${getPrice()/100.0} kr/L (raw=$priceStr)")
+                    log.debug("💰 PRICE GET addr=$addrInt -> ${getPrice()/100.0} kr/L")
                     EhlCommandResult.PriceResponse(frame.addr, priceBytes)
                 }
             }
             EhlFrameCodec.CMD_BLOCK -> {
                 setBlocked(addrInt, true)
-                log.info("🛑 BLOCK command for dispenser $addrInt")
+                log.info("🛑 BLOCK addr=$addrInt")
                 EhlCommandResult.OkAck(frame.addr)
             }
             EhlFrameCodec.CMD_UNBLOCK -> {
                 setBlocked(addrInt, false)
-                log.info("✅ UNBLOCK command for dispenser $addrInt")
+                log.info("✅ UNBLOCK addr=$addrInt")
                 EhlCommandResult.OkAck(frame.addr)
             }
             EhlFrameCodec.CMD_STOP -> {
                 setBlocked(addrInt, true)
                 resetVolume()
-                log.info("⏹️ STOP command for dispenser $addrInt")
+                log.info("⏹️ STOP addr=$addrInt")
                 EhlCommandResult.OkAck(frame.addr)
             }
             EhlFrameCodec.CMD_RESET -> {
                 resetVolume()
-                log.info("🔄 RESET command for dispenser $addrInt")
+                log.info("🔄 RESET addr=$addrInt")
                 EhlCommandResult.OkAck(frame.addr)
             }
             else -> {
-                log.info("❓ Unknown EHL command: 0x${cmd.toHex()} from dispenser $addrInt")
+                log.info("❓ Unknown cmd=0x${cmd.toHex()} addr=$addrInt -> ACK")
                 EhlCommandResult.OkAck(frame.addr)  // Generic ACK
             }
         }
@@ -292,6 +340,28 @@ sealed class EhlCommandResult {
             if (this === other) return true
             if (javaClass != other?.javaClass) return false
             other as PriceResponse
+            return addr == other.addr && data.contentEquals(other.data)
+        }
+        override fun hashCode(): Int = 31 * addr.toInt() + data.contentHashCode()
+    }
+    
+    /** ERROR_QUERY response (Alejandro tested) */
+    data class ErrorQueryResponse(val addr: Byte, val data: ByteArray) : EhlCommandResult() {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as ErrorQueryResponse
+            return addr == other.addr && data.contentEquals(other.data)
+        }
+        override fun hashCode(): Int = 31 * addr.toInt() + data.contentHashCode()
+    }
+    
+    /** TANKBIT response (Alejandro tested) */
+    data class TankbitResponse(val addr: Byte, val data: ByteArray) : EhlCommandResult() {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as TankbitResponse
             return addr == other.addr && data.contentEquals(other.data)
         }
         override fun hashCode(): Int = 31 * addr.toInt() + data.contentHashCode()

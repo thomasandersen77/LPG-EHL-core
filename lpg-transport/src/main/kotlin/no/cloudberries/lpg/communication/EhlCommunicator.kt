@@ -17,8 +17,13 @@ import java.util.concurrent.TimeoutException
  * and in-memory implementations for testing.
  * 
  * Thread-safety: Uses Mutex to ensure single-flight request/response pattern.
+ * 
+ * @property enableRawLogging If true, logs raw TX/RX bytes at DEBUG level. If false, uses TRACE.
  */
-class EhlCommunicator(private val transport: SerialTransport) {
+class EhlCommunicator(
+    private val transport: SerialTransport,
+    private val enableRawLogging: Boolean = true
+) {
     private val logger = LoggerFactory.getLogger(EhlCommunicator::class.java)
     private val receiveBuffer = mutableListOf<Byte>()
     private val bufferLock = Any()
@@ -65,8 +70,12 @@ class EhlCommunicator(private val transport: SerialTransport) {
 
         val bytes = EhlCodec.encode(packet)
         
-        // RAW HEX logging for protocol debugging
-        logger.debug("📤 TX HEX: [${bytes.toHexString()}] -> ${packet.command}")
+        // RAW HEX logging for protocol debugging (configurable level)
+        if (enableRawLogging) {
+            logger.debug("📤 TX HEX: [${bytes.toHexString()}] -> ${packet.command}")
+        } else {
+            logger.trace("📤 TX HEX: [${bytes.toHexString()}] -> ${packet.command}")
+        }
         
         // Detailed packet info at DEBUG level
         if (logger.isDebugEnabled) {
@@ -121,8 +130,12 @@ class EhlCommunicator(private val transport: SerialTransport) {
                 // Read more data from serial port
                 val newData = transport.readAvailable()
                 if (newData.isNotEmpty()) {
-                    // RAW HEX logging for protocol debugging
-                    logger.debug("📥 RX HEX: [${newData.toHexString()}]")
+                    // RAW HEX logging for protocol debugging (configurable level)
+                    if (enableRawLogging) {
+                        logger.debug("📥 RX HEX: [${newData.toHexString()}]")
+                    } else {
+                        logger.trace("📥 RX HEX: [${newData.toHexString()}]")
+                    }
                     
                     synchronized(bufferLock) {
                         receiveBuffer.addAll(newData.toList())

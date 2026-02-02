@@ -5,15 +5,15 @@ import no.cloudberries.lpg.emulator.EhlDispenserEmulator
 import no.cloudberries.lpg.emulator.InMemorySerialPort
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import jakarta.annotation.PostConstruct
 
 /**
  * LAB MODE: Emulator Serial Port Adapter for in-memory testing.
  * 
- * Dette er DEFAULT modus. Når ehl.emulator.enabled=true (eller ikke satt),
- * brukes denne adapteren som kobler EhlCommunicator til EhlDispenserEmulator.
+ * Aktiv når profile=lab ELLER ingen profile er satt (default).
+ * Kobler EhlCommunicator til in-memory EhlDispenserEmulator.
  * 
  * Fordeler:
  * - Ingen fysisk hardware nødvendig
@@ -21,20 +21,15 @@ import jakarta.annotation.PostConstruct
  * - Realistisk latency-simulering for timeout-testing
  * - Trygt for utvikling - kan ikke ved et uhell påvirke ekte pumper
  * 
- * Konfigurasjon i application.yaml:
+ * Konfigurasjon i application-lab.yaml:
  * ```yaml
  * ehl:
  *   emulator:
- *     enabled: true  # DEFAULT - aktiverer LAB MODE
  *     latency-ms: 20  # Simulert serial port latency
  *     price-per-liter-cents: 1590
  * ```
  */
-@ConditionalOnProperty(
-    name = ["ehl.emulator.enabled"],
-    havingValue = "true",
-    matchIfMissing = true  // DEFAULT: LAB MODE når property ikke er satt
-)
+@Profile("lab", "default")
 class EmulatorSerialPortAdapter(
     @Value("\${ehl.emulator.dispenser-address:1}")
     private val dispenserAddress: Int,

@@ -53,16 +53,24 @@ object EhlPacketFormatter {
         if (data.isEmpty()) return "Query"
         
         val stateCode = data[0].toInt() and 0xFF
-        val stateName = when (stateCode) {
-            0 -> "IDLE (Ready for new transaction)"
-            1 -> "READY (Authorized, waiting for nozzle)"
-            2 -> "DELIVERING (Fuel flowing)"
-            3 -> "FINISHED (Transaction complete)"
-            8 -> "PAYMENT_PENDING (Awaiting settlement)"
-            9 -> "ERROR (Dispenser error)"
-            else -> "UNKNOWN"
+        
+        // Use VB6-compatible bit-flag interpretation
+        // Bits: 0x02=OPEN_FOR_DELIVERY, 0x04=START_BUTTON, 0x08=AUTOMODE, 0x80=ERROR
+        val hasError = (stateCode and 0x80) != 0
+        val automode = (stateCode and 0x08) != 0
+        val startButton = (stateCode and 0x04) != 0
+        val openForDelivery = (stateCode and 0x02) != 0
+        
+        val stateName = when {
+            hasError -> "ERROR (Dispenser error)"
+            automode && !startButton && !openForDelivery -> "PAYMENT_PENDING (Awaiting settlement)"
+            startButton && openForDelivery -> "PUMPING (Fuel flowing)"  // 0x06
+            startButton && !openForDelivery -> "AUTHORIZED (Ready for nozzle)"  // 0x04
+            !startButton && !openForDelivery && !automode -> "IDLE (Ready for new transaction)"  // 0x00
+            openForDelivery && !startButton -> "NOZZLE_LIFTED (Waiting for authorization)"  // 0x02 only
+            else -> "UNKNOWN (bits: 0x%02X)".format(stateCode)
         }
-        return "State=$stateCode ($stateName)"
+        return "State=0x%02X ($stateName)".format(stateCode)
     }
     
     private fun formatVolumeData(data: ByteArray): String {

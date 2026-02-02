@@ -26,16 +26,24 @@ object EhlFrameCodec {
     const val ETX: Byte = 0x36
     const val MIN_FRAME_LENGTH = 6
     
-    // EHL Command codes
+    // EHL Command codes (from VB6/Python analysis)
     const val CMD_OK: Byte = 0x1E          // 30 - Command acknowledgement
+    const val CMD_ERROR_DATA: Byte = 0x25  // 37 - Error data response
     const val CMD_LINETEST: Byte = 0x6A    // 106 - Transmission channel test
     const val CMD_STATE: Byte = 0x4B       // 75 - Give/take calculator state
+    const val CMD_ERROR_QUERY: Byte = 0x4C // 76 - Query error status (Alejandro tested)
     const val CMD_VOLUME: Byte = 0x45      // 69 - Give/take fuel amount
-    const val CMD_PRICE: Byte = 0x4F       // 79 - Give/take unit price
+    const val CMD_PRICE: Byte = 0x5C       // 92 - Give/take unit price (actual VB6 code)
+    const val CMD_PRICE_ALT: Byte = 0x4F   // 79 - Alternate price command
     const val CMD_BLOCK: Byte = 0x69       // 105 - Block/stop dispenser
     const val CMD_UNBLOCK: Byte = 0x77     // 119 - Start delivery mode
     const val CMD_STOP: Byte = 0x2F        // 47 - Stop the dispenser
-    const val CMD_RESET: Byte = 0x52       // 82 - Reset dispenser
+    const val CMD_RESET: Byte = 0x81.toByte() // 129 - Reset dispenser (0x52 = 'R' ASCII, 0x81 = binary)
+    const val CMD_PROG_VOLUME: Byte = 0x70 // 112 - Program volume
+    const val CMD_PROG_AMOUNT: Byte = 0x75 // 117 - Program amount
+    const val CMD_PROG_PRC: Byte = 0xA9.toByte() // 169 - Program price
+    const val CMD_PRODUCT_SELECT: Byte = 0xC3.toByte() // 195 - Product selection
+    const val CMD_TANKBIT: Byte = 0xC5.toByte() // 197 - Tank bit status (Alejandro tested)
     
     /**
      * Decode an EHL frame from raw bytes.

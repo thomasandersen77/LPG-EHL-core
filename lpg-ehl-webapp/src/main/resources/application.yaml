@@ -1,93 +1,93 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# LPG-EHL WEBAPP - Common Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# PROFILES:
+#   lab   - Development with H2 + emulator (default)
+#   field - Production with real serial port
+#
+# USAGE:
+#   LAB:   java -jar lpg-ehl-webapp.jar --spring.profiles.active=lab
+#   FIELD: java -jar lpg-ehl-webapp.jar --spring.profiles.active=field
+#
+# EXTERNAL CONFIG:
+#   Override serial params in config/application.yaml:
+#   --spring.config.additional-location=file:./config/
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
 spring:
   application:
-    name: lpg-ehl-api
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
+    name: lpg-ehl-webapp
   security:
     user:
       name: ${SECURITY_USER_NAME:admin}
       password: ${SECURITY_USER_PASSWORD:admin123}
   
+  # Default: H2 in-memory (overridden by profiles or external config)
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lpg_ehl}
-    username: ${DB_USER:lpg_user}
-    password: ${DB_PASSWORD:lpg_dev_password}
-    driver-class-name: org.postgresql.Driver
+    url: jdbc:h2:mem:lpgdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
     hikari:
       maximum-pool-size: 10
-      minimum-idle: 5
+      minimum-idle: 2
       connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
   
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
-        jdbc:
-          batch_size: 20
-        order_inserts: true
-        order_updates: true
   
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
-    default-schema: public
-    liquibase-schema: public
-    drop-first: false
   
   jackson:
     serialization:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
 
-# Azure Storage Queue Configuration
+# Azure Storage Queue Configuration (disabled by default, override in profiles)
 azure:
-  enabled: ${AZURE_ENABLED:true}
+  enabled: ${AZURE_ENABLED:false}
   storage:
-    connection-string: ${AZURE_CONNECTION_STRING:UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://localhost:10001}
+    connection-string: ${AZURE_CONNECTION_STRING:UseDevelopmentStorage=true}
     queue-name: ${AZURE_QUEUE_NAME:lpg-transactions}
   sync:
     interval-seconds: ${AZURE_SYNC_INTERVAL:300}
     batch-size: ${AZURE_SYNC_BATCH_SIZE:10}
     max-retries: ${AZURE_SYNC_MAX_RETRIES:3}
 
-# Nets Cloud Connect Configuration (SSL/TLS Socket)
-# No configuration needed in application.yaml - CloudTerminalClient is configured in code
-# Connection parameters: 3.33.230.243:6001 (SSL/TLS)
-# Protocol: Baxi (same as direct TCP/ECR)
+# Nets Cloud Connect
 nets:
   cloud-connect:
-    # Optional overrides (defaults in CloudTerminalClient)
-    host: ${NETS_CLOUD_HOST:3.33.230.243}
+    host: ${NETS_CLOUD_HOST:localhost}
     port: ${NETS_CLOUD_PORT:6001}
     connect-timeout-ms: ${NETS_CONNECT_TIMEOUT_MS:10000}
     read-timeout-ms: ${NETS_READ_TIMEOUT_MS:30000}
 
-# Security Configuration
+# Security
 security:
   api-token: ${API_AUTH_TOKEN:dev-token-12345}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3001,http://localhost:8080}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3001,http://localhost:8080,http://localhost:5173}
 
-# Actuator Configuration
+# Actuator
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics
       base-path: /actuator
   endpoint:
     health:
-      show-details: when-authorized
-  metrics:
-    export:
-      prometheus:
-        enabled: true
+      show-details: always
 
 # API Documentation
 springdoc:
@@ -95,67 +95,49 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui.html
-    operations-sorter: method
-    tags-sorter: alpha
 
-# Logging
-logging:
-  level:
-    root: INFO
-    no.cloudberries.lpg: INFO
-    no.cloudberries.lpg.api.controller: INFO
-    no.cloudberries.lpg.api.config.TokenAuthenticationFilter: WARN
-    org.springframework.security: INFO
-    org.hibernate.SQL: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-
-# Server Configuration
+# Server
 server:
   port: ${PORT:8080}
   shutdown: graceful
   compression:
     enabled: true
 
+# Default logging (overridden by profiles)
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%15.15thread] %logger{25} - %msg%n"
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# EHL PROTOCOL CONFIGURATION
+# LPG APPLICATION CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
-# 
-# TRI-MODE ARKITEKTUR (ehl.transport.mode):
-#
-#   EMULATOR (Default):
-#     - InMemorySerialPort + EhlDispenserEmulator
-#     - Ingen fysisk hardware nødvendig
-#     - Perfekt for utvikling og testing
-#
-#   SOCAT:
-#     - RealSerialTransport + virtuell PTY (socat)
-#     - PLS Simulator på andre enden av PTY
-#     - Realistisk serial testing uten hardware
-#     - Bruk: ./scripts/start-socat-sim.sh
-#
-#   HARDWARE:
-#     - RealSerialTransport + fysisk RS-485
-#     - Kommuniserer med ekte LPG-pumpe
-#     - Kun for produksjon på ARK-3600
-#
-# LEGACY STØTTE: ehl.emulator.enabled fungerer fortsatt for bakoverkompatibilitet
-#
+lpg:
+  dispenser:
+    address: ${LPG_DISPENSER_ADDRESS:1}
+  polling:
+    interval-ms: ${LPG_POLLING_INTERVAL_MS:2000}
+  price:
+    per-liter: ${LPG_PRICE_PER_LITER:15.90}
+  station:
+    id: ${STATION_ID:STATION-001}
+    name: ${STATION_NAME:Test Station}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EHL SERIAL DEFAULTS (overridden by profiles or external config)
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
-  transport:
-    # Transport mode: EMULATOR, SOCAT, or HARDWARE
-    mode: ${EHL_TRANSPORT_MODE:EMULATOR}
   emulator:
-    # Legacy property - still works for backwards compatibility
-    enabled: ${EHL_EMULATOR_ENABLED:true}
     dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
     price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
-    latency-ms: ${EHL_LATENCY_MS:20}  # Simulert serial port latency
+    latency-ms: ${EHL_LATENCY_MS:20}
   serial:
-    # Serial port device path (for SOCAT and HARDWARE modes)
-    port: ${EHL_SERIAL_PORT:/tmp/ttyV1}
+    port: ${EHL_SERIAL_PORT:/tmp/vserial1}
     baud-rate: ${EHL_BAUD_RATE:9600}
     data-bits: 8
-    parity: EVEN  # 8E1 (8 data bits, even parity, 1 stop bit)
+    parity: ${EHL_SERIAL_PARITY:NONE}
     stop-bits: 1
+    read-timeout-ms: 3000
+    write-timeout-ms: 1000

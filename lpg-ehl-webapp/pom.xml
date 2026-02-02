@@ -60,6 +60,12 @@
             <artifactId>jackson-module-kotlin</artifactId>
         </dependency>
 
+        <!-- Kotlin Coroutines for suspend functions in Spring MVC -->
+        <dependency>
+            <groupId>org.jetbrains.kotlinx</groupId>
+            <artifactId>kotlinx-coroutines-reactor</artifactId>
+        </dependency>
+
         <!-- H2 Database (for in-memory testing) -->
         <dependency>
             <groupId>com.h2database</groupId>

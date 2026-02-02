@@ -23,6 +23,7 @@ fun main(args: Array<String>) {
     log.info("  Serial Configuration:")
     log.info("    Port:      {}", cliArgs.port)
     log.info("    Baud:      {}", cliArgs.baud)
+    log.info("    Parity:    {}", cliArgs.parity)
     log.info("    Mode:      {}", cliArgs.mode)
     log.info("    Chunked:   {}", cliArgs.chunk)
     log.info("    Latency:   {} ms", cliArgs.latencyMs)
@@ -30,8 +31,14 @@ fun main(args: Array<String>) {
     log.info("")
     log.info("  Dispenser Configuration:")
     log.info("    Address:   {}", cliArgs.dispenserAddress)
+    if (cliArgs.legacyAddressEnabled) {
+        log.info("    Legacy:    {} (32 + {})", 32 + cliArgs.dispenserAddress, cliArgs.dispenserAddress)
+    }
     log.info("    Price:     {} kr/L", cliArgs.priceCents / 100.0)
     log.info("    Blocked:   {}", cliArgs.initiallyBlocked)
+    log.info("")
+    log.info("  Commands supported (Alejandro tested):")
+    log.info("    STATE (0x4B), ERROR_QUERY (0x4C), VOLUME (0x45), TANKBIT (0xC5)")
     log.info("")
     log.info("  Logging:")
     log.info("    Heartbeat: {} ms", cliArgs.heartbeatIntervalMs)
@@ -42,12 +49,14 @@ fun main(args: Array<String>) {
     val plsState = PlsState(
         defaultAddress = cliArgs.dispenserAddress,
         priceCents = cliArgs.priceCents,
-        initiallyBlocked = cliArgs.initiallyBlocked
+        initiallyBlocked = cliArgs.initiallyBlocked,
+        legacyAddressEnabled = cliArgs.legacyAddressEnabled
     )
 
     val handler = SerialPortHandler(
         portName = cliArgs.port,
         baud = cliArgs.baud,
+        parity = cliArgs.parity,
         mode = cliArgs.mode,
         chunked = cliArgs.chunk,
         latencyMs = cliArgs.latencyMs,

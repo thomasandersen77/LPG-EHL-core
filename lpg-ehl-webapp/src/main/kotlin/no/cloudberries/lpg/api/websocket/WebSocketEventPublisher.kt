@@ -53,13 +53,15 @@ class WebSocketEventPublisher(
         sessions[session.id] = SessionInfo(session)
         allSessions.add(session)
         
-        // Send welcome message
-        val welcome = mapOf(
-            "type" to "connected",
-            "message" to "Tilkoblet logger-websocket",
-            "availableChannels" to LogChannel.values().map { it.name.lowercase() }
-        )
-        session.sendMessage(TextMessage(objectMapper.writeValueAsString(welcome)))
+        // Send welcome message (with safety check for already-closed connections)
+        trySendMessage(session) {
+            val welcome = mapOf(
+                "type" to "connected",
+                "message" to "Tilkoblet logger-websocket",
+                "availableChannels" to LogChannel.values().map { it.name.lowercase() }
+            )
+            objectMapper.writeValueAsString(welcome)
+        }
     }
     
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
@@ -69,6 +71,12 @@ class WebSocketEventPublisher(
     }
     
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
+        // Early exit if session is already closed or not tracked
+        if (!session.isOpen || !sessions.containsKey(session.id)) {
+            logger.debug("Ignoring message for closed/unknown session: ${session.id}")
+            return
+        }
+        
         try {
             val payload = objectMapper.readTree(message.payload)
             val action = payload.get("action")?.asText()
@@ -79,25 +87,35 @@ class WebSocketEventPublisher(
                         LogChannel.valueOf(it.asText().uppercase()) 
                     }?.toMutableSet() ?: mutableSetOf()
                     
-                    sessions[session.id]?.subscribedChannels?.clear()
-                    sessions[session.id]?.subscribedChannels?.addAll(channels)
+                    // Update subscriptions atomically
+                    sessions.computeIfPresent(session.id) { _, sessionInfo ->
+                        sessionInfo.subscribedChannels.clear()
+                        sessionInfo.subscribedChannels.addAll(channels)
+                        sessionInfo
+                    }
                     
                     logger.info("📝 Session ${session.id} subscribed to: $channels")
                     
-                    val response = mapOf(
-                        "type" to "subscribed",
-                        "channels" to channels.map { it.name.lowercase() }
-                    )
-                    session.sendMessage(TextMessage(objectMapper.writeValueAsString(response)))
+                    trySendMessage(session) {
+                        objectMapper.writeValueAsString(mapOf(
+                            "type" to "subscribed",
+                            "channels" to channels.map { it.name.lowercase() }
+                        ))
+                    }
                 }
                 "unsubscribe" -> {
-                    sessions[session.id]?.subscribedChannels?.clear()
-                    val response = mapOf("type" to "unsubscribed")
-                    session.sendMessage(TextMessage(objectMapper.writeValueAsString(response)))
+                    sessions.computeIfPresent(session.id) { _, sessionInfo ->
+                        sessionInfo.subscribedChannels.clear()
+                        sessionInfo
+                    }
+                    trySendMessage(session) {
+                        objectMapper.writeValueAsString(mapOf("type" to "unsubscribed"))
+                    }
                 }
                 "ping" -> {
-                    val response = mapOf("type" to "pong", "timestamp" to java.time.Instant.now().toString())
-                    session.sendMessage(TextMessage(objectMapper.writeValueAsString(response)))
+                    trySendMessage(session) {
+                        objectMapper.writeValueAsString(mapOf("type" to "pong", "timestamp" to java.time.Instant.now().toString()))
+                    }
                 }
                 else -> {
                     logger.warn("Unknown WebSocket action: $action")
@@ -192,5 +210,41 @@ class WebSocketEventPublisher(
                 logger.debug("Failed to send to session ${sessionInfo.session.id}: ${e.message}")
             }
         }
+    }
+    
+    /**
+     * Safely send a message to a WebSocket session.
+     * Handles ClosedChannelException and other errors gracefully.
+     * 
+     * Uses synchronized send to prevent concurrent access issues with Undertow.
+     */
+    private inline fun trySendMessage(session: WebSocketSession, messageProvider: () -> String) {
+        try {
+            if (session.isOpen) {
+                synchronized(session) {
+                    if (session.isOpen) { // Double-check after acquiring lock
+                        session.sendMessage(TextMessage(messageProvider()))
+                    }
+                }
+            }
+        } catch (e: java.nio.channels.ClosedChannelException) {
+            // Expected when client disconnects rapidly - silently clean up
+            cleanupSession(session)
+        } catch (e: java.io.IOException) {
+            // Connection reset or broken pipe - normal during disconnect
+            logger.debug("IO error sending to session ${session.id}: ${e.message}")
+            cleanupSession(session)
+        } catch (e: Exception) {
+            logger.debug("Failed to send to session ${session.id}: ${e.message}")
+            cleanupSession(session)
+        }
+    }
+    
+    /**
+     * Clean up a disconnected session from tracking collections.
+     */
+    private fun cleanupSession(session: WebSocketSession) {
+        sessions.remove(session.id)
+        allSessions.remove(session)
     }
 }

@@ -14,16 +14,17 @@ import java.util.concurrent.CopyOnWriteArraySet
 /**
  * WebSocket handler for real-time log streaming.
  * 
- * Supports three log channels:
+ * Supports four log channels:
  * - api: REST API related logs
- * - emulator: Emulator state machine logs
+ * - service: Service layer business logic logs (always active)
+ * - emulator: Emulator state machine logs (LAB mode only)
  * - protocol: EHL protocol packet logs
  * 
  * Clients can subscribe to specific channels by sending:
- * {"action": "subscribe", "channels": ["api", "emulator", "protocol"]}
+ * {"action": "subscribe", "channels": ["api", "service", "emulator", "protocol"]}
  * 
  * Log entries are broadcast as:
- * {"channel": "emulator", "timestamp": "...", "level": "INFO", "logger": "...", "message": "..."}
+ * {"channel": "service", "timestamp": "...", "level": "INFO", "logger": "...", "message": "..."}
  */
 @Component
 class LogWebSocketHandler(
@@ -45,7 +46,8 @@ class LogWebSocketHandler(
     
     enum class LogChannel {
         API,      // REST API logs
-        EMULATOR, // Emulator state machine logs
+        SERVICE,  // Service layer business logic logs (always active)
+        EMULATOR, // Emulator state machine logs (LAB mode only)
         PROTOCOL  // EHL protocol packet logs
     }
     
