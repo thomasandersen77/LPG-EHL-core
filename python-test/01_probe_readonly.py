@@ -12,7 +12,7 @@ from ehl_protocol import (
     extract_frames,
     hexdump,
 )
-from logging_utils import debug, die, info, warn
+from logging_utils import debug, die, info, init_logging, warn
 from serial_linux import Rs485Config, open_serial
 
 
@@ -31,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--retries", type=int, default=2, help="Retries per command (default: 2)")
     p.add_argument("--delay-ms", type=int, default=150, help="Delay between commands (default: 150ms)")
     p.add_argument("--debug", action="store_true", help="Verbose debug logs")
+    p.add_argument("--log-file", help="Also write logs to this file (in addition to stdout).")
 
     p.add_argument("--rs485", action="store_true", help="Best-effort enable Linux RS-485 ioctl mode")
     p.add_argument("--rts-before-ms", type=int, default=0, help="RS-485 RTS delay before send (ms)")
@@ -67,6 +68,7 @@ def txrx(port, addr: int, cmd: int, *, timeout_ms: int, debug_enabled: bool) -> 
 
 def main() -> int:
     args = parse_args()
+    init_logging(args.log_file, console_level="INFO", file_level="DEBUG")
     if not (1 <= args.addr <= 255):
         die(f"--addr must be 1..255 (got {args.addr})")
 

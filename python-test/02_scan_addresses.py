@@ -5,7 +5,7 @@ import argparse
 import time
 
 from ehl_protocol import ETX, STX_CONTROLLER, build_frame, describe_frame, extract_frames, hexdump
-from logging_utils import die, info, warn
+from logging_utils import die, info, init_logging, warn
 from serial_linux import Rs485Config, open_serial
 
 
@@ -27,6 +27,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--addr-range", default="1-32", help="Address range like 1-32 (default) or a single number")
     p.add_argument("--timeout-ms", type=int, default=250, help="Per-address read window (default: 250ms)")
     p.add_argument("--delay-ms", type=int, default=20, help="Delay between addresses (default: 20ms)")
+    p.add_argument("--log-file", help="Also write logs to this file (in addition to stdout).")
 
     p.add_argument("--rs485", action="store_true")
     p.add_argument("--rts-before-ms", type=int, default=0)
@@ -36,6 +37,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    init_logging(args.log_file, console_level="INFO", file_level="DEBUG")
     a0, a1 = parse_range(args.addr_range)
     if a0 > a1:
         a0, a1 = a1, a0

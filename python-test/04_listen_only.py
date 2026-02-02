@@ -5,7 +5,7 @@ import argparse
 import time
 
 from ehl_protocol import describe_frame, extract_frames, hexdump
-from logging_utils import info, warn
+from logging_utils import info, init_logging, warn
 from serial_linux import Rs485Config, open_serial
 
 
@@ -15,6 +15,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--baud", type=int, default=9600)
     p.add_argument("--duration-s", type=int, default=30, help="How long to listen (default: 30s)")
     p.add_argument("--show-raw", action="store_true", help="Also print raw byte chunks (hexdump)")
+    p.add_argument("--log-file", help="Also write logs to this file (in addition to stdout).")
 
     p.add_argument("--rs485", action="store_true")
     p.add_argument("--rts-before-ms", type=int, default=0)
@@ -24,6 +25,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    init_logging(args.log_file, console_level="INFO", file_level="DEBUG")
     rs = Rs485Config(
         enabled=bool(args.rs485),
         delay_rts_before_send_ms=int(args.rts_before_ms),
