@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import time
+from datetime import datetime
 
 from ehl_protocol import (
     ETX,
     STX_CONTROLLER,
+    STX_DISPENSER,
     build_frame,
     describe_frame,
     extract_frames,
@@ -20,6 +23,14 @@ CMD_STATE = 0x4B
 CMD_ERROR_QUERY = 0x4C
 CMD_VOLUME = 0x45
 CMD_TANKBIT = 0xC5
+
+
+def default_log_path(*, port: str, addr: int) -> str:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(script_dir, "logs")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    port_safe = port.strip("/").replace("/", "_").replace(":", "_")
+    return os.path.join(log_dir, f"ehl_probe_{ts}_{port_safe}_addr{addr}.log")
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,6 +67,11 @@ def txrx(port, addr: int, cmd: int, *, timeout_ms: int, debug_enabled: bool) -> 
             buf += chunk
             frames, buf = extract_frames(buf)
             for f in frames:
+                # If the adapter echoes TX, we may see our own controller frames (STX=0x10).
+                # For probes we only accept actual device replies (STX=0x20).
+                if f.stx != STX_DISPENSER:
+                    debug(f"RX <ignored non-dispenser frame> {describe_frame(f)}", enabled=debug_enabled)
+                    continue
                 info(f"RX {describe_frame(f)}")
                 return True
 
@@ -68,6 +84,8 @@ def txrx(port, addr: int, cmd: int, *, timeout_ms: int, debug_enabled: bool) -> 
 
 def main() -> int:
     args = parse_args()
+    if not args.log_file:
+        args.log_file = default_log_path(port=args.port, addr=int(args.addr))
     init_logging(args.log_file, console_level="INFO", file_level="DEBUG")
     if not (1 <= args.addr <= 255):
         die(f"--addr must be 1..255 (got {args.addr})")

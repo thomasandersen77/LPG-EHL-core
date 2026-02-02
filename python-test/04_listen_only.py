@@ -2,11 +2,21 @@
 from __future__ import annotations
 
 import argparse
+import os
 import time
+from datetime import datetime
 
 from ehl_protocol import describe_frame, extract_frames, hexdump
 from logging_utils import info, init_logging, warn
 from serial_linux import Rs485Config, open_serial
+
+
+def default_log_path(*, port: str) -> str:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(script_dir, "logs")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    port_safe = port.strip("/").replace("/", "_").replace(":", "_")
+    return os.path.join(log_dir, f"ehl_listen_{ts}_{port_safe}.log")
 
 
 def parse_args() -> argparse.Namespace:
@@ -25,6 +35,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if not args.log_file:
+        args.log_file = default_log_path(port=args.port)
     init_logging(args.log_file, console_level="INFO", file_level="DEBUG")
     rs = Rs485Config(
         enabled=bool(args.rs485),

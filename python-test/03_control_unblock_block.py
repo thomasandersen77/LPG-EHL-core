@@ -2,16 +2,27 @@
 from __future__ import annotations
 
 import argparse
+import os
 import time
+from datetime import datetime
 
-from ehl_protocol import ETX, STX_CONTROLLER, build_frame, describe_frame, extract_frames, hexdump
+from ehl_protocol import ETX, STX_CONTROLLER, STX_DISPENSER, build_frame, describe_frame, extract_frames, hexdump
 from logging_utils import debug, die, info, init_logging, warn
 from serial_linux import Rs485Config, open_serial
 
 
 CMD_UNBLOCK = 0x77
 CMD_BLOCK = 0x69
-OK_BYTE = 0x1E  # VB6 checks x(4)=30 (decimal) for OK
+# VB6 evidence in this repo indicates ACK "OK" is ASCII '0' (0x30) in the first payload byte.
+OK_BYTE = 0x30
+
+
+def default_log_path(*, port: str, addr: int, action: str) -> str:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(script_dir, "logs")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    port_safe = port.strip("/").replace("/", "_").replace(":", "_")
+    return os.path.join(log_dir, f"ehl_control_{action}_{ts}_{port_safe}_addr{addr}.log")
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +63,9 @@ def await_ack(port, *, addr: int, cmd: int, timeout_ms: int, debug_frames: bool 
         frames, buf = extract_frames(buf)
         for f in frames:
             debug(f"RX {describe_frame(f)}", enabled=debug_frames)
+            # Ignore echoed controller frames if adapter echoes TX.
+            if f.stx != STX_DISPENSER:
+                continue
             if f.addr != (addr & 0xFF):
                 continue
             if f.cmd != (cmd & 0xFF):
@@ -65,6 +79,8 @@ def await_ack(port, *, addr: int, cmd: int, timeout_ms: int, debug_frames: bool 
 
 def main() -> int:
     args = parse_args()
+    if not args.log_file:
+        args.log_file = default_log_path(port=args.port, addr=int(args.addr), action=str(args.action))
     init_logging(args.log_file, console_level="INFO", file_level="DEBUG")
     if not (1 <= args.addr <= 255):
         die("--addr must be 1..255")
@@ -94,7 +110,7 @@ def main() -> int:
             warn(n)
         info(f"Opened {args.port} @ {args.baud}. Sending now...")
         port.write(frame)
-        info("TX sent. Waiting for VB6-style ACK (cmd echo + data[0]==0x1E)...")
+        info("TX sent. Waiting for VB6-style ACK (cmd echo + data[0]==0x30)...")
         if await_ack(port, addr=args.addr, cmd=cmd, timeout_ms=args.timeout_ms):
             return 0
         warn("No VB6-style ACK seen (device may still have acted; verify with STATE via 01_probe_readonly.py).")

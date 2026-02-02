@@ -131,8 +131,16 @@ def _set_raw_8n1(fd: int, baud: int) -> None:
 
     # set baud
     speed = BAUD_MAP[baud]
-    termios.cfsetispeed(attrs, speed)
-    termios.cfsetospeed(attrs, speed)
+    # Python's termios API differs across platforms:
+    # - Linux typically exposes cfsetispeed/cfsetospeed helpers
+    # - macOS (darwin) commonly does not; in that case, set ispeed/ospeed
+    #   directly in the tcgetattr() list: [4] = ispeed, [5] = ospeed.
+    if hasattr(termios, "cfsetispeed") and hasattr(termios, "cfsetospeed"):
+        termios.cfsetispeed(attrs, speed)
+        termios.cfsetospeed(attrs, speed)
+    else:
+        attrs[4] = speed  # ispeed
+        attrs[5] = speed  # ospeed
 
     termios.tcsetattr(fd, termios.TCSANOW, attrs)
 

@@ -2,14 +2,25 @@
 from __future__ import annotations
 
 import argparse
+import os
 import time
+from datetime import datetime
 
-from ehl_protocol import ETX, STX_CONTROLLER, build_frame, describe_frame, extract_frames, hexdump
+from ehl_protocol import ETX, STX_CONTROLLER, STX_DISPENSER, build_frame, describe_frame, extract_frames, hexdump
 from logging_utils import die, info, init_logging, warn
 from serial_linux import Rs485Config, open_serial
 
 
 CMD_STATE = 0x4B
+
+
+def default_log_path(*, port: str, addr_range: str) -> str:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(script_dir, "logs")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    port_safe = port.strip("/").replace("/", "_").replace(":", "_")
+    range_safe = addr_range.replace("-", "_")
+    return os.path.join(log_dir, f"ehl_scan_{ts}_{port_safe}_range{range_safe}.log")
 
 
 def parse_range(s: str) -> tuple[int, int]:
@@ -37,6 +48,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if not args.log_file:
+        args.log_file = default_log_path(port=args.port, addr_range=str(args.addr_range))
     init_logging(args.log_file, console_level="INFO", file_level="DEBUG")
     a0, a1 = parse_range(args.addr_range)
     if a0 > a1:
@@ -71,6 +84,9 @@ def main() -> int:
                 buf += chunk
                 frames, buf = extract_frames(buf)
                 for f in frames:
+                    # Ignore echoed controller frames if adapter echoes TX.
+                    if f.stx != STX_DISPENSER:
+                        continue
                     if f.addr == addr:
                         info(f"ADDR {addr}: RX {describe_frame(f)}")
                         found.append(addr)

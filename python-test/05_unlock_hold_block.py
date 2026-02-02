@@ -9,6 +9,7 @@ from datetime import datetime
 from ehl_protocol import (
     ETX,
     STX_CONTROLLER,
+    STX_DISPENSER,
     build_frame,
     describe_frame,
     extract_frames,
@@ -31,7 +32,8 @@ CMD_BLOCK = 0x69
 CMD_RESET = 0x81
 CMD_PRODUCT_SELECT = 0xC3
 
-OK_BYTE = 0x1E  # VB6 checks x(4)=30 (decimal) for OK in Case 117/119
+# VB6 evidence in this repo indicates ACK "OK" is ASCII '0' (0x30) in the first payload byte.
+OK_BYTE = 0x30
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,7 +69,11 @@ def parse_args() -> argparse.Namespace:
         "--log-file",
         help="Write logs to this file. If omitted, a timestamped file is created under --log-dir.",
     )
-    p.add_argument("--log-dir", default="logs", help="Directory for default log file (default: ./logs)")
+    p.add_argument(
+        "--log-dir",
+        default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs"),
+        help="Directory for default log file (default: python-test/logs)",
+    )
 
     p.add_argument(
         "--disable-product-select-fallback",
@@ -140,6 +146,9 @@ def await_cmd_ok(
         if meaning:
             debug(f"RX meaning: {meaning}", enabled=debug_enabled)
 
+        # Ignore echoed controller frames if adapter echoes TX.
+        if f.stx != STX_DISPENSER:
+            return
         if f.addr != (addr & 0xFF):
             return
         if f.cmd != (cmd & 0xFF):
@@ -174,6 +183,9 @@ def poll_cmd_once(
         meaning = interpret_frame(f)
         if meaning:
             debug(f"RX meaning: {meaning}", enabled=debug_enabled)
+        # Ignore echoed controller frames if adapter echoes TX.
+        if f.stx != STX_DISPENSER:
+            return
         if got is None and f.addr == (addr & 0xFF) and f.cmd == (cmd & 0xFF):
             got = f
 
