@@ -71,6 +71,22 @@ python3 03_control_unblock_block.py --port /dev/ttyUSB0 --addr 1 unblock --i-und
 python3 03_control_unblock_block.py --port /dev/ttyUSB0 --addr 1 block   --i-understand-this-can-affect-real-hardware
 ```
 
+### 4) (Field test) VB6-style unlock, hold, then block
+
+This script attempts a VB6-like enable sequence with **strict ACK checking**, then holds for 30 seconds (polling STATE/ERROR), then blocks again.
+
+```bash
+python3 05_unlock_hold_block.py --port /dev/ttyUSB0 --addr 33 --hold-seconds 30 --i-understand-this-can-affect-real-hardware
+```
+
+## Logging to a file
+
+All scripts accept `--log-file` to write the same logs to a `.log` file (in addition to stdout). Example:
+
+```bash
+python3 01_probe_readonly.py --port /dev/ttyUSB0 --addr 33 --log-file /tmp/ehl_probe.log
+```
+
 ## Serial settings
 
 These scripts default to:

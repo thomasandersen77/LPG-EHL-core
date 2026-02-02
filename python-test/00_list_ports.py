@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import glob
 import os
 from pathlib import Path
 
-from logging_utils import info
+from logging_utils import info, init_logging
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="List likely serial device paths under /dev.")
+    p.add_argument("--log-file", help="Also write logs to this file (in addition to stdout).")
+    return p.parse_args()
 
 
 def main() -> int:
+    args = parse_args()
+    init_logging(args.log_file, console_level="INFO", file_level="DEBUG")
     info("Listing likely serial device paths...")
     candidates = []
 

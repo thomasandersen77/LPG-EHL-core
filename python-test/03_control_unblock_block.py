@@ -5,21 +5,25 @@ import argparse
 import time
 
 from ehl_protocol import ETX, STX_CONTROLLER, build_frame, describe_frame, extract_frames, hexdump
-from logging_utils import die, info, warn
+from logging_utils import debug, die, info, init_logging, warn
 from serial_linux import Rs485Config, open_serial
 
 
 CMD_UNBLOCK = 0x77
 CMD_BLOCK = 0x69
+OK_BYTE = 0x1E  # VB6 checks x(4)=30 (decimal) for OK
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="CONTROL script: UNBLOCK/BLOCK. Requires explicit acknowledgement.")
+    p = argparse.ArgumentParser(
+        description="CONTROL script: UNBLOCK/BLOCK. Requires VB6-style acknowledgement (cmd echo + OK byte)."
+    )
     p.add_argument("--port", required=True)
     p.add_argument("--addr", type=int, required=True)
     p.add_argument("--baud", type=int, default=9600)
     p.add_argument("--timeout-ms", type=int, default=1200)
     p.add_argument("--dry-run", action="store_true", help="Do not write to serial; just print what would be sent.")
+    p.add_argument("--log-file", help="Also write logs to this file (in addition to stdout).")
 
     p.add_argument("--rs485", action="store_true")
     p.add_argument("--rts-before-ms", type=int, default=0)
@@ -37,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def await_any_frame(port, timeout_ms: int) -> bool:
+def await_ack(port, *, addr: int, cmd: int, timeout_ms: int, debug_frames: bool = True) -> bool:
     deadline = time.time() + (timeout_ms / 1000.0)
     buf = b""
     while time.time() < deadline:
@@ -47,13 +51,21 @@ def await_any_frame(port, timeout_ms: int) -> bool:
         buf += chunk
         frames, buf = extract_frames(buf)
         for f in frames:
-            info(f"RX {describe_frame(f)}")
-            return True
+            debug(f"RX {describe_frame(f)}", enabled=debug_frames)
+            if f.addr != (addr & 0xFF):
+                continue
+            if f.cmd != (cmd & 0xFF):
+                continue
+            if len(f.data) >= 1 and f.data[0] == OK_BYTE:
+                info(f"ACK OK: RX {describe_frame(f)}")
+                return True
+            info(f"ACK REJECT/UNKNOWN: RX {describe_frame(f)}")
     return False
 
 
 def main() -> int:
     args = parse_args()
+    init_logging(args.log_file, console_level="INFO", file_level="DEBUG")
     if not (1 <= args.addr <= 255):
         die("--addr must be 1..255")
 
@@ -82,11 +94,10 @@ def main() -> int:
             warn(n)
         info(f"Opened {args.port} @ {args.baud}. Sending now...")
         port.write(frame)
-        info("TX sent. Waiting for any valid response frame...")
-        if await_any_frame(port, args.timeout_ms):
-            info("Got a valid response frame.")
+        info("TX sent. Waiting for VB6-style ACK (cmd echo + data[0]==0x1E)...")
+        if await_ack(port, addr=args.addr, cmd=cmd, timeout_ms=args.timeout_ms):
             return 0
-        warn("No valid response frame seen (device may still have acted; check STATE with 01_probe_readonly.py).")
+        warn("No VB6-style ACK seen (device may still have acted; verify with STATE via 01_probe_readonly.py).")
         return 2
     finally:
         port.close()
