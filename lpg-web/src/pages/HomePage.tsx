@@ -165,6 +165,15 @@ export function HomePage() {
             </Link>
 
             <Link
+              to="/serial-config"
+              className="p-6 bg-cyan-50 hover:bg-cyan-100 border-2 border-cyan-200 rounded-xl transition text-center group"
+            >
+              <div className="text-4xl mb-3">🔌</div>
+              <h4 className="text-lg font-bold text-slate-900 mb-2">Serial Port Config</h4>
+              <p className="text-sm text-slate-600">Skann og konfigurer serieporter</p>
+            </Link>
+
+            <Link
               to="/azure-storage"
               className="p-6 bg-indigo-50 hover:bg-indigo-100 border-2 border-indigo-200 rounded-xl transition text-center group"
             >

@@ -58,15 +58,14 @@ class WebSocketLogAppender : AppenderBase<ILoggingEvent>() {
             loggerName.contains("Communicator") -> LogChannel.PROTOCOL
             loggerName.contains("SerialPort") -> LogChannel.PROTOCOL
             
-            // Emulator logs
-            loggerName.contains("Emulator") -> LogChannel.EMULATOR
-            loggerName.contains("Dispenser") -> LogChannel.EMULATOR
-            loggerName.contains("PumpState") -> LogChannel.EMULATOR
-            loggerName.contains("Pump") -> LogChannel.EMULATOR
+            // Emulator logs - ONLY from emulator package (LAB mode only)
+            loggerName.startsWith("no.cloudberries.lpg.emulator") -> LogChannel.EMULATOR
             
-            // API logs (controllers, services)
+            // Service logs (PumpStateService, PumpAuthorizationService, etc.)
+            loggerName.startsWith("no.cloudberries.lpg.service") -> LogChannel.SERVICE
+            
+            // API logs (controllers)
             loggerName.contains("Controller") -> LogChannel.API
-            loggerName.contains("Service") -> LogChannel.API
             
             // Default to API
             else -> LogChannel.API

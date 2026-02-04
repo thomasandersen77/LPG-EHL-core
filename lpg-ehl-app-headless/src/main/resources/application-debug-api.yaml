@@ -1,19 +1,28 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# DEBUG API PROFILE
+# DEBUG API PROFILE - Felt-testing via curl (Undertow webserver)
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Aktiverer en lett webserver (Undertow) for felt-testing via curl.
-#
 # Bruk:
-#   java -jar lpg-ehl-app-headless.jar --spring.profiles.active=debug-api
+#   java -jar lpg-ehl-app-headless.jar --spring.profiles.active=field,debug-api
 #
-# Endepunkter:
+# Pumpe-kontroll (eksisterende):
 #   GET  /api/debug/health          - Helsesjekk
 #   GET  /api/debug/state/{addr}    - Les pumpetilstand
 #   GET  /api/debug/volume/{addr}   - Les volum
 #   POST /api/debug/linetest/{addr} - Test kommunikasjon
 #   POST /api/debug/unblock/{addr}  - Frigi pumpe
 #   POST /api/debug/block/{addr}    - Blokker pumpe
+#
+# Serial diagnostikk (som Alejandros Python-scripts):
+#   GET  /api/debug/serial/ports          - List porter (00_list_ports.py)
+#   GET  /api/debug/serial/health         - Health check (01_probe_readonly.py)
+#   POST /api/debug/serial/smart-scan     - Finn working config automatisk
+#   POST /api/debug/serial/scan-addresses - Scan adresser (02_scan_addresses.py)
+#   POST /api/debug/serial/auto-detect    - Auto-detect parity
+#
+# Eksempler:
+#   curl http://localhost:8080/api/debug/serial/ports
+#   curl -X POST "http://localhost:8080/api/debug/serial/scan-addresses?port=/dev/ttyUSB0&start=32&end=40"
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 

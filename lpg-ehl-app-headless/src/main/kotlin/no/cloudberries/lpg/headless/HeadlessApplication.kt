@@ -30,13 +30,12 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @ComponentScan(
     basePackages = [
         "no.cloudberries.lpg.headless",       // Headless config, startup
-        "no.cloudberries.lpg.api.controller", // REST controllers from webapp
-        "no.cloudberries.lpg.service",        // Business logic
+        "no.cloudberries.lpg.service",        // Business logic + REST controllers
         "no.cloudberries.lpg.communication",  // EhlCommunicator
         "no.cloudberries.lpg.transport",      // Serial transport
         "no.cloudberries.lpg.pls"             // PLS protocol
     ]
-    // Note: no.cloudberries.lpg.api.config excluded - headless has its own config
+    // Note: no.cloudberries.lpg.api excluded - headless has its own config
 )
 @EnableScheduling
 class HeadlessApplication

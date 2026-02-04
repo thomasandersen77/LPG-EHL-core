@@ -1,0 +1,20 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# LAB PROFILE - Headless with Emulator
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Start: java -jar lpg-ehl-headless.jar --spring.profiles.active=lab
+#
+# Features:
+#   - H2 in-memory database
+#   - Built-in EHL emulator (no hardware)
+#   - Debug logging enabled
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Verbose logging for development
+logging:
+  level:
+    no.cloudberries.lpg: INFO
+    no.cloudberries.lpg.communication: DEBUG
+    no.cloudberries.lpg.protocol: DEBUG
+    no.cloudberries.lpg.emulator: INFO

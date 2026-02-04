@@ -25,6 +25,18 @@
             <artifactId>kotlin-stdlib</artifactId>
         </dependency>
 
+        <!-- LPG Modules -->
+        <dependency>
+            <groupId>no.cloudberries.lpg</groupId>
+            <artifactId>lpg-ehl-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>no.cloudberries.lpg</groupId>
+            <artifactId>lpg-transport</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Serial Communication -->
         <dependency>
             <groupId>com.fazecast</groupId>
@@ -92,7 +104,7 @@
                         <configuration>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>no.cloudberries.lpg.pls.sim.PlsSimMainKt</mainClass>
+<mainClass>no.cloudberries.lpg.pls.sim.PlsSimMainKt</mainClass>
                                 </transformer>
                                 <!-- Handle service files for jSerialComm -->
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>

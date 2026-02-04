@@ -8,40 +8,46 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Profile
+import org.springframework.core.env.Environment
 import jakarta.annotation.PostConstruct
 
 /**
  * Configuration for EHL protocol communication.
  * 
- * ARKITEKTUR: Dual-mode system styrt av ehl.emulator.enabled:
+ * ARKITEKTUR: Dual-mode system styrt av Spring Profiles:
  * 
- * LAB MODE (ehl.emulator.enabled=true, DEFAULT):
+ * LAB MODE (profile=lab eller ingen profile):
  *   - EmulatorSerialPortAdapter laster automatisk
  *   - Kommuniserer med in-memory EhlDispenserEmulator
  *   - Trygt for utvikling - ingen fysisk hardware påvirkes
  * 
- * FIELD MODE (ehl.emulator.enabled=false):
+ * FIELD MODE (profile=field):
  *   - RealSerialPortAdapter laster automatisk
- *   - Kommuniserer med fysisk RS-485 serial port
- *   - For produksjon på ARK-3600 eller lignende
+ *   - Kommuniserer med fysisk RS-485 serial port eller socat PTY
+ *   - For produksjon på ARK-3600 eller socat testing
  * 
  * KRITISK: EhlCommunicator vet IKKE hvilken modus den kjører i.
  * Den sender bare bytes til SerialTransport-interfacet.
  */
 @Configuration
-class CommunicationConfig {
+class CommunicationConfig(
+    private val environment: Environment
+) {
     
     private val logger = LoggerFactory.getLogger(CommunicationConfig::class.java)
     
-    @Value("\${ehl.emulator.enabled:true}")
-    private var emulatorEnabled: Boolean = true
-    
     @PostConstruct
     fun logMode() {
-        val mode = if (emulatorEnabled) "🧪 LAB MODE" else "🏭 FIELD MODE"
+        val activeProfiles = environment.activeProfiles.toList()
+        val isLabMode = activeProfiles.isEmpty() || 
+                        activeProfiles.contains("lab") || 
+                        activeProfiles.contains("default")
+        val mode = if (isLabMode) "🧪 LAB MODE" else "🏭 FIELD MODE"
         logger.info("")
         logger.info("═══════════════════════════════════════════════════════════")
         logger.info("  EHL KOMMUNIKASJON: $mode")
+        logger.info("  Active profiles: ${activeProfiles.ifEmpty { listOf("default") }}")
         logger.info("═══════════════════════════════════════════════════════════")
         logger.info("")
     }
@@ -51,11 +57,7 @@ class CommunicationConfig {
      * Brukes av ProtocolTestController for debugging.
      */
     @Bean
-    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-        name = ["ehl.emulator.enabled"],
-        havingValue = "true",
-        matchIfMissing = true
-    )
+    @Profile("lab", "default")
     fun dispenserEmulator(
         @Value("\${ehl.emulator.dispenser-address:1}") dispenserAddress: Int,
         @Value("\${ehl.emulator.price-per-liter-cents:1590}") pricePerLiterCents: Int

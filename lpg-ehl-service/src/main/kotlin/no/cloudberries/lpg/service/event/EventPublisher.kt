@@ -60,7 +60,8 @@ data class LogEvent(
 
 enum class LogChannel {
     API,      // REST API logs
-    EMULATOR, // Emulator state machine logs
+    SERVICE,  // Service layer business logic logs (always active)
+    EMULATOR, // Emulator state machine logs (LAB mode only)
     PROTOCOL  // EHL protocol packet logs
 }
 

@@ -13,6 +13,7 @@ import kotlin.random.Random
 class SerialPortHandler(
     private val portName: String,
     private val baud: Int,
+    private val parity: String = "NONE",
     private val mode: FrameMode,
     private val chunked: Boolean,
     private val latencyMs: Int,
@@ -36,15 +37,25 @@ class SerialPortHandler(
      * Open serial port and start reading.
      */
     fun start() {
-        log.info("Opening serial port: {} at {} baud, mode={}, chunked={}", portName, baud, mode, chunked)
+        log.info("Opening serial port: {} at {} baud, parity={}, mode={}, chunked={}", portName, baud, parity, mode, chunked)
 
         val port = SerialPort.getCommPort(portName)
         
-        // Configure port: 8N1, no parity
+        // Configure port with specified parity
         port.baudRate = baud
         port.numDataBits = 8
         port.numStopBits = SerialPort.ONE_STOP_BIT
-        port.parity = SerialPort.NO_PARITY
+        port.parity = when (parity.uppercase()) {
+            "NONE" -> SerialPort.NO_PARITY
+            "EVEN" -> SerialPort.EVEN_PARITY
+            "ODD" -> SerialPort.ODD_PARITY
+            "MARK" -> SerialPort.MARK_PARITY
+            "SPACE" -> SerialPort.SPACE_PARITY
+            else -> {
+                log.warn("Unknown parity '{}', defaulting to NONE", parity)
+                SerialPort.NO_PARITY
+            }
+        }
         
         // Semi-blocking read with timeout
         port.setComPortTimeouts(
@@ -138,11 +149,20 @@ class SerialPortHandler(
                 addrInt, cmdName, ehlFrame.cmd.toHex(), ehlFrame.data.size, frame.toHexString())
 
             val result = state.processEhlCommand(ehlFrame)
+            
+            // null = don't respond (wrong address)
+            if (result == null) {
+                log.debug("🚫 No response (address mismatch)")
+                return
+            }
+            
             val (responseCmd, responseData, responseAddr) = when (result) {
                 is EhlCommandResult.OkAck -> Triple(EhlFrameCodec.CMD_OK, ByteArray(0), result.addr)
                 is EhlCommandResult.StateResponse -> Triple(EhlFrameCodec.CMD_STATE, result.data, result.addr)
                 is EhlCommandResult.VolumeResponse -> Triple(EhlFrameCodec.CMD_VOLUME, result.data, result.addr)
                 is EhlCommandResult.PriceResponse -> Triple(EhlFrameCodec.CMD_PRICE, result.data, result.addr)
+                is EhlCommandResult.ErrorQueryResponse -> Triple(EhlFrameCodec.CMD_ERROR_DATA, result.data, result.addr)
+                is EhlCommandResult.TankbitResponse -> Triple(EhlFrameCodec.CMD_TANKBIT, result.data, result.addr)
             }
             val response = EhlFrameCodec.encode(responseAddr, responseCmd, responseData)
 
@@ -178,15 +198,19 @@ class SerialPortHandler(
     /** Map command byte to readable name */
     private fun cmdToName(cmd: Byte): String = when (cmd) {
         EhlFrameCodec.CMD_OK -> "OK"
+        EhlFrameCodec.CMD_ERROR_DATA -> "ERROR_DATA"
         EhlFrameCodec.CMD_LINETEST -> "LINETEST"
         EhlFrameCodec.CMD_STATE -> "STATE"
+        EhlFrameCodec.CMD_ERROR_QUERY -> "ERROR_QUERY"
         EhlFrameCodec.CMD_VOLUME -> "VOLUME"
         EhlFrameCodec.CMD_PRICE -> "PRICE"
+        EhlFrameCodec.CMD_PRICE_ALT -> "PRICE_ALT"
         EhlFrameCodec.CMD_BLOCK -> "BLOCK"
         EhlFrameCodec.CMD_UNBLOCK -> "UNBLOCK"
         EhlFrameCodec.CMD_STOP -> "STOP"
         EhlFrameCodec.CMD_RESET -> "RESET"
-        else -> "UNKNOWN"
+        EhlFrameCodec.CMD_TANKBIT -> "TANKBIT"
+        else -> "0x${cmd.toHex()}"
     }
 
     /**

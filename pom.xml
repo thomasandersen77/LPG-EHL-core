@@ -19,7 +19,6 @@
         <module>lpg-ehl-emulator</module>
         <module>lpg-ehl-webapp</module>
         <module>lpg-transport</module>
-        <module>lpg-ehl-cli</module>
         <module>lpg-ehl-serialport-sim</module>
         <module>lpg-ehl-service</module>
         <module>lpg-ehl-app-headless</module>
@@ -73,6 +72,11 @@
             <dependency>
                 <groupId>org.jetbrains.kotlinx</groupId>
                 <artifactId>kotlinx-coroutines-jdk8</artifactId>
+                <version>${coroutines.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-coroutines-reactor</artifactId>
                 <version>${coroutines.version}</version>
             </dependency>
 

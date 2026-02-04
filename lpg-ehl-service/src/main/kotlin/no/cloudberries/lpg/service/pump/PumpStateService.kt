@@ -5,8 +5,7 @@ import kotlinx.coroutines.*
 import no.cloudberries.lpg.communication.EhlCommunicator
 import no.cloudberries.lpg.emulator.EhlDispenserEmulator
 import no.cloudberries.lpg.protocol.*
-import no.cloudberries.lpg.service.event.EventPublisher
-import no.cloudberries.lpg.service.event.PumpStatusEvent
+import no.cloudberries.lpg.service.event.*
 import no.cloudberries.lpg.service.price.PriceService
 import no.cloudberries.lpg.service.transaction.Transaction
 import no.cloudberries.lpg.service.transaction.TransactionService
@@ -156,6 +155,25 @@ class PumpStateService(
     }
     
     /**
+     * Helper to log to SERVICE channel (WebSocket + console).
+     */
+    private fun serviceLog(level: LogLevel, message: String) {
+        when (level) {
+            LogLevel.ERROR -> logger.error(message)
+            LogLevel.WARN -> logger.warn(message)
+            LogLevel.INFO -> logger.info(message)
+            LogLevel.DEBUG -> logger.debug(message)
+            else -> logger.trace(message)
+        }
+        eventPublisher.publishLogEvent(LogEvent(
+            channel = LogChannel.SERVICE,
+            level = level,
+            logger = "PumpStateService",
+            message = message
+        ))
+    }
+    
+    /**
      * Unblock pump ("Fri pumpe") - Start pumping.
      * 
      * Sender UNBLOCK-kommando til dispenser via EhlCommunicator.
@@ -261,9 +279,9 @@ class PumpStateService(
         try {
             val transaction = transactionService.createStartedTransaction(address, currentPriceKr)
             state.pendingTransactionId = transaction.transactionId
-            protocolLogger.info("📝 Transaksjon opprettet: ID=${transaction.transactionId}, status=STARTED")
+            serviceLog(LogLevel.INFO, "📝 Transaksjon opprettet: ID=${transaction.transactionId}, pris=${currentPriceKr} kr/L")
         } catch (e: Exception) {
-            logger.error("❌ Kunne ikke opprette transaksjon: ${e.message}")
+            serviceLog(LogLevel.ERROR, "❌ Kunne ikke opprette transaksjon: ${e.message}")
         }
         
         // Find active authorization if any
@@ -333,7 +351,7 @@ class PumpStateService(
             }
         }
         
-        logger.info("🔓 PUMPE FRIGJORT: Pump $address klar til fylling (60s timeout startet)")
+        serviceLog(LogLevel.INFO, "🔓 PUMPE FRIGJORT: Pump #$address klar til fylling (60s timeout startet)")
         broadcastStatus(state)
         
         return Result.success(getStatus(address))
@@ -439,9 +457,9 @@ class PumpStateService(
                     state.amountKr, 
                     "PENDING"
                 )
-                protocolLogger.info("📋 Transaksjon oppdatert: ID=$transactionId, status=PENDING")
+                serviceLog(LogLevel.INFO, "📋 Transaksjon oppdatert til PENDING: ID=$transactionId, ${state.volumeLitres} L = ${state.amountKr} kr")
             } catch (e: Exception) {
-                logger.error("❌ Kunne ikke oppdatere transaksjon: ${e.message}")
+                serviceLog(LogLevel.ERROR, "❌ Kunne ikke oppdatere transaksjon: ${e.message}")
             }
         }
         
@@ -449,9 +467,9 @@ class PumpStateService(
         if (state.volumeLitres > 0) {
             state.hasPendingTransaction = true
             state.state = "PAYMENT_PENDING"
-            logger.info("🛑 PUMPING STOP: Volume: ${state.volumeLitres}L, Amount: ${state.amountKr} kr")
+            serviceLog(LogLevel.INFO, "🛑 Pumping stoppet: ${state.volumeLitres} L = ${state.amountKr} kr - venter betaling")
         } else {
-            logger.info("🛑 PUMPING STOP: No volume delivered for pump $address")
+            serviceLog(LogLevel.INFO, "🛑 Pumping stoppet: Ingen volum levert for pumpe #$address")
         }
         
         broadcastStatus(state)
@@ -520,15 +538,9 @@ class PumpStateService(
         if (transactionId != null) {
             try {
                 transactionService.markTransactionPaid(transactionId, paymentMethod)
-                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                protocolLogger.info("💳 BETALING SIMULERT")
-                protocolLogger.info("   Transaksjon: $transactionId")
-                protocolLogger.info("   Volum: ${state.volumeLitres} L")
-                protocolLogger.info("   Beløp: ${state.amountKr} kr")
-                protocolLogger.info("   Metode: $paymentMethod")
-                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                serviceLog(LogLevel.INFO, "💳 Betaling fullført: ${state.volumeLitres} L = ${state.amountKr} kr via $paymentMethod")
             } catch (e: Exception) {
-                logger.error("❌ Failed to mark transaction as paid: ${e.message}")
+                serviceLog(LogLevel.ERROR, "❌ Kunne ikke markere transaksjon som betalt: ${e.message}")
             }
         } else {
             // Fallback: Create new transaction if no pending ID (shouldn't happen normally)
@@ -545,9 +557,9 @@ class PumpStateService(
                     includesRoadTax = true
                 )
                 transactionService.saveTransaction(transaction)
-                logger.info("💾 Transaction saved to database (fallback)")
+                serviceLog(LogLevel.INFO, "💾 Transaksjon lagret til database (fallback)")
             } catch (e: Exception) {
-                logger.error("❌ Failed to save transaction: ${e.message}")
+                serviceLog(LogLevel.ERROR, "❌ Kunne ikke lagre transaksjon: ${e.message}")
             }
         }
         

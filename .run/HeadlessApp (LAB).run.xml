@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="HeadlessApp (LAB)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="lpg-ehl-app-headless" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="no.cloudberries.lpg.headless.HeadlessApplicationKt" />
+    <option name="ACTIVE_PROFILES" value="lab" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

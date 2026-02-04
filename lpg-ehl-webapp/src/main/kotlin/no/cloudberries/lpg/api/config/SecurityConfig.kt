@@ -20,7 +20,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 
 @Configuration
 @EnableWebSecurity
-@Profile("local", "test", "demo", "default", "h2")
+@Profile("local", "test", "demo", "default", "h2", "field")
 class SecurityConfig(
     @Value("\${security.api-token:dev-token-12345}") private val apiToken: String,
     @Value("\${security.cors.allowed-origins:http://localhost:3001,http://localhost:8080}") private val allowedOrigins: String

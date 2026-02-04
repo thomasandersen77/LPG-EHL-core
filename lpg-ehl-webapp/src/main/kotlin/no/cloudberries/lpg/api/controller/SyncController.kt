@@ -21,10 +21,9 @@ import java.util.*
 @RequestMapping("/api/v1/sync")
 @Tag(name = "Sync", description = "Azure sync management endpoints")
 // @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
-@ConditionalOnProperty(name = ["azure.enabled"], havingValue = "true")
 class SyncController(
-    private val azureSyncService: AzureSyncService,
-    private val azureQueueReaderService: AzureQueueReaderService
+    private val azureSyncService: AzureSyncService?,
+    private val azureQueueReaderService: AzureQueueReaderService?
 ) {
 
     @GetMapping("/status")
@@ -39,7 +38,13 @@ class SyncController(
         ]
     )
     fun getSyncStatus(): ResponseEntity<SyncStatusResponse> {
-        val status = azureSyncService.getSyncStatus()
+        // Return stub response when Azure is disabled
+        val status = azureSyncService?.getSyncStatus() ?: SyncStatusResponse(
+            pendingCount = 0,
+            syncedCount = 0,
+            failedCount = 0,
+            lastSyncTime = null
+        )
         return ResponseEntity.ok(status)
     }
 
@@ -60,6 +65,12 @@ class SyncController(
         @Parameter(description = "Queue item UUID")
         @PathVariable queueId: UUID
     ): ResponseEntity<Map<String, Any>> {
+        if (azureSyncService == null) {
+            return ResponseEntity.status(503).body(mapOf(
+                "success" to false,
+                "message" to "Azure sync is disabled"
+            ))
+        }
         val success = azureSyncService.retrySyncItem(queueId)
         
         return if (success) {
@@ -82,6 +93,9 @@ class SyncController(
         ]
     )
     fun triggerSync(): ResponseEntity<Map<String, String>> {
+        if (azureSyncService == null) {
+            return ResponseEntity.status(503).body(mapOf("message" to "Azure sync is disabled"))
+        }
         azureSyncService.syncPendingItems()
         return ResponseEntity.ok(mapOf("message" to "Sync job triggered"))
     }
@@ -101,6 +115,9 @@ class SyncController(
         @Parameter(description = "Maximum number of messages to retrieve")
         @RequestParam(defaultValue = "32") maxMessages: Int
     ): ResponseEntity<List<AzureQueueMessageDto>> {
+        if (azureQueueReaderService == null) {
+            return ResponseEntity.ok(emptyList())
+        }
         val messages = azureQueueReaderService.peekMessages(maxMessages.coerceAtMost(1000))
         return ResponseEntity.ok(messages)
     }
@@ -117,6 +134,12 @@ class SyncController(
         ]
     )
     fun getQueueMessagesByDate(): ResponseEntity<AzureQueueByDateResponse> {
+        if (azureQueueReaderService == null) {
+            return ResponseEntity.ok(AzureQueueByDateResponse(
+                dates = emptyMap(),
+                totalMessages = 0
+            ))
+        }
         val messagesByDate = azureQueueReaderService.getMessagesByDate()
         
         // Convert LocalDate keys to String for JSON serialization

@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="WebApp (FIELD - Auto-detect)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="lpg-ehl-webapp" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="no.cloudberries.lpg.api.LpgEhlApiApplicationKt" />
+    <option name="ACTIVE_PROFILES" value="field" />
+    <option name="PROGRAM_PARAMETERS" value="--ehl.serial.port=/tmp/vserial1 --ehl.serial.parity-auto-detect=true" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

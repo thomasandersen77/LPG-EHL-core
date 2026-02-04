@@ -1,0 +1,99 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# EKSTERN KONFIGURASJON - Installasjons-spesifikk
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Denne filen legges i config/ mappen ved siden av JAR-filen:
+#
+#   /opt/lpg-ehl/
+#     ├── lpg-ehl-webapp.jar
+#     ├── lpg-ehl-headless.jar
+#     └── config/
+#         └── application.yaml  <-- Denne filen (uten .example)
+#
+# Spring Boot leser automatisk config/application.yaml med HØYERE prioritet
+# enn application.yaml inni JAR-filen.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────────────────────
+# STASJON-IDENTIFIKASJON
+# ───────────────────────────────────────────────────────────────────────────────
+station:
+  id: "STATION-001"           # Unik ID for denne stasjonen
+  name: "Teststasjonen Oslo"  # Beskrivende navn
+  location: "Oslo, Norway"
+
+# ───────────────────────────────────────────────────────────────────────────────
+# SERIAL PORT KONFIGURASJON (Hardware-spesifikk)
+# ───────────────────────────────────────────────────────────────────────────────
+ehl:
+  serial:
+    port: /dev/ttyUSB0        # Serial port (Linux/Mac)
+    # port: COM3              # Serial port (Windows)
+    # port: /tmp/vserial1     # Virtual port for testing med socat
+    
+    baud-rate: 9600
+    data-bits: 8
+    parity: EVEN              # EVEN for ekte hardware, NONE for simulator
+    stop-bits: 1
+    read-timeout-ms: 3000
+    write-timeout-ms: 1000
+    
+    # Auto-detect parity (anbefalt for field-testing)
+    parity-auto-detect: false
+  
+  # Dispenser addresses på denne stasjonen
+  dispensers:
+    - address: 1
+      name: "Dispenser 1 - Venstre"
+      enabled: true
+    
+    - address: 2
+      name: "Dispenser 2 - Høyre"
+      enabled: true
+
+# ───────────────────────────────────────────────────────────────────────────────
+# DATABASE (Produksjon)
+# ───────────────────────────────────────────────────────────────────────────────
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/lpgdb
+    username: lpg_user
+    password: ${DB_PASSWORD}  # Fra environment variable
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+  
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# ───────────────────────────────────────────────────────────────────────────────
+# EKSTERNE TJENESTER
+# ───────────────────────────────────────────────────────────────────────────────
+azure:
+  enabled: true
+  storage:
+    connection-string: ${AZURE_STORAGE_CONNECTION_STRING}
+
+nets:
+  cloud-connect:
+    host: ${NETS_CLOUD_HOST:nets-cloud.norgesgass.no}
+    port: ${NETS_CLOUD_PORT:6001}
+
+# ───────────────────────────────────────────────────────────────────────────────
+# LOGGING (Kan overstyres per installasjon)
+# ───────────────────────────────────────────────────────────────────────────────
+logging:
+  level:
+    no.cloudberries.lpg: INFO
+    no.cloudberries.lpg.protocol: DEBUG  # Mer detaljert protokoll-logging
+  file:
+    name: logs/lpg-ehl.log
+    max-size: 10MB
+    max-history: 30

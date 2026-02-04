@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="WebApp (LAB)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="lpg-ehl-webapp" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="no.cloudberries.lpg.api.LpgEhlApiApplicationKt" />
+    <option name="ACTIVE_PROFILES" value="lab" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -1,57 +1,40 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# LPG EHL - External H2 Configuration for Development and Testing
+# LPG EHL - External Configuration for Field Deployment
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# This file is placed OUTSIDE the JAR for easy configuration changes without
-# rebuilding. Perfect for changing serial parameters during iterative testing.
+# VIKTIG: Denne filen er UTENFOR JAR og brukes kun i FIELD mode for å overstyre
+# serielle parametre. Plasseres i deploy-katalogen på target hardware.
 #
 # ═══════════════════════════════════════════════════════════════════════════════
-# USAGE MODES
+# PROFILES (Spring Profiles)
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# 1. HEADLESS (no web server, polling daemon only):
-#    java -jar release/lpg-ehl-headless.jar \
-#      --spring.config.location=file:./application-h2.yaml
+# LAB (default - in-memory emulator):
+#   ./scripts/run-lab.sh webapp           # Full GUI + emulator
+#   ./scripts/run-lab.sh headless --api   # CLI + debug REST API
 #
-# 2. HEADLESS + DEBUG API (REST endpoints for curl testing):
-#    java -jar release/lpg-ehl-headless.jar \
-#      --spring.config.location=file:./application-h2.yaml \
-#      --spring.profiles.active=h2,debug-api
+# FIELD (ekte serial port eller socat):
+#   ./scripts/run-field.sh webapp         # GUI + serial port
+#   ./scripts/run-field.sh headless       # CLI + serial port
 #
-# 3. WEBAPP (full GUI with WebSocket logging):
-#    java -jar release/lpg-ehl-webapp.jar \
-#      --spring.config.location=file:./application-h2.yaml
+# For socat testing, start først:
+#   ./scripts/start-socat-sim.sh
 #
-# 4. EMULATOR (TCP server for Windows Dispenser Control testing):
-#    java -jar release/lpg-ehl-emulator.jar \
-#      --spring.config.location=file:./application-h2.yaml
+# ═══════════════════════════════════════════════════════════════════════════════
+# EXTERNAL OVERRIDE
+# ═══════════════════════════════════════════════════════════════════════════════
 #
-# 5. WEBAPP + EMULATOR (run both for full testing with Dispenser Control):
-#    # Terminal 1: Start webapp
-#    java -jar release/lpg-ehl-webapp.jar --spring.config.location=file:./application-h2.yaml --spring.profiles.active=h2
-#    # Terminal 2: Start emulator TCP server (port 9000)
-#    java -jar release/lpg-ehl-emulator.jar --spring.config.location=file:./application-h2.yaml --spring.profiles.active=h2
+# Denne filen lastes med --spring.config.additional-location for å overstyre
+# serial port parametre i felt uten å måtte rebuilde JAR.
 #
-# 6. WEBAPP + SOCAT (H2 database med ekte seriell via SOCAT):
-#    java -jar release/lpg-ehl-webapp.jar \
-#      --spring.config.location=file:./application-h2.yaml \
-#      --spring.profiles.active=h2,field
-#
-#    Sett opp SOCAT først:
-#    socat -d -d pty,raw,echo=0,link=/tmp/ttyV1 pty,raw,echo=0,link=/tmp/ttyV2
-#
-# TIP: Use the launcher scripts in scripts/ folder:
-#    ./scripts/run-h2-headless.sh       # Headless mode
-#    ./scripts/run-h2-headless.sh --api # Headless + debug API
-#    ./scripts/run-h2-webapp.sh         # Webapp only
-#    ./scripts/run-h2-full.sh           # Webapp + Emulator TCP server
+# Eksempel:
+#   java -jar lpg-ehl-webapp.jar \
+#     --spring.profiles.active=field \
+#     --spring.config.additional-location=file:./application-h2.yaml
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
 spring:
-  config:
-    activate:
-      on-profile: h2
   application:
     name: lpg-ehl
   security:
@@ -165,26 +148,31 @@ logging:
 # 
 # Standard EHL Protocol: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
 #
+# ⚠️ VIKTIG: Simulator og Python bruker 8N1 (no parity)
+#   For testing mot simulator: parity: NONE
+#   For ekte hardware: parity: EVEN (verifiser med Python først!)
+#
 # Common port paths:
 #   Linux:   /dev/ttyS0, /dev/ttyUSB0, /dev/ttyAMA0 (Raspberry Pi)
-#   macOS:   /dev/cu.usbserial-xxxx, /tmp/ttyV1 (socat PTY)
+#   macOS:   /dev/cu.usbserial-xxxx, /tmp/vserial1 (socat PTY)
 #   Windows: COM1, COM3, etc.
+#
+# Parity options: NONE, EVEN, ODD, MARK, SPACE
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
   transport:
-    # Transport mode: EMULATOR, SOCAT, or HARDWARE
-    #   EMULATOR - In-memory emulator, no hardware needed (default for webapp)
-    #   SOCAT    - Virtual PTY via socat, for simulator testing
-    #   HARDWARE - Real serial port (production)
+    # LEGACY: Denne brukes ikke lenger, bruk lpg.mode i stedet
+    # Beholdes for bakoverkompatibilitet
     mode: ${EHL_TRANSPORT_MODE:EMULATOR}
   
   serial:
-    # Serial port device path (for SOCAT and HARDWARE modes)
-    port: ${EHL_SERIAL_PORT:/dev/ttyS0}
+    # Serial port device path
+    port: ${EHL_SERIAL_PORT:/tmp/vserial1}
     baud-rate: ${EHL_BAUD_RATE:9600}
     data-bits: 8
-    parity: EVEN
+    # VIKTIG: NONE for simulator/Python, EVEN for ekte hardware (default)
+    parity: ${EHL_SERIAL_PARITY:EVEN}
     stop-bits: 1
     # Timeouts (ms)
     read-timeout-ms: 3000
@@ -222,8 +210,15 @@ lpg-api:
 # ═══════════════════════════════════════════════════════════════════════════════
 # LPG APPLICATION CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
+#
+# Spring Profiles styrer transport-laget:
+#   lab   - InMemorySerialPort + EhlDispenserEmulator (default, ingen hardware)
+#   field - SerialPortManager + ekte serial port (produksjon eller socat)
+#
+# Bruk: --spring.profiles.active=lab eller --spring.profiles.active=field
+#
+# ═══════════════════════════════════════════════════════════════════════════════
 lpg:
-  mode: ${LPG_MODE:LAB}  # LAB (emulator testing) or FIELD (real hardware)
   dispenser:
     address: ${LPG_DISPENSER_ADDRESS:1}
   polling:
@@ -233,28 +228,28 @@ lpg:
   station:
     id: ${STATION_ID:STATION-001}
     name: ${STATION_NAME:Test Stasjon}
+  protocol:
+    logging:
+      # Enable raw TX/RX HEX logging (true = DEBUG level, false = TRACE level)
+      # Default: true in LAB mode, false in FIELD mode
+      enabled: ${LPG_PROTOCOL_LOGGING_ENABLED:true}
 
 ---
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIELD PROFILE - Real hardware/SOCAT transport
+# FIELD OVERRIDE SECTION
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Bruk: --spring.profiles.active=h2,field
+# Dette avsnittet aktiveres kun når filen lastes med additional-location.
+# Brukes for å overstyre serial port parametre i felt.
 #
-# Kombinerer H2 database med ekte seriell kommunikasjon via SOCAT eller hardware.
-# Perfekt for testing mot din simulator over virtuell PTY.
+# Eksempel deployment på ARK-3600:
+#   ehl.serial.port: /dev/ttyUSB0
+#   ehl.serial.parity: EVEN
 #
 # ═══════════════════════════════════════════════════════════════════════════════
-spring:
-  config:
-    activate:
-      on-profile: field
 
-ehl:
-  transport:
-    mode: SOCAT
-  serial:
-    port: ${EHL_SERIAL_PORT:/tmp/ttyV1}
-
-lpg:
-  mode: FIELD
+# Override serial port for field deployment (uncomment and modify as needed):
+# ehl:
+#   serial:
+#     port: /dev/ttyUSB0
+#     parity: EVEN  # EVEN for real EHL hardware, NONE for simulator

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-// Build: 2026-01-22T22:50 - Fixed AUTHORIZED_WAITING state display
+import { useAppMode } from '../contexts/AppModeContext';
+// Build: 2026-01-29T01:00 - Hide emulator in FIELD mode
 
 // API configuration
 // Both webapp frontend and API run on port 8080
@@ -27,7 +28,7 @@ interface LogEntry {
   message: string;
 }
 
-type LogChannel = 'api' | 'emulator' | 'protocol';
+type LogChannel = 'api' | 'service' | 'emulator' | 'protocol';
 
 // API functions
 const pumpApi = {
@@ -85,6 +86,8 @@ const pumpApi = {
 
 export function ControlPanel() {
   const queryClient = useQueryClient();
+  const { hardwareMode } = useAppMode();
+  const isFieldMode = hardwareMode === 'FIELD';
   const [maxAmount, setMaxAmount] = useState(2000);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -167,10 +170,13 @@ export function ControlPanel() {
 
     ws.onopen = () => {
       setWsConnected(true);
-      // Subscribe to all channels
+      // Subscribe to channels - skip 'emulator' in FIELD mode, 'service' always included
+      const channels = isFieldMode 
+        ? ['api', 'service', 'protocol'] 
+        : ['api', 'service', 'emulator', 'protocol'];
       ws.send(JSON.stringify({
         action: 'subscribe',
-        channels: ['api', 'emulator', 'protocol']
+        channels
       }));
     };
 
@@ -212,7 +218,7 @@ export function ControlPanel() {
     return () => {
       ws.close();
     };
-  }, []);
+  }, [isFieldMode]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -239,6 +245,13 @@ export function ControlPanel() {
       setCountdown(null);
     }
   }, [pumpStatus?.state]);
+
+  // Reset activeChannel if it's 'emulator' in FIELD mode
+  useEffect(() => {
+    if (isFieldMode && activeChannel === 'emulator') {
+      setActiveChannel('all');
+    }
+  }, [isFieldMode, activeChannel]);
 
   // Filter logs by channel
   const filteredLogs = activeChannel === 'all' 
@@ -287,6 +300,7 @@ export function ControlPanel() {
   const getChannelColor = (channel: string) => {
     switch (channel) {
       case 'api': return 'bg-blue-600';
+      case 'service': return 'bg-green-600';
       case 'emulator': return 'bg-purple-600';
       case 'protocol': return 'bg-orange-600';
       default: return 'bg-gray-600';
@@ -342,14 +356,14 @@ export function ControlPanel() {
                 <div className="bg-gray-700 rounded-lg p-4 text-center">
                   <div className="text-gray-400 text-sm">Volum</div>
                   <div className="text-3xl font-bold text-blue-400">
-                    {pumpStatus?.volumeLitres.toFixed(2)}
+                    {(pumpStatus?.volumeLitres ?? 0).toFixed(2)}
                   </div>
                   <div className="text-gray-400 text-xs">liter</div>
                 </div>
                 <div className="bg-gray-700 rounded-lg p-4 text-center">
                   <div className="text-gray-400 text-sm">Beløp</div>
                   <div className="text-3xl font-bold text-green-400">
-                    {pumpStatus?.amountKr.toFixed(2)}
+                    {(pumpStatus?.amountKr ?? 0).toFixed(2)}
                   </div>
                   <div className="text-gray-400 text-xs">kr</div>
                 </div>
@@ -358,7 +372,7 @@ export function ControlPanel() {
               {/* Price info */}
               <div className="bg-gray-700 rounded-lg p-3 mb-6 text-center">
                 <span className="text-gray-400">Pris: </span>
-                <span className="font-bold">{pumpStatus?.pricePerLitreKr.toFixed(2)} kr/L</span>
+                <span className="font-bold">{(pumpStatus?.pricePerLitreKr ?? 0).toFixed(2)} kr/L</span>
               </div>
 
               {/* Error message */}
@@ -502,12 +516,12 @@ export function ControlPanel() {
               </button>
             </div>
 
-            {/* Channel tabs */}
-            <div className="flex gap-2 mb-4">
-              {(['all', 'api', 'emulator', 'protocol'] as const).map(channel => (
+            {/* Channel tabs - hide emulator in FIELD mode, service always visible */}
+            <div className="flex gap-2 mb-4 flex-wrap">
+              {(['all', 'api', 'service', ...(isFieldMode ? [] : ['emulator']), 'protocol'] as const).map(channel => (
                 <button
                   key={channel}
-                  onClick={() => setActiveChannel(channel)}
+                  onClick={() => setActiveChannel(channel as typeof activeChannel)}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     activeChannel === channel
                       ? 'bg-blue-600 text-white'

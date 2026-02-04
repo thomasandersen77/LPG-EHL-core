@@ -1,0 +1,30 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# FIELD PROFILE - Headless with Real Serial Port
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Start: java -jar lpg-ehl-headless.jar --spring.profiles.active=field
+#
+# For SOCAT testing:
+#   1. ./scripts/start-socat-sim.sh
+#   2. java -jar lpg-ehl-headless.jar --spring.profiles.active=field
+#
+# Serial port override via config/application.yaml:
+#   ehl:
+#     serial:
+#       port: /dev/ttyUSB0
+#       parity: EVEN
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Serial defaults for SOCAT simulator
+ehl:
+  serial:
+    port: ${EHL_SERIAL_PORT:/tmp/vserial1}
+    parity: ${EHL_SERIAL_PARITY:NONE}
+
+# Production-level logging
+logging:
+  level:
+    no.cloudberries.lpg: INFO
+    no.cloudberries.lpg.communication: INFO
+    no.cloudberries.lpg.protocol: INFO
