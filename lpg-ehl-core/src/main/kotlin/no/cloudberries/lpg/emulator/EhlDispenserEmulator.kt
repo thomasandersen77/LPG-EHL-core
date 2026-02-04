@@ -96,6 +96,7 @@ class EhlDispenserEmulator(
             EhlCommand.STOP, EhlCommand.BLOCK -> handleStop()
             EhlCommand.VOLUME -> listOf(buildVolumeResponse())
             EhlCommand.PRICE -> listOf(buildPriceResponse())
+            EhlCommand.TANK -> listOf(buildTankResponse())
             EhlCommand.PRODUCT_SELECT -> handleProductSelect()
             EhlCommand.LINETEST -> listOf(buildLinetestResponse())
             else -> {
@@ -115,7 +116,7 @@ class EhlDispenserEmulator(
             logger.info("State: IDLE → AUTHORIZED")
         }
         return listOf(
-            EhlPacket(address, EhlCommand.OK),
+            buildVb6AckPacket(),
             buildStateResponse()
         )
     }
@@ -134,7 +135,7 @@ class EhlDispenserEmulator(
                 
                 logger.info("State: ${if (state == EmulatorState.IDLE) "IDLE" else "AUTHORIZED"} → DELIVERING")
                 listOf(
-                    EhlPacket(address, EhlCommand.OK),
+                    buildVb6AckPacket(),
                     buildStateResponse()
                 )
             }
@@ -147,14 +148,14 @@ class EhlDispenserEmulator(
                 
                 // Return deterministic response: ACK + PAYMENT_PENDING state
                 listOf(
-                    EhlPacket(address, EhlCommand.OK),
+                    buildVb6AckPacket(),
                     buildStateResponse() // Will show PAYMENT_PENDING
                 )
             }
             EmulatorState.DELIVERING -> {
                 // Already delivering
                 logger.warn("UNBLOCK received while already delivering - ignoring")
-                listOf(EhlPacket(address, EhlCommand.OK))
+                listOf(buildVb6AckPacket())
             }
         }
     }
@@ -187,14 +188,14 @@ class EhlDispenserEmulator(
                 logger.info("State: DELIVERING → PAYMENT_PENDING")
                 
                 listOf(
-                    EhlPacket(address, EhlCommand.OK),
+                    buildVb6AckPacket(),
                     buildStateResponse(),
                     buildVolumeResponse()
                 )
             }
             else -> {
                 logger.warn("STOP/BLOCK received in state $state - ignoring")
-                listOf(EhlPacket(address, EhlCommand.OK))
+                listOf(buildVb6AckPacket())
             }
         }
     }
@@ -220,6 +221,18 @@ class EhlDispenserEmulator(
         
         val data = byteArrayOf(stateCode.toByte())
         return EhlPacket(address, EhlCommand.STATE, data)
+    }
+    
+    /**
+     * Build VB6-compatible ACK packet.
+     * VB6 expects OK (0x1E) with payload byte 0x30 (ASCII '0').
+     * This matches the behavior in Python tests that check for OK_BYTE = 0x30.
+     */
+    private fun buildVb6AckPacket(): EhlPacket {
+        // VB6 sends ACK with data[0] = 0x30 (ASCII '0')
+        val data = byteArrayOf(0x30)
+        logger.debug("VB6 ACK: OK with data[0]=0x30")
+        return EhlPacket(address, EhlCommand.OK, data)
     }
     
     private fun buildVolumeResponse(): EhlPacket {
@@ -267,6 +280,14 @@ class EhlDispenserEmulator(
         val data = byteArrayOf(0x55, 0xAA.toByte())
         logger.debug("LINETEST response: 0x55 0xAA")
         return EhlPacket(address, EhlCommand.LINETEST, data)
+    }
+    
+    private fun buildTankResponse(): EhlPacket {
+        // VB6 format: Tank status byte (typically 0x01 for tank 1 selected)
+        // Python test expects TANKBIT response with 1 data byte
+        val data = byteArrayOf(0x01)
+        logger.debug("TANK response: 0x01 (tank 1 selected)")
+        return EhlPacket(address, EhlCommand.TANK, data)
     }
     
     private fun buildErrorPacket(code: Int): EhlPacket {
