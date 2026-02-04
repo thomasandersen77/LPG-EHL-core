@@ -120,11 +120,35 @@ mkdir -p "$RELEASE_DIR"
 # Find and copy JARs
 WEBAPP_JAR=$(find "$SCRIPT_DIR/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
 HEADLESS_JAR=$(find "$SCRIPT_DIR/lpg-ehl-app-headless/target" -name "lpg-ehl-app-headless-*.jar" -not -name "*-plain.jar" | head -1)
-PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
+PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "pls-sim.jar" | head -1)
+if [ -z "$PLS_SIM_JAR" ]; then
+    # Fallback if naming changes in the future
+    PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
+fi
+
+# Require main artifacts
+if [ -z "$WEBAPP_JAR" ] || [ ! -f "$WEBAPP_JAR" ]; then
+    echo ""
+    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find WebApp JAR in lpg-ehl-webapp/target"
+    exit 1
+fi
+
+if [ -z "$HEADLESS_JAR" ] || [ ! -f "$HEADLESS_JAR" ]; then
+    echo ""
+    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find Headless JAR in lpg-ehl-app-headless/target"
+    exit 1
+fi
+
+PLS_SIM_AVAILABLE=true
+if [ -z "$PLS_SIM_JAR" ] || [ ! -f "$PLS_SIM_JAR" ]; then
+    PLS_SIM_AVAILABLE=false
+fi
 
 cp "$WEBAPP_JAR" "$RELEASE_DIR/lpg-ehl-webapp.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-webapp.jar"
 cp "$HEADLESS_JAR" "$RELEASE_DIR/lpg-ehl-headless.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-headless.jar"
-cp "$PLS_SIM_JAR" "$RELEASE_DIR/pls-sim.jar" && chmod +x "$RELEASE_DIR/pls-sim.jar"
+if [ "$PLS_SIM_AVAILABLE" = true ]; then
+    cp "$PLS_SIM_JAR" "$RELEASE_DIR/pls-sim.jar" && chmod +x "$RELEASE_DIR/pls-sim.jar"
+fi
 
 echo -e "${GREEN}✓${NC}"
 
@@ -136,7 +160,11 @@ BUILD_TIME=$(printf "%d:%02d" $((BUILD_DURATION / 60)) $((BUILD_DURATION % 60)))
 # Sizes
 WEBAPP_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-webapp.jar" | cut -f1)
 HEADLESS_SIZE=$(du -h "$RELEASE_DIR/lpg-ehl-headless.jar" | cut -f1)
-PLS_SIM_SIZE=$(du -h "$RELEASE_DIR/pls-sim.jar" | cut -f1)
+if [ "$PLS_SIM_AVAILABLE" = true ]; then
+    PLS_SIM_SIZE=$(du -h "$RELEASE_DIR/pls-sim.jar" | cut -f1)
+else
+    PLS_SIM_SIZE="(not built)"
+fi
 
 # Clean up build log on success
 rm -f "$BUILD_LOG"
@@ -150,7 +178,11 @@ echo -e "${BLUE}═════════════════════�
 echo ""
 echo -e "  ${YELLOW}release/lpg-ehl-webapp.jar${NC}    ${GRAY}($WEBAPP_SIZE)${NC}"
 echo -e "  ${GREEN}release/lpg-ehl-headless.jar${NC}  ${GRAY}($HEADLESS_SIZE)${NC}"
-echo -e "  ${CYAN}release/pls-sim.jar${NC}           ${GRAY}($PLS_SIM_SIZE)${NC}"
+if [ "$PLS_SIM_AVAILABLE" = true ]; then
+    echo -e "  ${CYAN}release/pls-sim.jar${NC}           ${GRAY}($PLS_SIM_SIZE)${NC}"
+else
+    echo -e "  ${CYAN}release/pls-sim.jar${NC}           ${GRAY}$PLS_SIM_SIZE${NC}"
+fi
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  🚀 BRUK${NC}"

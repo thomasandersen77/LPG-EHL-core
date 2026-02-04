@@ -29,8 +29,9 @@
         <kotlin.version>2.1.0</kotlin.version>
         <coroutines.version>1.10.1</coroutines.version>
         <spring-boot.version>3.2.1</spring-boot.version>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <!-- Target runtime JDK (ARK has Java 17) -->
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <slf4j.version>2.0.13</slf4j.version>
         <!-- logback.version managed by Spring Boot BOM -->
@@ -157,7 +158,7 @@
                         </execution>
                     </executions>
                     <configuration>
-                        <jvmTarget>21</jvmTarget>
+                        <jvmTarget>${maven.compiler.target}</jvmTarget>
                         <languageVersion>2.0</languageVersion>
                         <apiVersion>2.0</apiVersion>
                     </configuration>
@@ -169,7 +170,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.12.1</version>
                     <configuration>
-                        <release>21</release>
+                        <release>${maven.compiler.target}</release>
                     </configuration>
                 </plugin>
 
