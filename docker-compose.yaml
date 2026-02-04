@@ -1,0 +1,92 @@
+# Docker Compose for Azurite (Local Development)
+# 
+# This setup runs Azurite (Azure Storage Emulator) for local development.
+# The Spring Boot API uses H2 file-based database (no Docker container needed)
+# and runs in IntelliJ or via Maven on port 8080.
+#
+# H2 Database Configuration:
+#   Database stored as file: ./data/lpg_ehl.mv.db
+#   No container needed - H2 runs embedded in Spring Boot
+#   Access H2 Console: http://localhost:8080/h2-console
+#   JDBC URL: jdbc:h2:file:./data/lpg_ehl
+#
+# Azurite is critical for sending transaction messages to Nets Cloud Connect.
+# Without Azurite, transactions won't be queued and sent to the cloud.
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose down
+#   docker-compose logs -f
+
+services:
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: lpg-azurite
+    restart: unless-stopped
+    command: azurite-queue --queueHost 0.0.0.0 --queuePort 10001 --loose --skipApiVersionCheck
+    ports:
+      - "10001:10001"  # Azure Queue Service
+    volumes:
+      - azurite-dev-data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "10001"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  azurite-dev-data:
+    driver: local
+
+# Connection details for Spring Boot application (lpg-ehl-api):
+#
+# When running lpg-ehl-api locally (IntelliJ or Maven), use these settings:
+#
+# H2 Database (File-based, no Docker needed):
+#   spring.datasource.url=jdbc:h2:file:./data/lpg_ehl
+#   spring.datasource.driver-class-name=org.h2.Driver
+#   spring.datasource.username=sa
+#   spring.datasource.password=
+#   spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+#   spring.h2.console.enabled=true
+#   H2 Console: http://localhost:8080/h2-console
+#
+# Azurite (Azure Storage Emulator):
+#   AZURE_CONNECTION_STRING=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://localhost:10001
+#   AZURE_QUEUE_NAME=lpg-transactions
+#   Queue Service URL: http://localhost:10001/devstoreaccount1/lpg-transactions
+#
+# Nets Cloud Connect Integration:
+#   Azurite stores transaction messages that need to be sent to Nets Cloud
+#   The queue acts as a reliable buffer for payment transactions
+#   See NETS_CLOUD_CONNECT.md for full technical documentation
+#
+# IntelliJ Run Configuration:
+#   1. Run this docker-compose file first: docker-compose up -d
+#   2. Run lpg-ehl-api with VM options: -Dspring.profiles.active=local
+#   3. Application will start on http://localhost:8080
+#   4. H2 database file will be created automatically in ./data/
+#   5. No additional environment variables needed (defaults in application.yaml work)
+#
+# These match the defaults in application.yaml, so no extra configuration needed
+# if running with SPRING_PROFILES_ACTIVE=local
+#
+# Commands:
+#   Start services:     docker-compose up -d
+#   Stop services:      docker-compose down
+#   View logs:          docker-compose logs -f azurite
+#   Wipe Azurite data:  docker-compose down -v
+#   Check Azurite:      curl http://localhost:10001/devstoreaccount1/lpg-transactions
+#
+# H2 Database Management:
+#   View data:          Connect to H2 Console at http://localhost:8080/h2-console
+#   Backup:             cp ./data/lpg_ehl.mv.db ./data/lpg_ehl_backup.mv.db
+#   Reset database:     rm ./data/lpg_ehl.mv.db (will be recreated on next startup)
+#   Database location:  ./data/lpg_ehl.mv.db
+#
+# Architecture Notes:
+#   - H2 file-based database replaced PostgreSQL (simpler for development)
+#   - Azurite provides Azure Queue Storage emulation for Nets Cloud Connect
+#   - All transaction messages go through Azurite queue before cloud sync
+#   - This setup is for local development only
+#   - Production should use proper Azure Storage and a production database

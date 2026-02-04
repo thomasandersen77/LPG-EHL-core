@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.CommandLineRunner
+import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
 
 /**
@@ -29,11 +30,10 @@ import org.springframework.stereotype.Component
 class HeadlessStartupRunner(
     private val ehlCommunicator: EhlCommunicator,
     private val dispenserService: DispenserService,
+    private val environment: Environment,
     @Autowired(required = false) private val pumpStateService: PumpStateService?,
     @Autowired(required = false) private val hardwareWatchdogService: HardwareWatchdogService?,
     @Autowired(required = false) private val azureQueueReaderService: AzureQueueReaderService?,
-    @Value("\${ehl.transport.mode:}") private val transportMode: String,
-    @Value("\${lpg.mode:LAB}") private val legacyMode: String,
     @Value("\${lpg.dispenser.address:1}") private val dispenserAddress: Int
 ) : CommandLineRunner {
 
@@ -71,17 +71,16 @@ class HeadlessStartupRunner(
     }
     
     /**
-     * Determine effective transport mode:
-     * - ehl.transport.mode takes precedence if set
-     * - Falls back to lpg.mode for backwards compatibility
+     * Determine effective transport mode based on active Spring profile.
+     * This ensures consistency with TransportConfiguration.
      */
-    private fun getEffectiveMode(): String = when {
-        transportMode.equals("SOCAT", ignoreCase = true) -> "SOCAT"
-        transportMode.equals("HARDWARE", ignoreCase = true) -> "HARDWARE"
-        transportMode.equals("EMULATOR", ignoreCase = true) -> "EMULATOR"
-        legacyMode.equals("FIELD", ignoreCase = true) -> "HARDWARE"
-        legacyMode.equals("LAB", ignoreCase = true) -> "EMULATOR"
-        else -> "HARDWARE" // Default for headless
+    private fun getEffectiveMode(): String {
+        val activeProfiles = environment.activeProfiles
+        return when {
+            activeProfiles.contains("field") -> "HARDWARE"
+            activeProfiles.contains("lab") -> "EMULATOR"
+            else -> "EMULATOR" // Default to EMULATOR if no profile specified
+        }
     }
     
     private fun initializeHardware() {

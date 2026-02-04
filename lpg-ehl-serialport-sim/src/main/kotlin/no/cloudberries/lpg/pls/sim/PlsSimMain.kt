@@ -42,18 +42,41 @@ fun main(args: Array<String>) {
     log.info("")
     log.info("  Logging:")
     log.info("    Heartbeat: {} ms", cliArgs.heartbeatIntervalMs)
+    
+    // Log fault injection config if present
+    if (cliArgs.disconnectAfterSeconds != null || cliArgs.badChecksumRate > 0.0 || cliArgs.powerfaultAfterSeconds != null) {
+        log.info("")
+        log.info("  ⚠️ Fault Injection:")
+        if (cliArgs.disconnectAfterSeconds != null) {
+            log.info("    Disconnect:  {:.1f} seconds", cliArgs.disconnectAfterSeconds)
+        }
+        if (cliArgs.badChecksumRate > 0.0) {
+            log.info("    Bad Checksum: {:.1f}%", cliArgs.badChecksumRate * 100)
+        }
+        if (cliArgs.powerfaultAfterSeconds != null) {
+            log.info("    Power Fault: {:.1f} seconds", cliArgs.powerfaultAfterSeconds)
+        }
+    }
     log.info("══════════════════════════════════════════════════════════")
     log.info("")
 
+    // Handler reference for callbacks
+    var handler: SerialPortHandler? = null
+    
     // Create state with configured parameters
     val plsState = PlsState(
         defaultAddress = cliArgs.dispenserAddress,
         priceCents = cliArgs.priceCents,
         initiallyBlocked = cliArgs.initiallyBlocked,
-        legacyAddressEnabled = cliArgs.legacyAddressEnabled
+        legacyAddressEnabled = cliArgs.legacyAddressEnabled,
+        disconnectAfterSeconds = cliArgs.disconnectAfterSeconds,
+        badChecksumRate = cliArgs.badChecksumRate,
+        powerfaultAfterSeconds = cliArgs.powerfaultAfterSeconds,
+        onDisconnect = { handler?.forceDisconnect() },
+        onPowerfault = { handler?.forceDisconnect() }
     )
 
-    val handler = SerialPortHandler(
+    handler = SerialPortHandler(
         portName = cliArgs.port,
         baud = cliArgs.baud,
         parity = cliArgs.parity,

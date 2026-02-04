@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 import java.math.BigDecimal
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -33,7 +34,7 @@ enum class DispenserState {
 data class DispenserStateInfo(
     val state: DispenserState = DispenserState.IDLE,
     val lastVolumeDeciliters: Int = 0,
-    val currentTransactionId: String? = null,
+    val currentTransactionId: UUID? = null,
     val transactionStartTime: LocalDateTime? = null,
     val pricePerLiterNok: BigDecimal? = null,
     val pendingPriceUpdate: BigDecimal? = null  // Queued price update waiting for IDLE state
@@ -284,7 +285,7 @@ class DispenserService(
      * Start a new transaction when pump becomes active
      */
     private fun startNewTransaction(address: Int) {
-        val transactionId = "TXN-$address-${System.currentTimeMillis()}"
+        val transactionId = UUID.randomUUID()
         val startTime = LocalDateTime.now()
         
         dispenserStates[address] = dispenserStates.getOrDefault(address, DispenserStateInfo()).copy(

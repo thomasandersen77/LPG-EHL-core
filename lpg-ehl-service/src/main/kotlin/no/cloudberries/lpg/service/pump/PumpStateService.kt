@@ -239,22 +239,18 @@ class PumpStateService(
             EhlPacket(address, EhlCommand.OK, ByteArray(0))  // Return OK (not STATE) to skip validation
         }
         
-        // Steg 3: Sjekk TRANSACTION_COMPLETE flag (0x08) i STATE-respons
+        // Steg 3: Log STATE-respons for debugging (payment validation er service-lagets ansvar, ikke hardware)
+        // TRANSACTION_COMPLETE flag (0x08) fra hardware betyr bare at forrige pumping er stoppet,
+        // IKKE at betaling mangler - det håndteres av service-laget via hasPendingTransaction sjekk ovenfor
         if (stateResponse.command == EhlCommand.STATE && stateResponse.data.isNotEmpty()) {
             val stateByte = stateResponse.data[0].toInt() and 0xFF
-            
-            if ((stateByte and STATE_FLAG_TRANSACTION_COMPLETE) != 0) {
-                protocolLogger.error("❌ UNBLOCK AVVIST: Dispenser har ubetalt transaksjon (STATE=0x%02X, TRANSACTION_COMPLETE flag satt)".format(stateByte))
-                protocolLogger.info("💳 Forrige transaksjon må betales før ny pumping kan starte")
-                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                return Result.failure(IllegalStateException("Dispenser has pending payment - settle transaction before unblocking"))
-            }
             
             // Log state flags for debugging
             val flagsDesc = buildString {
                 if ((stateByte and STATE_FLAG_PUMPING) != 0) append("PUMPING ")
                 if ((stateByte and STATE_FLAG_AUTHORIZED) != 0) append("AUTHORIZED ")
                 if ((stateByte and STATE_FLAG_NOZZLE_LIFTED) != 0) append("NOZZLE_LIFTED ")
+                if ((stateByte and STATE_FLAG_TRANSACTION_COMPLETE) != 0) append("TRANSACTION_COMPLETE ")
             }
             protocolLogger.info("✅ STATE validert: 0x%02X (%s)".format(stateByte, flagsDesc.ifEmpty { "IDLE" }))
         }
@@ -597,6 +593,44 @@ class PumpStateService(
         
         logger.info("🔄 Pump $address reset to IDLE")
         broadcastStatus(state)
+    }
+    
+    /**
+     * Reset ALL pumps to idle state.
+     * 
+     * Brukes for cleanup når autorisasjoner har hengt seg fra tidligere kjøringer.
+     * VIKTIG: Denne metoden er ment for admin/debugging - bruk med forsiktighet!
+     */
+    fun resetAllPumps() {
+        logger.warn("🧹 Resetting ALL pumps to IDLE...")
+        
+        val resetCount = pumpStates.size
+        
+        pumpStates.values.forEach { state ->
+            // Cancel any running timeout jobs
+            state.timeoutJob?.cancel()
+            
+            // Reset state
+            state.state = "IDLE"
+            state.volumeLitres = 0.0
+            state.amountKr = 0.0
+            state.pricePerLitreKr = currentPriceKr
+            state.nozzleLifted = false
+            state.hasPendingTransaction = false
+            state.pumpingStartTime = null
+            state.pendingTransactionId = null
+            state.authorizationId = null
+            state.unblockTime = null
+            state.timeoutJob = null
+            
+            logger.info("   🔄 Pump ${state.address} reset to IDLE")
+            broadcastStatus(state)
+        }
+        
+        // Clear milestone tracking
+        lastLoggedMilestone.clear()
+        
+        logger.info("✅ Reset $resetCount pump(s) to IDLE")
     }
     
     /**
