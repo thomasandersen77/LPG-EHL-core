@@ -2,6 +2,8 @@
 
 Bakgrunnsservice for LPG-dispenserstyring **uten web-server eller GUI**. Perfekt for produksjonsmiljøer på bensinstasjoner.
 
+📋 **[Debug API Curl Reference](DEBUG_API_CURL_REFERENCE.md)** - Komplett oversikt over tilgjengelige debug-endepunkter
+
 ## ✨ Features
 
 - ✅ **NO WEB SERVER** - Ingen HTTP overhead, kun forretningslogikk
@@ -359,45 +361,70 @@ dmesg | grep -i tty | tail -10
 # - /dev/ttyS0    (Onboard seriell port)
 ```
 
-### Steg 4: Test pumpekommandoer med curl
+### Steg 4: Test pumpekommandoer med curl (Debug API)
 
-Når applikasjonen kjører, kan du teste pumpen med curl-kommandoer.
-
-> **MERK:** Headless-appen har IKKE web-server. For å teste via curl, må du enten:
-> - Bruke `lpg-ehl-webapp` (full app med REST API)
-> - Eller bruke CLI-verktøyet `lpg-ehl-cli`
-
-#### Alternativ A: Kjør webapp i stedet for headless
+Headless-appen har IKKE web-server som standard, men du kan aktivere **Debug API** for felt-testing:
 
 ```bash
-# Start webapp med REST API
-java -jar lpg-ehl-webapp-*.jar \
+# Start headless med debug-api profil
+java -jar lpg-ehl-app-headless-*.jar \
+  --spring.profiles.active=field,debug-api \
   --EHL_EMULATOR_ENABLED=false \
   --EHL_SERIAL_PORT=/dev/ttyUSB0
 ```
 
-Nå kan du teste:
+Nå kan du teste med curl:
 
 ```bash
-# 1. Sjekk pumpestatus
-curl http://localhost:8080/api/v1/emulator/pump/1/status
+# 1. Health check
+curl http://localhost:8080/api/debug/health
 
-# 2. FRI PUMPE - Åpne pumpen (UNBLOCK)
-curl -X POST http://localhost:8080/api/v1/emulator/pump/1/unblock
+# 2. Sjekk pumpestatus
+curl http://localhost:8080/api/debug/state/1
+
+# 3. Test kommunikasjon (LINETEST)
+curl -X POST http://localhost:8080/api/debug/linetest/1
+
+# 4. FRI PUMPE (UNBLOCK)
+curl -X POST http://localhost:8080/api/debug/unblock/1
 
 # --> Nå kan kunden fylle drivstoff <--
 
-# 3. STOPP PUMPE - Blokkér pumpen (BLOCK)
-curl -X POST http://localhost:8080/api/v1/emulator/pump/1/block
+# 5. Les volum direkte
+curl http://localhost:8080/api/debug/volume/1
 
-# 4. REGISTRER BETALING - Settle transaksjonen
-curl -X POST "http://localhost:8080/api/v1/emulator/settle/1?method=CARD"
+# 6. STOPP PUMPE (BLOCK)
+curl -X POST http://localhost:8080/api/debug/block/1
 
-# 5. Nullstill pumpe til IDLE
-curl -X POST http://localhost:8080/api/v1/emulator/pump/1/reset
+# 7. REGISTRER BETALING (simulert for debug)
+curl -X POST "http://localhost:8080/api/debug/settle/1?paymentMethod=CARD"
+
+# 8. Nullstill pumpe til IDLE
+curl -X POST http://localhost:8080/api/debug/reset/1
 ```
 
-#### Alternativ B: Bruk CLI-verktøyet
+#### Serial Diagnostikk (som Alejandros Python-scripts)
+
+```bash
+# List tilgjengelige porter
+curl http://localhost:8080/api/debug/serial/ports
+
+# Health check på serial connection
+curl "http://localhost:8080/api/debug/serial/health?address=1"
+
+# Smart scan - finn working config automatisk
+curl -X POST "http://localhost:8080/api/debug/serial/smart-scan?timeoutMs=1000"
+
+# Scan adresser (som 02_scan_addresses.py)
+curl -X POST "http://localhost:8080/api/debug/serial/scan-addresses?port=/dev/ttyUSB0&start=32&end=40"
+
+# Auto-detect parity
+curl -X POST "http://localhost:8080/api/debug/serial/auto-detect?port=/dev/ttyUSB0&address=33"
+```
+
+> **MERK:** Debug API bruker en lett Undertow-server (1 IO thread, 4 worker threads) for minimal ressursbruk.
+
+#### Alternativ: Bruk CLI-verktøyet
 
 ```bash
 # Bygg CLI
@@ -419,33 +446,45 @@ Her er en komplett testsekvens for å verifisere at systemet fungerer:
 
 ```bash
 #!/bin/bash
-# felttest.sh - Komplett felttest
+# felttest.sh - Komplett felttest med Debug API
 
-API="http://localhost:8080/api/v1"
+API="http://localhost:8080/api/debug"
 PUMP=1
 
-echo "🔍 1. Sjekker pumpestatus..."
-curl -s $API/emulator/pump/$PUMP/status | jq
+echo "🔍 1. Health check..."
+curl -s $API/health | jq
 
 echo ""
-echo "🔓 2. Frigir pumpe (FRI PUMPE)..."
-curl -s -X POST $API/emulator/pump/$PUMP/unblock | jq
+echo "🔍 2. Sjekker pumpestatus..."
+curl -s $API/state/$PUMP | jq
+
+echo ""
+echo "📡 3. Test kommunikasjon (LINETEST)..."
+curl -s -X POST $API/linetest/$PUMP | jq
+
+echo ""
+echo "🔓 4. Frigir pumpe (FRI PUMPE)..."
+curl -s -X POST $API/unblock/$PUMP | jq
 
 echo ""
 echo "⛽ Venter på at kunde fyller (10 sekunder)..."
 sleep 10
 
 echo ""
-echo "🛑 3. Stopper pumpe..."
-curl -s -X POST $API/emulator/pump/$PUMP/block | jq
+echo "📊 5. Les volum..."
+curl -s $API/volume/$PUMP | jq
 
 echo ""
-echo "💳 4. Registrerer betaling (CARD)..."
-curl -s -X POST "$API/emulator/settle/$PUMP?method=CARD" | jq
+echo "🛑 6. Stopper pumpe (BLOCK)..."
+curl -s -X POST $API/block/$PUMP | jq
 
 echo ""
-echo "🔄 5. Nullstiller pumpe..."
-curl -s -X POST $API/emulator/pump/$PUMP/reset | jq
+echo "💳 7. Registrerer betaling (simulert)..."
+curl -s -X POST "$API/settle/$PUMP?paymentMethod=CARD" | jq
+
+echo ""
+echo "🔄 8. Nullstiller pumpe..."
+curl -s -X POST $API/reset/$PUMP | jq
 
 echo ""
 echo "✅ Test fullført!"
@@ -455,6 +494,11 @@ Lagre som `felttest.sh` og kjør:
 ```bash
 chmod +x felttest.sh
 ./felttest.sh
+```
+
+**VIKTIG:** Headless må startes med `debug-api` profil:
+```bash
+java -jar lpg-ehl-app-headless-*.jar --spring.profiles.active=field,debug-api
 ```
 
 ### Steg 6: Verifiser i databasen

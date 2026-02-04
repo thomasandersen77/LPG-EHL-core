@@ -16,7 +16,7 @@ import java.time.format.DateTimeFormatter
  * - Post-mortem log analysis
  * - Debugging communication issues
  * 
- * Heartbeat interval: 30 seconds (configurable via lpg.heartbeat.interval-ms)
+ * Heartbeat interval: 60 seconds (configurable via lpg.heartbeat.interval-ms)
  */
 @Component
 class HeartbeatScheduler(
@@ -35,10 +35,10 @@ class HeartbeatScheduler(
     private var lastStateTransition: String = "STARTUP"
     
     /**
-     * Log heartbeat every 30 seconds.
+     * Log heartbeat every 60 seconds (1 minute).
      * Shows current pump state, volume, price, and system info.
      */
-    @Scheduled(fixedRateString = "\${lpg.heartbeat.interval-ms:30000}")
+    @Scheduled(fixedRateString = "\${lpg.heartbeat.interval-ms:60000}")
     fun logHeartbeat() {
         heartbeatCount++
         val now = LocalDateTime.now().format(timestampFormat)
@@ -72,10 +72,10 @@ class HeartbeatScheduler(
     }
     
     /**
-     * Quick status log every 3 seconds during active pumping.
+     * Quick status log every 10 seconds during active pumping.
      * Only logs when pump is in PUMPING or READY_TO_PUMP state.
      */
-    @Scheduled(fixedRate = 3000)
+    @Scheduled(fixedRate = 10000)
     fun logActiveStatus() {
         try {
             val status = pumpStateService.getStatus(dispenserAddress)
