@@ -14,7 +14,7 @@ data class CliArgs(
     val dispenserAddress: Int = 1,
     val priceCents: Int = 1590,
     val initiallyBlocked: Boolean = true,
-    val heartbeatIntervalMs: Long = 5000,  // Configurable heartbeat interval (default: 5 seconds)
+    val heartbeatIntervalMs: Long = 60000,  // Configurable heartbeat interval (default: 60 seconds)
     val legacyAddressEnabled: Boolean = true  // Also respond to address 32+n (Alejandro's finding)
 ) {
     companion object {
@@ -29,7 +29,7 @@ data class CliArgs(
             var dispenserAddress = 1
             var priceCents = 1590
             var initiallyBlocked = true
-            var heartbeatIntervalMs = 5000L
+            var heartbeatIntervalMs = 60000L
             var legacyAddressEnabled = true
 
             val iterator = args.iterator()
@@ -54,7 +54,7 @@ data class CliArgs(
                     arg.startsWith("--address=") -> dispenserAddress = arg.substringAfter("--address=").toIntOrNull() ?: 1
                     arg.startsWith("--price=") -> priceCents = arg.substringAfter("--price=").toIntOrNull() ?: 1590
                     arg.startsWith("--blocked=") -> initiallyBlocked = arg.substringAfter("--blocked=").lowercase() != "false"
-                    arg.startsWith("--heartbeatIntervalMs=") -> heartbeatIntervalMs = arg.substringAfter("--heartbeatIntervalMs=").toLongOrNull() ?: 5000L
+                    arg.startsWith("--heartbeatIntervalMs=") -> heartbeatIntervalMs = arg.substringAfter("--heartbeatIntervalMs=").toLongOrNull() ?: 60000L
                     arg.startsWith("--legacy-address=") -> legacyAddressEnabled = arg.substringAfter("--legacy-address=").lowercase() != "false"
                     arg == "--help" || arg == "-h" -> {
                         printHelp()
@@ -100,7 +100,7 @@ data class CliArgs(
                 |                         Based on Alejandro's finding: pumps respond at 32+pump_number
                 |
                 |Logging Options:
-                |  --heartbeatIntervalMs=<ms>  Heartbeat log interval in ms (default: 5000)
+                |  --heartbeatIntervalMs=<ms>  Heartbeat log interval in ms (default: 60000)
                 |  --help, -h             Show this help message
                 |
                 |Examples:
