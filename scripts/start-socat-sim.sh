@@ -13,6 +13,8 @@
 #   --blocked=<bool>   Initial blocked state (default: true)
 #   --help             Show help
 #
+# Note: DEBUG logging is enabled by default to show RX/TX HEX bytes.
+#
 #═══════════════════════════════════════════════════════════════════════
 set -e
 
@@ -43,7 +45,7 @@ SOCAT_PID=""
 SIM_PID=""
 
 show_help() {
-    sed -n '2,16p' "$0" | sed 's/^# //' | sed 's/^#//'
+    sed -n '2,18p' "$0" | sed 's/^# //' | sed 's/^#//'
     exit 0
 }
 
@@ -137,7 +139,7 @@ echo -e "      Commands:  ${GRAY}STATE, ERROR_QUERY, VOLUME, TANKBIT${NC}"
 echo ""
 
 # Start simulator with full logging to console
-java -jar "$SIM_JAR" \
+java -Dsim.log.level=DEBUG -jar "$SIM_JAR" \
     --port=/tmp/vserial0 \
     --address="$DISPENSER_ADDRESS" \
     --price="$PRICE_CENTS" \
