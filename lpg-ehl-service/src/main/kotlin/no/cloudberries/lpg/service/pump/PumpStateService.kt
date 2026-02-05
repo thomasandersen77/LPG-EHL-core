@@ -3,7 +3,7 @@ package no.cloudberries.lpg.service.pump
 import jakarta.annotation.PostConstruct
 import kotlinx.coroutines.*
 import no.cloudberries.lpg.communication.EhlCommunicator
-import no.cloudberries.lpg.emulator.EhlDispenserEmulator
+import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
 import no.cloudberries.lpg.protocol.*
 import no.cloudberries.lpg.service.event.*
 import no.cloudberries.lpg.service.price.PriceService
@@ -33,7 +33,7 @@ class PumpStateService(
     private val eventPublisher: EventPublisher,
     private val transactionService: TransactionService,
     private val ehlCommunicator: EhlCommunicator,
-    private val dispenserEmulator: EhlDispenserEmulator?,  // Null i FIELD MODE
+    private val dispenserEmulator: IEhlDispenserEmulator?,  // Null i FIELD MODE
     private val priceService: PriceService,
     private val authorizationService: PumpAuthorizationService? = null  // Optional - for kortdragning-flow
 ) {

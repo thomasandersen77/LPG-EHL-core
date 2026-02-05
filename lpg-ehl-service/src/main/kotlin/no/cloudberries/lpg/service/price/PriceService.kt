@@ -3,7 +3,7 @@ package no.cloudberries.lpg.service.price
 import no.cloudberries.lpg.service.price.PriceHistory
 import no.cloudberries.lpg.service.price.PriceHistoryRepository
 import no.cloudberries.lpg.service.event.EventPublisher
-import no.cloudberries.lpg.emulator.EhlDispenserEmulator
+import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -22,7 +22,7 @@ import java.time.LocalDateTime
 class PriceService(
     private val priceHistoryRepository: PriceHistoryRepository,
     private val eventPublisher: EventPublisher,
-    private val dispenserEmulator: EhlDispenserEmulator?
+    private val dispenserEmulator: IEhlDispenserEmulator?
 ) {
     private val logger = LoggerFactory.getLogger(PriceService::class.java)
     

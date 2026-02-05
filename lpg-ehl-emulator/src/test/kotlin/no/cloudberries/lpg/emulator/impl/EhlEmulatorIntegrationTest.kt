@@ -1,5 +1,6 @@
-package no.cloudberries.lpg.emulator
+package no.cloudberries.lpg.emulator.impl
 
+import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
 import no.cloudberries.lpg.protocol.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -23,13 +24,15 @@ import kotlin.test.assertTrue
 @DisplayName("EHL Dispenser Emulator Integration Tests")
 class EhlEmulatorIntegrationTest {
     
-    private lateinit var emulator: EhlDispenserEmulator
+    private lateinit var emulator: IEhlDispenserEmulator
     private val testAddress = 1
     private val testPrice = 1590  // 15.90 kr/L
     
     @BeforeEach
     fun setup() {
-        emulator = EhlDispenserEmulator(
+        val simulator = DispenserSimulatorImpl(litresPerSecond = 0.5, pricePerLitreCents = testPrice)
+        emulator = EhlDispenserEmulatorImpl(
+            simulator = simulator,
             address = testAddress,
             pricePerLitreCents = testPrice,
             litresPerSecond = 0.5

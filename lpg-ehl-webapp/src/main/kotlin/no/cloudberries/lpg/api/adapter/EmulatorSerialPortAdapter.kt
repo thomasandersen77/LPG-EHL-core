@@ -1,8 +1,11 @@
 package no.cloudberries.lpg.api.adapter
 
 import no.cloudberries.lpg.transport.SerialTransport
-import no.cloudberries.lpg.emulator.EhlDispenserEmulator
-import no.cloudberries.lpg.emulator.InMemorySerialPort
+import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
+import no.cloudberries.lpg.emulator.IDispenserSimulator
+import no.cloudberries.lpg.emulator.impl.InMemorySerialPort
+import no.cloudberries.lpg.emulator.impl.EhlDispenserEmulatorImpl
+import no.cloudberries.lpg.emulator.impl.DispenserSimulatorImpl
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
@@ -44,10 +47,13 @@ class EmulatorSerialPortAdapter(
     private val logger = LoggerFactory.getLogger(EmulatorSerialPortAdapter::class.java)
     
     // Lazy initialization for emulator og in-memory serial port
-    private val _emulator: EhlDispenserEmulator by lazy {
-        EhlDispenserEmulator(
+    private val _emulator: IEhlDispenserEmulator by lazy {
+        val simulator = DispenserSimulatorImpl(litresPerSecond = 0.5, pricePerLitreCents = pricePerLiterCents)
+        EhlDispenserEmulatorImpl(
+            simulator = simulator,
             address = dispenserAddress,
-            pricePerLitreCents = pricePerLiterCents
+            pricePerLitreCents = pricePerLiterCents,
+            litresPerSecond = 0.5
         )
     }
     
@@ -97,5 +103,5 @@ class EmulatorSerialPortAdapter(
     /**
      * Hent emulator-instansen for direkte tilgang (f.eks. for testing/debugging).
      */
-    fun getEmulator(): EhlDispenserEmulator = _emulator
+    fun getEmulator(): IEhlDispenserEmulator = _emulator
 }
