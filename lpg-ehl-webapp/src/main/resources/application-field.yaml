@@ -66,6 +66,8 @@ nets:
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
+  emulator:
+    enabled: false  # Field mode uses real hardware or socat simulator
   serial:
     port: ${EHL_SERIAL_PORT:/tmp/vserial1}
     baud-rate: ${EHL_BAUD_RATE:9600}

@@ -196,6 +196,7 @@ class SerialPortHandler(
             
             val (responseCmd, responseData, responseAddr) = when (result) {
                 is EhlCommandResult.OkAck -> Triple(EhlFrameCodec.CMD_OK, byteArrayOf(0x30), result.addr)  // VB6: OK with data[0]=0x30
+                is EhlCommandResult.LinetestResponse -> Triple(EhlFrameCodec.CMD_LINETEST, byteArrayOf(0x55.toByte(), 0xAA.toByte()), result.addr)  // VB6: LINETEST echoes command with 0x55 0xAA pattern
                 is EhlCommandResult.StateResponse -> Triple(EhlFrameCodec.CMD_STATE, result.data, result.addr)
                 is EhlCommandResult.VolumeResponse -> Triple(EhlFrameCodec.CMD_VOLUME, result.data, result.addr)
                 is EhlCommandResult.PriceResponse -> Triple(EhlFrameCodec.CMD_PRICE, result.data, result.addr)

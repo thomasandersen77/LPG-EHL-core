@@ -16,8 +16,17 @@ Usage:
 import sys
 import time
 import argparse
-from ehl_protocol import EhlProtocol, EhlCommand
-from logging_utils import setup_logger
+from ehl_protocol import (
+    ETX,
+    STX_CONTROLLER,
+    STX_DISPENSER,
+    build_frame,
+    describe_frame,
+    extract_frames,
+    hexdump,
+)
+from logging_utils import info, warn
+from serial_linux import open_serial
 
 # ANSI colors
 RED = '\033[0;31m'
@@ -27,7 +36,27 @@ CYAN = '\033[0;36m'
 BOLD = '\033[1m'
 NC = '\033[0m'
 
-def test_disconnect(port, addr):
+CMD_STATE = 0x4B
+
+def send_command(port, addr, cmd, timeout_ms=500):
+    """Send a command and try to get response."""
+    frame = build_frame(addr, cmd, b"", stx=STX_CONTROLLER, etx=ETX)
+    port.write(frame)
+    
+    deadline = time.time() + (timeout_ms / 1000.0)
+    buf = b""
+    
+    while time.time() < deadline:
+        chunk = port.read(timeout_s=0.05)
+        if chunk:
+            buf += chunk
+            frames, buf = extract_frames(buf)
+            for f in frames:
+                if f.stx == STX_DISPENSER:
+                    return True
+    return False
+
+def test_disconnect(port_path, addr):
     """Test that simulator disconnects after configured time."""
     print(f"\n{CYAN}═══════════════════════════════════════════════════════════{NC}")
     print(f"{BOLD}Test: Disconnect after 5 seconds{NC}")
@@ -36,27 +65,26 @@ def test_disconnect(port, addr):
     print(f"1. Start simulator with: {YELLOW}--disconnectAfterSeconds=5{NC}")
     print(f"2. Waiting for disconnect event...\n")
     
-    protocol = EhlProtocol(port)
+    port, _ = open_serial(port_path, baud=9600)
     
-    # Send STATE commands every second until disconnect
-    for i in range(10):
-        try:
-            print(f"[{i+1}s] Sending STATE command...")
-            response = protocol.query_state(addr)
-            if response:
-                print(f"     ✓ Response received: {response.hex()}")
-            else:
-                print(f"     {RED}✗ No response{NC}")
-            time.sleep(1)
-        except Exception as e:
-            print(f"\n{GREEN}✓ Disconnect detected after {i+1}s: {e}{NC}")
-            break
-    else:
+    try:
+        # Send STATE commands every second until disconnect
+        for i in range(10):
+            try:
+                print(f"[{i+1}s] Sending STATE command...")
+                if send_command(port, addr, CMD_STATE):
+                    print(f"     ✓ Response received")
+                else:
+                    print(f"     {RED}✗ No response{NC}")
+                time.sleep(1)
+            except Exception as e:
+                print(f"\n{GREEN}✓ Disconnect detected after {i+1}s: {e}{NC}")
+                return
         print(f"\n{RED}✗ Test failed: No disconnect detected within 10s{NC}")
-    
-    protocol.close()
+    finally:
+        port.close()
 
-def test_checksum(port, addr):
+def test_checksum(port_path, addr):
     """Test that simulator corrupts checksums at configured rate."""
     print(f"\n{CYAN}═══════════════════════════════════════════════════════════{NC}")
     print(f"{BOLD}Test: Bad checksum rate (50%){NC}")
@@ -65,38 +93,38 @@ def test_checksum(port, addr):
     print(f"1. Start simulator with: {YELLOW}--badChecksumRate=0.5{NC}")
     print(f"2. Sending 20 STATE commands and counting checksum errors...\n")
     
-    protocol = EhlProtocol(port)
+    port, _ = open_serial(port_path, baud=9600)
     
-    total = 20
-    errors = 0
-    success = 0
-    
-    for i in range(total):
-        try:
-            response = protocol.query_state(addr, timeout=0.5)
-            if response:
-                success += 1
-                print(f"[{i+1:2d}] {GREEN}✓{NC} Valid response")
-            else:
+    try:
+        total = 20
+        errors = 0
+        success = 0
+        
+        for i in range(total):
+            try:
+                if send_command(port, addr, CMD_STATE, timeout_ms=500):
+                    success += 1
+                    print(f"[{i+1:2d}] {GREEN}✓{NC} Valid response")
+                else:
+                    errors += 1
+                    print(f"[{i+1:2d}] {RED}✗{NC} No response (checksum error?)")
+            except Exception as e:
                 errors += 1
-                print(f"[{i+1:2d}] {RED}✗{NC} No response (checksum error?)")
-        except Exception as e:
-            errors += 1
-            print(f"[{i+1:2d}] {RED}✗{NC} Error: {e}")
-        time.sleep(0.2)
-    
-    print(f"\n{BOLD}Results:{NC}")
-    print(f"  Success: {success}/{total} ({100*success/total:.0f}%)")
-    print(f"  Errors:  {errors}/{total} ({100*errors/total:.0f}%)")
-    
-    if 0.3 <= errors/total <= 0.7:
-        print(f"\n{GREEN}✓ Test passed: Error rate ~50% as expected{NC}")
-    else:
-        print(f"\n{YELLOW}⚠ Test inconclusive: Error rate not close to 50%{NC}")
-    
-    protocol.close()
+                print(f"[{i+1:2d}] {RED}✗{NC} Error: {e}")
+            time.sleep(0.2)
+        
+        print(f"\n{BOLD}Results:{NC}")
+        print(f"  Success: {success}/{total} ({100*success/total:.0f}%)")
+        print(f"  Errors:  {errors}/{total} ({100*errors/total:.0f}%)")
+        
+        if 0.3 <= errors/total <= 0.7:
+            print(f"\n{GREEN}✓ Test passed: Error rate ~50% as expected{NC}")
+        else:
+            print(f"\n{YELLOW}⚠ Test inconclusive: Error rate not close to 50%{NC}")
+    finally:
+        port.close()
 
-def test_powerfault(port, addr):
+def test_powerfault(port_path, addr):
     """Test that simulator resets state and disconnects on power fault."""
     print(f"\n{CYAN}═══════════════════════════════════════════════════════════{NC}")
     print(f"{BOLD}Test: Power fault after 5 seconds{NC}")
@@ -105,37 +133,33 @@ def test_powerfault(port, addr):
     print(f"1. Start simulator with: {YELLOW}--powerfaultAfterSeconds=5{NC}")
     print(f"2. Monitoring state and waiting for power fault...\n")
     
-    protocol = EhlProtocol(port)
+    port, _ = open_serial(port_path, baud=9600)
     
-    # Send STATE commands every second until power fault
-    for i in range(10):
-        try:
-            print(f"[{i+1}s] Querying state...")
-            response = protocol.query_state(addr)
-            if response and len(response) >= 5:
-                status_byte = response[4]
-                print(f"     Status byte: 0x{status_byte:02X}")
-            else:
-                print(f"     {RED}✗ No response{NC}")
-            time.sleep(1)
-        except Exception as e:
-            print(f"\n{GREEN}✓ Power fault detected after {i+1}s: {e}{NC}")
-            print(f"   Simulator should have reset to IDLE state before disconnect")
-            break
-    else:
+    try:
+        # Send STATE commands every second until power fault
+        for i in range(10):
+            try:
+                print(f"[{i+1}s] Querying state...")
+                if send_command(port, addr, CMD_STATE):
+                    print(f"     ✓ Got response")
+                else:
+                    print(f"     {RED}✗ No response{NC}")
+                time.sleep(1)
+            except Exception as e:
+                print(f"\n{GREEN}✓ Power fault detected after {i+1}s: {e}{NC}")
+                print(f"   Simulator should have reset to IDLE state before disconnect")
+                return
         print(f"\n{RED}✗ Test failed: No power fault detected within 10s{NC}")
-    
-    protocol.close()
+    finally:
+        port.close()
 
 def main():
     parser = argparse.ArgumentParser(description='Test PLS Simulator fault injection')
-    parser.add_argument('--port', required=True, help='Serial port (e.g., /tmp/vserial1)')
+    parser.add_argument('--port', required=True, help='Serial port (e.g., /tmp/ttyV1)')
     parser.add_argument('--addr', type=int, default=1, help='Dispenser address (default: 1)')
     parser.add_argument('--test', choices=['disconnect', 'checksum', 'powerfault'], 
                        required=True, help='Which fault injection test to run')
     args = parser.parse_args()
-    
-    setup_logger(verbose=True)
     
     print(f"\n{BOLD}PLS Simulator Fault Injection Test{NC}")
     print(f"Port: {args.port}, Address: {args.addr}\n")

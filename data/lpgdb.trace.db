@@ -1,3 +1,3 @@
-2026-01-25 21:26:27.920756+01:00 jdbc[3]: exception
+2026-02-05 01:51:54.930230+01:00 jdbc[3]: exception
 org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "DATABASECHANGELOGLOCK" not found; SQL statement:
 SELECT COUNT(*) FROM PUBLIC.DATABASECHANGELOGLOCK [42102-224]

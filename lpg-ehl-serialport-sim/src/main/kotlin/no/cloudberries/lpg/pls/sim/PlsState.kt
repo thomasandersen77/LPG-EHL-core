@@ -330,7 +330,7 @@ class PlsState(
         return when (cmd) {
             EhlFrameCodec.CMD_LINETEST -> {
                 log.debug("🔗 LINETEST from address $addrInt")
-                EhlCommandResult.OkAck(frame.addr)
+                EhlCommandResult.LinetestResponse(frame.addr)
             }
             EhlFrameCodec.CMD_STATE -> {
                 val statusByte = buildStatusByte()
@@ -625,4 +625,7 @@ sealed class EhlCommandResult {
         }
         override fun hashCode(): Int = 31 * addr.toInt() + data.contentHashCode()
     }
+    
+    /** LINETEST response - VB6 expects special pattern 0x55 0xAA */
+    data class LinetestResponse(val addr: Byte) : EhlCommandResult()
 }
