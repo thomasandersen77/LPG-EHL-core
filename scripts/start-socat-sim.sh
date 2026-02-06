@@ -12,8 +12,8 @@
 #   --legacy-address=<bool> Also respond to 32+address (default: true)
 #
 # Serial Options:
-#   --baud=<rate>         Baud rate (default: 9800)
-#   --parity=<type>       Parity: NONE, EVEN, ODD (default: EVEN)
+#   --baud=<rate>         Baud rate (default: 9600)
+#   --parity=<type>       Parity: NONE, EVEN, ODD (default: NONE)
 #   --mode=<mode>         Frame mode: line, stxetx, ehl (default: ehl)
 #   --chunk=<bool>        Enable chunked responses (default: false)
 #   --latencyMs=<ms>      Add latency jitter to read loop (default: 0)
@@ -43,8 +43,8 @@ BUILD_LOG="$PROJECT_ROOT/.build-sim.log"
 # Default configuration
 DISPENSER_ADDRESS=1
 PRICE_CENTS=1590
-BAUD_RATE=9800
-PARITY="EVEN"
+BAUD_RATE=9600
+PARITY="NONE"
 BLOCKED="true"
 LEGACY_ADDRESS="true"
 MODE="ehl"

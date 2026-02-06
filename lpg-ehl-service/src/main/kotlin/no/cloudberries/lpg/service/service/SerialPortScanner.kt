@@ -61,15 +61,18 @@ class SerialPortScanner {
      * @param includeSocatPorts Whether to include socat virtual ports (default: true)
      * @return List of AvailablePort with details
      */
-    fun listAvailablePorts(includeSocatPorts: Boolean = true): List<AvailablePort> {
-        // Get hardware serial ports from jSerialComm
+    fun listAvailablePorts(includeSocatPorts: Boolean = true, checkAccess: Boolean = true): List<AvailablePort> {
+        // Get hardware serial ports from jSerialComm (use systemPortPath for full path)
         val hardwarePorts = SerialPort.getCommPorts().map { port ->
+            val portPath = port.systemPortPath ?: port.systemPortName
+            val access = if (checkAccess) checkPortAccess(portPath) else "UNKNOWN"
             AvailablePort(
-                path = port.systemPortName,
+                path = portPath,
                 description = port.portDescription ?: "Unknown",
                 location = port.portLocation ?: "Unknown",
                 vendorId = port.vendorID,
-                productId = port.productID
+                productId = port.productID,
+                accessStatus = access
             )
         }
         
@@ -78,26 +81,93 @@ class SerialPortScanner {
             SOCAT_VIRTUAL_PORTS
                 .filter { java.io.File(it).exists() }
                 .map { path ->
+                    val access = if (checkAccess) checkPortAccess(path) else "UNKNOWN"
                     AvailablePort(
                         path = path,
                         description = "Socat Virtual PTY",
                         location = "Virtual",
                         vendorId = 0,
-                        productId = 0
+                        productId = 0,
+                        accessStatus = access
                     )
                 }
         } else {
             emptyList()
         }
         
-        val allPorts = hardwarePorts + virtualPorts
+        // On macOS, scan /dev/cu.* for additional ports not enumerated by jSerialComm
+        val macOsPorts = if (includeSocatPorts) {
+            scanMacOsSerialPorts(hardwarePorts.map { it.path }.toSet() + virtualPorts.map { it.path }.toSet(), checkAccess)
+        } else {
+            emptyList()
+        }
         
-        logger.info("Found ${allPorts.size} serial ports (${hardwarePorts.size} hardware, ${virtualPorts.size} virtual)")
+        val allPorts = hardwarePorts + virtualPorts + macOsPorts
+        
+        logger.info("Found ${allPorts.size} serial ports (${hardwarePorts.size} hardware, ${virtualPorts.size} virtual, ${macOsPorts.size} macOS-detected)")
         allPorts.forEach { port ->
-            logger.debug("  - ${port.path}: ${port.description}")
+            logger.debug("  - ${port.path}: ${port.description} [${port.accessStatus}]")
         }
         
         return allPorts
+    }
+    
+    /**
+     * Check if a serial port can be opened (lightweight access test).
+     * @return Access status string: OK, PERMISSION_DENIED, BUSY, NOT_FOUND, UNKNOWN
+     */
+    private fun checkPortAccess(portPath: String): String {
+        return try {
+            val file = java.io.File(portPath)
+            if (!file.exists()) return "NOT_FOUND"
+            if (!file.canRead() || !file.canWrite()) return "PERMISSION_DENIED"
+            
+            // Try a quick open/close via jSerialComm
+            val testPort = SerialPort.getCommPort(portPath)
+            testPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 100)
+            val opened = testPort.openPort(100)  // 100ms timeout
+            if (opened) {
+                testPort.closePort()
+                "OK"
+            } else {
+                // Check error details
+                when (testPort.lastErrorCode) {
+                    0 -> "BUSY"  // Port exists but couldn't be opened (likely in use)
+                    else -> "BUSY"
+                }
+            }
+        } catch (e: Exception) {
+            logger.debug("Access check failed for $portPath: ${e.message}")
+            when {
+                e.message?.contains("Permission", ignoreCase = true) == true -> "PERMISSION_DENIED"
+                e.message?.contains("busy", ignoreCase = true) == true -> "BUSY"
+                else -> "UNKNOWN"
+            }
+        }
+    }
+    
+    /**
+     * Scan macOS /dev/cu.* ports that jSerialComm may not enumerate.
+     */
+    private fun scanMacOsSerialPorts(alreadyKnown: Set<String>, checkAccess: Boolean): List<AvailablePort> {
+        val devDir = java.io.File("/dev")
+        if (!devDir.isDirectory) return emptyList()
+        
+        return devDir.listFiles { _, name ->
+            name.startsWith("cu.") && !name.startsWith("cu.Bluetooth") && !name.startsWith("cu.debug")
+        }?.mapNotNull { file ->
+            val path = file.absolutePath
+            if (alreadyKnown.contains(path)) return@mapNotNull null
+            val access = if (checkAccess) checkPortAccess(path) else "UNKNOWN"
+            AvailablePort(
+                path = path,
+                description = "macOS serial port",
+                location = "System",
+                vendorId = 0,
+                productId = 0,
+                accessStatus = access
+            )
+        } ?: emptyList()
     }
     
     /**
@@ -356,6 +426,92 @@ class SerialPortScanner {
     }
     
     /**
+     * Probe a specific serial port with given UART settings.
+     * Opens a temporary connection, sends a STATE query, and returns detailed result.
+     *
+     * @return ProbeResult with detailed diagnostics
+     */
+    suspend fun probePort(
+        portPath: String,
+        baudRate: Int = 9600,
+        parity: String = "NONE",
+        dataBits: Int = 8,
+        stopBitsValue: Int = 1,
+        address: Int = 1,
+        timeoutMs: Long = 2000
+    ): ProbeResult {
+        val startTime = System.currentTimeMillis()
+        val parityValue = when (parity.uppercase()) {
+            "NONE" -> SerialPort.NO_PARITY
+            "EVEN" -> SerialPort.EVEN_PARITY
+            "ODD" -> SerialPort.ODD_PARITY
+            else -> SerialPort.NO_PARITY
+        }
+        val stopBitsMode = when (stopBitsValue) {
+            2 -> SerialPort.TWO_STOP_BITS
+            else -> SerialPort.ONE_STOP_BIT
+        }
+        val usedConfig = ProbeConfig(portPath, baudRate, parity.uppercase(), dataBits, stopBitsValue, address)
+
+        var manager: SerialPortManager? = null
+        return try {
+            // Check file exists first
+            if (!java.io.File(portPath).exists()) {
+                return ProbeResult(false, false, 0, "NOT_FOUND", "Port $portPath does not exist", usedConfig = usedConfig)
+            }
+
+            val config = SerialPortConfig(
+                portName = portPath,
+                baudRate = baudRate,
+                dataBits = dataBits,
+                stopBits = stopBitsMode,
+                parity = parityValue,
+                readTimeout = timeoutMs.toInt(),
+                writeTimeout = timeoutMs.toInt()
+            )
+            manager = SerialPortManager(config)
+            
+            if (!manager.connect()) {
+                val elapsed = System.currentTimeMillis() - startTime
+                return ProbeResult(false, false, elapsed, "BUSY", "Failed to open port $portPath (in use or permission denied)", usedConfig = usedConfig)
+            }
+
+            val communicator = EhlCommunicator(manager, enableRawLogging = false)
+            val testPacket = EhlPacketBuilder.createStateQuery(address)
+
+            val response = withTimeout(timeoutMs) {
+                communicator.sendAndReceive(testPacket, timeoutMs)
+            }
+            val elapsed = System.currentTimeMillis() - startTime
+            ProbeResult(
+                opened = true,
+                testPassed = true,
+                responseTimeMs = elapsed,
+                errorCategory = null,
+                errorMessage = null,
+                responseCommand = response.command.name,
+                usedConfig = usedConfig
+            )
+        } catch (e: java.io.IOException) {
+            val elapsed = System.currentTimeMillis() - startTime
+            val category = when {
+                e.message?.contains("Permission", ignoreCase = true) == true -> "PERMISSION"
+                e.message?.contains("busy", ignoreCase = true) == true -> "BUSY"
+                else -> "UNKNOWN"
+            }
+            ProbeResult(false, false, elapsed, category, e.message, usedConfig = usedConfig)
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            val elapsed = System.currentTimeMillis() - startTime
+            ProbeResult(true, false, elapsed, "NO_RESPONSE", "No response within ${timeoutMs}ms from address $address", usedConfig = usedConfig)
+        } catch (e: Exception) {
+            val elapsed = System.currentTimeMillis() - startTime
+            ProbeResult(false, false, elapsed, "UNKNOWN", e.message, usedConfig = usedConfig)
+        } finally {
+            try { manager?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    /**
      * Calculate confidence score for a configuration.
      * Higher score = more likely to be correct.
      */
@@ -392,7 +548,30 @@ data class AvailablePort(
     val description: String,
     val location: String,
     val vendorId: Int,
-    val productId: Int
+    val productId: Int,
+    val accessStatus: String = "UNKNOWN"  // OK, PERMISSION_DENIED, BUSY, NOT_FOUND, UNKNOWN
+)
+
+/**
+ * Result of probing a specific serial port configuration.
+ */
+data class ProbeResult(
+    val opened: Boolean,
+    val testPassed: Boolean,
+    val responseTimeMs: Long,
+    val errorCategory: String?,  // BUSY, PERMISSION, NOT_FOUND, NO_RESPONSE, UNKNOWN
+    val errorMessage: String?,
+    val responseCommand: String? = null,
+    val usedConfig: ProbeConfig? = null
+)
+
+data class ProbeConfig(
+    val port: String,
+    val baudRate: Int,
+    val parity: String,
+    val dataBits: Int,
+    val stopBits: Int,
+    val address: Int
 )
 
 /**

@@ -12,7 +12,20 @@ interface AvailablePort {
   location: string;
   vendorId: number;
   productId: number;
+  accessStatus?: 'OK' | 'PERMISSION_DENIED' | 'BUSY' | 'UNKNOWN';
 }
+
+interface ProbeResult {
+  portPath: string;
+  opened: boolean;
+  testPassed: boolean;
+  responseTimeMs: Long;
+  errorCategory?: string;
+  errorMessage?: string;
+  detectedParity?: string;
+  responseHex?: string;
+}
+type Long = number;
 
 interface WorkingConfiguration {
   port: AvailablePort;
@@ -43,11 +56,11 @@ interface SerialStatus {
 }
 
 interface SerialHealthStatus {
-  healthy: boolean;
+  connected: boolean;
+  testPassed: boolean;
   responseTimeMs: number;
-  lastError?: string;
-  parityMode?: string;
-  baudRate?: number;
+  error?: string;
+  responseCommand?: string;
 }
 
 // Configuration options
@@ -96,6 +109,20 @@ const serialApi = {
       params: { port, address }
     });
     return res.data;
+  },
+  probePort: async (
+    port: string,
+    baud: number,
+    parity: string,
+    dataBits: number,
+    stopBits: number,
+    address: number,
+    timeoutMs: number
+  ): Promise<ProbeResult> => {
+    const res = await axios.get(`${API_BASE}/api/debug/serial/probe`, {
+      params: { port, baud, parity, dataBits, stopBits, address, timeoutMs }
+    });
+    return res.data;
   }
 };
 
@@ -133,6 +160,18 @@ export function SerialPortConfigPage() {
   // Mutations
   const healthCheckMutation = useMutation({
     mutationFn: () => serialApi.healthCheck(testAddress)
+  });
+
+  const probeMutation = useMutation({
+    mutationFn: () => serialApi.probePort(
+      selectedPort,
+      baudRate,
+      parity,
+      dataBits,
+      stopBits,
+      testAddress,
+      2000
+    )
   });
 
   const smartScanMutation = useMutation({
@@ -220,7 +259,21 @@ export function SerialPortConfigPage() {
                           : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
                       }`}
                     >
-                      <div className="font-mono font-bold">{port.path}</div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold">{port.path}</span>
+                        {port.accessStatus && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                            port.accessStatus === 'OK' ? 'bg-green-700 text-green-200' :
+                            port.accessStatus === 'PERMISSION_DENIED' ? 'bg-red-700 text-red-200' :
+                            port.accessStatus === 'BUSY' ? 'bg-yellow-700 text-yellow-200' :
+                            'bg-gray-600 text-gray-300'
+                          }`}>
+                            {port.accessStatus === 'OK' ? '✅ OK' :
+                             port.accessStatus === 'PERMISSION_DENIED' ? '🔒 No access' :
+                             port.accessStatus === 'BUSY' ? '⏳ Busy' : '❓ Unknown'}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-gray-300">{port.description}</div>
                       {port.vendorId !== 0 && (
                         <div className="text-xs text-gray-400 mt-1">
@@ -315,11 +368,18 @@ export function SerialPortConfigPage() {
               </div>
 
               {/* Quick actions */}
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => probeMutation.mutate()}
+                  disabled={probeMutation.isPending || !selectedPort}
+                  className="py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg font-bold transition"
+                >
+                  {probeMutation.isPending ? '⏳ Probing...' : '🔌 Probe Port'}
+                </button>
                 <button
                   onClick={() => healthCheckMutation.mutate()}
-                  disabled={healthCheckMutation.isPending || !selectedPort}
-                  className="py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg font-bold transition"
+                  disabled={healthCheckMutation.isPending}
+                  className="py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 rounded-lg font-bold transition"
                 >
                   {healthCheckMutation.isPending ? '⏳ Testing...' : '💓 Health Check'}
                 </button>
@@ -332,19 +392,54 @@ export function SerialPortConfigPage() {
                 </button>
               </div>
 
-              {/* Health check result */}
-              {healthCheckMutation.data && (
+              {/* Probe result */}
+              {probeMutation.data && (
                 <div className={`mt-4 p-4 rounded-lg ${
-                  healthCheckMutation.data.healthy ? 'bg-green-900/30 border border-green-500' : 'bg-red-900/30 border border-red-500'
+                  probeMutation.data.testPassed ? 'bg-green-900/30 border border-green-500' : 'bg-red-900/30 border border-red-500'
                 }`}>
                   <div className="font-bold mb-2">
-                    {healthCheckMutation.data.healthy ? '✅ Communication OK' : '❌ Communication Failed'}
+                    {probeMutation.data.testPassed ? '✅ Probe OK — Dispenser responded!' : 
+                     probeMutation.data.opened ? '⚠️ Port opened but no response' : '❌ Could not open port'}
                   </div>
-                  {healthCheckMutation.data.responseTimeMs && (
+                  {probeMutation.data.responseTimeMs > 0 && (
+                    <div className="text-sm">Response time: {probeMutation.data.responseTimeMs}ms</div>
+                  )}
+                  {probeMutation.data.responseHex && (
+                    <div className="text-sm text-green-400 font-mono">RX: {probeMutation.data.responseHex}</div>
+                  )}
+                  {probeMutation.data.errorCategory && (
+                    <div className="text-sm text-yellow-400">Category: {probeMutation.data.errorCategory}</div>
+                  )}
+                  {probeMutation.data.errorMessage && (
+                    <div className="text-sm text-red-400">{probeMutation.data.errorMessage}</div>
+                  )}
+                  {probeMutation.data.testPassed && (
+                    <div className="text-xs text-gray-400 mt-2">
+                      ✅ Config confirmed: {baudRate} baud, {dataBits}{parity.charAt(0)}{stopBits}, address {testAddress}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Health check result (uses currently connected transport) */}
+              {healthCheckMutation.data && (
+                <div className={`mt-4 p-4 rounded-lg ${
+                  healthCheckMutation.data.testPassed ? 'bg-green-900/30 border border-green-500' : 'bg-red-900/30 border border-red-500'
+                }`}>
+                  <div className="font-bold mb-2">
+                    {healthCheckMutation.data.testPassed ? '✅ Communication OK' : '❌ Communication Failed'}
+                  </div>
+                  {healthCheckMutation.data.responseTimeMs > 0 && (
                     <div className="text-sm">Response time: {healthCheckMutation.data.responseTimeMs}ms</div>
                   )}
-                  {healthCheckMutation.data.lastError && (
-                    <div className="text-sm text-red-400">{healthCheckMutation.data.lastError}</div>
+                  {healthCheckMutation.data.responseCommand && (
+                    <div className="text-sm text-green-400">Response: {healthCheckMutation.data.responseCommand}</div>
+                  )}
+                  {healthCheckMutation.data.error && (
+                    <div className="text-sm text-red-400">{healthCheckMutation.data.error}</div>
+                  )}
+                  {!healthCheckMutation.data.connected && (
+                    <div className="text-sm text-yellow-400 mt-1">⚠️ Transport not connected</div>
                   )}
                 </div>
               )}
@@ -584,26 +679,26 @@ export function SerialPortConfigPage() {
                 </button>
                 <button
                   onClick={() => {
-                    setBaudRate(19200);
-                    setParity('NONE');
+                    setBaudRate(9600);
+                    setParity('EVEN');
                     setDataBits(8);
                     setStopBits(1);
                   }}
                   className="p-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-left"
                 >
-                  <div className="font-bold">8N1 @ 19200</div>
-                  <div className="text-sm text-gray-400">High speed</div>
+                  <div className="font-bold">8E1 @ 9600</div>
+                  <div className="text-sm text-gray-400">Real hardware (RS-485)</div>
                 </button>
                 <button
                   onClick={() => {
                     setTestAddress(33);
-                    setScanStartAddr(32);
+                    setScanStartAddr(1);
                     setScanEndAddr(40);
                   }}
                   className="p-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-left"
                 >
                   <div className="font-bold">Legacy 32+n</div>
-                  <div className="text-sm text-gray-400">Real hardware</div>
+                  <div className="text-sm text-gray-400">Addr 33 + scan 1-40</div>
                 </button>
               </div>
             </div>

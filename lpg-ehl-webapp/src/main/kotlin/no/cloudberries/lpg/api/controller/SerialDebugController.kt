@@ -1,9 +1,11 @@
 package no.cloudberries.lpg.api.controller
 
 import no.cloudberries.lpg.communication.EhlCommunicator
+import no.cloudberries.lpg.communication.HardwareWatchdogCapable
 import no.cloudberries.lpg.service.service.*
 import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.web.bind.annotation.*
 
 /**
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*
  * - Health checking serial communication
  * - Manual parity detection
  * - Serial port diagnostics
+ * - Probe: test arbitrary port+config with automatic disconnect/reconnect of main transport
  */
 @RestController
 @RequestMapping("/api/debug/serial")
@@ -21,7 +24,8 @@ class SerialDebugController(
     private val parityDetector: SerialParityAutoDetector,
     private val portScanner: SerialPortScanner,
     private val communicator: EhlCommunicator,
-    private val transport: SerialTransport
+    private val transport: SerialTransport,
+    @Value("\${ehl.serial.port:}") private val configuredPort: String
 ) {
     
     private val logger = LoggerFactory.getLogger(SerialDebugController::class.java)
@@ -169,12 +173,108 @@ class SerialDebugController(
         @RequestParam(defaultValue = "500") timeoutMs: Long
     ): AddressScanResult {
         logger.info("Starting address scan: port=$port, range=$start-$end, baud=$baud, parity=$parity")
-        return portScanner.scanAddresses(
-            portPath = port,
-            addressRange = start..end,
-            baudRate = baud,
-            parity = parity,
-            testTimeoutMs = timeoutMs
-        )
+        
+        // Disconnect main transport if it holds the same port, so the scan can open it
+        val disconnected = disconnectIfSamePort(port)
+        
+        return try {
+            portScanner.scanAddresses(
+                portPath = port,
+                addressRange = start..end,
+                baudRate = baud,
+                parity = parity,
+                testTimeoutMs = timeoutMs
+            )
+        } finally {
+            if (disconnected) reconnectTransport()
+        }
+    }
+    
+    /**
+     * Probe a specific serial port with given UART settings.
+     * 
+     * Opens a temporary connection to the specified port, sends a STATE query,
+     * and returns detailed diagnostics. If the port is the same as the currently
+     * configured production port, the main transport is temporarily disconnected
+     * and automatically reconnected via the watchdog after the probe completes.
+     * 
+     * @param port Serial port device path
+     * @param baud Baud rate (default: 9600)
+     * @param parity Parity mode: NONE, EVEN, ODD (default: NONE)
+     * @param dataBits Data bits (default: 8)
+     * @param stopBits Stop bits (default: 1)
+     * @param address Dispenser address (default: 1)
+     * @param timeoutMs Timeout (default: 2000ms)
+     * @return ProbeResult with detailed diagnostics
+     */
+    @GetMapping("/probe")
+    suspend fun probePort(
+        @RequestParam port: String,
+        @RequestParam(defaultValue = "9600") baud: Int,
+        @RequestParam(defaultValue = "NONE") parity: String,
+        @RequestParam(defaultValue = "8") dataBits: Int,
+        @RequestParam(defaultValue = "1") stopBits: Int,
+        @RequestParam(defaultValue = "1") address: Int,
+        @RequestParam(defaultValue = "2000") timeoutMs: Long
+    ): ProbeResult {
+        logger.info("Probe requested: port=$port, baud=$baud, parity=$parity, dataBits=$dataBits, stopBits=$stopBits, address=$address")
+        
+        // Disconnect main transport if it holds the same port
+        val disconnected = disconnectIfSamePort(port)
+        
+        return try {
+            portScanner.probePort(
+                portPath = port,
+                baudRate = baud,
+                parity = parity,
+                dataBits = dataBits,
+                stopBitsValue = stopBits,
+                address = address,
+                timeoutMs = timeoutMs
+            )
+        } finally {
+            if (disconnected) reconnectTransport()
+        }
+    }
+    
+    /**
+     * Disconnect the main transport if the requested port matches the configured one.
+     * This allows diagnostic endpoints to temporarily use the port.
+     * 
+     * @return true if transport was disconnected (and should be reconnected after)
+     */
+    private fun disconnectIfSamePort(requestedPort: String): Boolean {
+        if (configuredPort.isBlank()) return false
+        
+        // Normalize paths for comparison
+        val normalizedConfigured = java.io.File(configuredPort).canonicalPath
+        val normalizedRequested = try { java.io.File(requestedPort).canonicalPath } catch (_: Exception) { requestedPort }
+        
+        if (normalizedConfigured != normalizedRequested) return false
+        if (!transport.isConnected) return false
+        
+        logger.warn("🔧 DIAGNOSTIC: Temporarily disconnecting main transport from $configuredPort for probe/scan")
+        transport.disconnect()
+        // Small delay to let the OS release the port FD
+        Thread.sleep(200)
+        return true
+    }
+    
+    /**
+     * Reconnect the main transport after a diagnostic operation.
+     * Uses HardwareWatchdogCapable.reconnect() if available for self-healing.
+     */
+    private fun reconnectTransport() {
+        logger.info("🔧 DIAGNOSTIC: Reconnecting main transport to $configuredPort")
+        try {
+            if (transport is HardwareWatchdogCapable) {
+                (transport as HardwareWatchdogCapable).reconnect()
+            } else {
+                transport.connect()
+            }
+            logger.info("✅ Main transport reconnected successfully")
+        } catch (e: Exception) {
+            logger.error("❌ Failed to reconnect main transport: ${e.message}", e)
+        }
     }
 }

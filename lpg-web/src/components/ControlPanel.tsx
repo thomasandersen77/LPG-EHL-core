@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppMode } from '../contexts/AppModeContext';
+import { confirmPayment } from '../api/emulator';
 // Build: 2026-01-29T01:00 - Hide emulator in FIELD mode
 
 // API configuration
@@ -59,14 +60,6 @@ const pumpApi = {
   startPumping: async (address: number = 1) => {
     const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/start-pumping`, {
       method: 'POST'
-    });
-    return res.json();
-  },
-  confirmPayment: async (address: number = 1) => {
-    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/confirm-payment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentMethod: 'SIMULATION' })
     });
     return res.json();
   },
@@ -134,10 +127,14 @@ export function ControlPanel() {
 
   // Confirm payment mutation
   const confirmPaymentMutation = useMutation({
-    mutationFn: () => pumpApi.confirmPayment(1),
+    mutationFn: () => confirmPayment(1, 'SIMULATION'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pump-status'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setErrorMessage(null);
+    },
+    onError: (error: any) => {
+      setErrorMessage(error.message || 'Kunne ikke bekrefte betaling');
     }
   });
 

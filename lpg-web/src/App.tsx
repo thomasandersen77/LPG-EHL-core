@@ -40,16 +40,32 @@ function LabModeBanner() {
 }
 
 function FieldModeBanner() {
-  const { hardwareMode, hardwareDescription, serialPort, baudRate } = useAppMode();
+  const { hardwareMode, hardwareDescription, serialPort, baudRate, parity, dataBits, stopBits, connectionKind } = useAppMode();
 
   if (hardwareMode !== 'FIELD') return null;
+
+  const isSocat = connectionKind === 'SOCAT_VIRTUAL';
+  const parityChar = parity === 'NONE' ? 'N' : parity === 'EVEN' ? 'E' : parity === 'ODD' ? 'O' : '?';
+  const uartSummary = baudRate ? `${baudRate} ${dataBits || 8}${parityChar}${stopBits || 1}` : '';
+
+  if (isSocat) {
+    return (
+      <div className="bg-orange-600 text-white px-4 py-3 text-center font-bold border-b-4 border-orange-800">
+        🔧 FIELD MODE (SOCAT)
+        <span className="ml-3 text-sm font-normal">
+          {hardwareDescription}
+          {serialPort && uartSummary ? ` — ${serialPort} @ ${uartSummary}` : ''}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-red-600 text-white px-4 py-3 text-center font-bold border-b-4 border-red-800">
       🏭 PRODUCTION MODE - REAL HARDWARE
       <span className="ml-3 text-sm font-normal">
         {hardwareDescription}
-        {serialPort && baudRate ? ` (${serialPort} @ ${baudRate} baud)` : ''}
+        {serialPort && uartSummary ? ` — ${serialPort} @ ${uartSummary}` : ''}
       </span>
     </div>
   );

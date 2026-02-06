@@ -54,7 +54,7 @@ class PumpAuthorizationService(
      * @param dispenserAddress Pumpe-adresse (default 1)
      * @param maxAmountKr Maks beløp å reservere (default 2000 kr)
      * @param triggeredBy Hvem/hva som trigget (for logging)
-     * @param paymentMethod Betalingsmetode (CARD, CREDIT, CASH)
+     * @param paymentMethod Betalingsmetode (CARD, CREDIT)
      */
     fun simulateCardSwipe(
         dispenserAddress: Int = 1,

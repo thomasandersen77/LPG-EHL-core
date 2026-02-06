@@ -29,7 +29,11 @@ class ConfigController(
         val isRealHardware: Boolean,
         val description: String,
         val serialPort: String?,
-        val baudRate: Int?
+        val baudRate: Int?,
+        val parity: String?,
+        val dataBits: Int?,
+        val stopBits: Int?,
+        val connectionKind: String?  // "SOCAT_VIRTUAL" or "REAL_SERIAL"
     )
 
     @GetMapping("/mode")
@@ -72,13 +76,24 @@ class ConfigController(
         val isRealHardware = !emulatorEnabled
 
         val serialPort = if (!emulatorEnabled) environment.getProperty("ehl.serial.port") else null
-        val baudRateStr = environment.getProperty("ehl.serial.baud-rate")
-        val baudRate = baudRateStr?.toIntOrNull()
+        val baudRate = environment.getProperty("ehl.serial.baud-rate")?.toIntOrNull()
+        val parity = if (!emulatorEnabled) environment.getProperty("ehl.serial.parity", "EVEN") else null
+        val dataBits = if (!emulatorEnabled) environment.getProperty("ehl.serial.data-bits", "8").toIntOrNull() else null
+        val stopBits = if (!emulatorEnabled) environment.getProperty("ehl.serial.stop-bits", "1").toIntOrNull() else null
 
-        val description = when (hardwareMode) {
-            "FIELD" -> "REAL HARDWARE - Communicating via serial port"
-            "LAB" -> "SIMULATED HARDWARE - Using in-memory emulator"
-            else -> "Unknown hardware mode"
+        // Detect if port is a socat virtual PTY or real hardware serial
+        val connectionKind = if (serialPort != null) {
+            val isVirtual = serialPort.contains("/tmp/") ||
+                    serialPort.contains("/dev/pts/") ||
+                    serialPort.contains("vserial") ||
+                    serialPort.contains("ttyV")
+            if (isVirtual) "SOCAT_VIRTUAL" else "REAL_SERIAL"
+        } else null
+
+        val description = when {
+            hardwareMode == "LAB" -> "SIMULATED HARDWARE - Using in-memory emulator"
+            connectionKind == "SOCAT_VIRTUAL" -> "Communicating via virtual serial (socat)"
+            else -> "Communicating via RS-485 serial"
         }
 
         return ResponseEntity.ok(
@@ -87,7 +102,11 @@ class ConfigController(
                 isRealHardware = isRealHardware,
                 description = description,
                 serialPort = serialPort,
-                baudRate = baudRate
+                baudRate = baudRate,
+                parity = parity,
+                dataBits = dataBits,
+                stopBits = stopBits,
+                connectionKind = connectionKind
             )
         )
     }
