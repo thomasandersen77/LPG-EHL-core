@@ -22,7 +22,7 @@ class UndertowConfig {
     @Bean
     fun undertowWebServerCustomizer(): WebServerFactoryCustomizer<UndertowServletWebServerFactory> {
         return WebServerFactoryCustomizer { factory ->
-            factory.addDeploymentInfoCustomizers(UndertowDeploymentInfoCustomizer { deploymentInfo ->
+            factory.addDeploymentInfoCustomizers({ deploymentInfo ->
                 val webSocketDeploymentInfo = WebSocketDeploymentInfo().apply {
                     // Configure buffer pool for WebSocket connections
                     // Direct buffers = true for better performance

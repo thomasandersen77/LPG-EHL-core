@@ -15,7 +15,11 @@ data class CliArgs(
     val priceCents: Int = 1590,
     val initiallyBlocked: Boolean = true,
     val heartbeatIntervalMs: Long = 60000,  // Configurable heartbeat interval (default: 60 seconds)
-    val legacyAddressEnabled: Boolean = true  // Also respond to address 32+n (Alejandro's finding)
+    val legacyAddressEnabled: Boolean = true,  // Also respond to address 32+n (Alejandro's finding)
+    // Fault injection for testing
+    val disconnectAfterSeconds: Double? = null,  // Simulate disconnect after N seconds
+    val badChecksumRate: Double = 0.0,           // Probability of corrupted checksum (0.0-1.0)
+    val powerfaultAfterSeconds: Double? = null   // Simulate power fault after N seconds
 ) {
     companion object {
         fun parse(args: Array<String>): CliArgs {
@@ -31,6 +35,9 @@ data class CliArgs(
             var initiallyBlocked = true
             var heartbeatIntervalMs = 60000L
             var legacyAddressEnabled = true
+            var disconnectAfterSeconds: Double? = null
+            var badChecksumRate = 0.0
+            var powerfaultAfterSeconds: Double? = null
 
             val iterator = args.iterator()
             while (iterator.hasNext()) {
@@ -56,6 +63,9 @@ data class CliArgs(
                     arg.startsWith("--blocked=") -> initiallyBlocked = arg.substringAfter("--blocked=").lowercase() != "false"
                     arg.startsWith("--heartbeatIntervalMs=") -> heartbeatIntervalMs = arg.substringAfter("--heartbeatIntervalMs=").toLongOrNull() ?: 60000L
                     arg.startsWith("--legacy-address=") -> legacyAddressEnabled = arg.substringAfter("--legacy-address=").lowercase() != "false"
+                    arg.startsWith("--disconnectAfterSeconds=") -> disconnectAfterSeconds = arg.substringAfter("--disconnectAfterSeconds=").toDoubleOrNull()
+                    arg.startsWith("--badChecksumRate=") -> badChecksumRate = arg.substringAfter("--badChecksumRate=").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.0
+                    arg.startsWith("--powerfaultAfterSeconds=") -> powerfaultAfterSeconds = arg.substringAfter("--powerfaultAfterSeconds=").toDoubleOrNull()
                     arg == "--help" || arg == "-h" -> {
                         printHelp()
                         kotlin.system.exitProcess(0)
@@ -69,7 +79,7 @@ data class CliArgs(
                 kotlin.system.exitProcess(1)
             }
 
-            return CliArgs(port, baud, parity, mode, chunk, latencyMs, logHex, dispenserAddress, priceCents, initiallyBlocked, heartbeatIntervalMs, legacyAddressEnabled)
+            return CliArgs(port, baud, parity, mode, chunk, latencyMs, logHex, dispenserAddress, priceCents, initiallyBlocked, heartbeatIntervalMs, legacyAddressEnabled, disconnectAfterSeconds, badChecksumRate, powerfaultAfterSeconds)
         }
 
         private fun printHelp() {
@@ -101,6 +111,12 @@ data class CliArgs(
                 |
                 |Logging Options:
                 |  --heartbeatIntervalMs=<ms>  Heartbeat log interval in ms (default: 60000)
+                |
+                |Fault Injection (for testing error handling):
+                |  --disconnectAfterSeconds=<sec>  Disconnect serial port after N seconds
+                |  --badChecksumRate=<rate>       Probability of bad checksum (0.0-1.0, default: 0.0)
+                |  --powerfaultAfterSeconds=<sec> Simulate power fault after N seconds
+                |
                 |  --help, -h             Show this help message
                 |
                 |Examples:

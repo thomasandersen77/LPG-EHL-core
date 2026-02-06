@@ -35,7 +35,7 @@
         <slf4j.version>2.0.13</slf4j.version>
         <!-- logback.version managed by Spring Boot BOM -->
         <junit.version>5.10.2</junit.version>
-        <jserialcomm.version>2.10.4</jserialcomm.version>
+        <jserialcomm.version>2.11.4</jserialcomm.version>
         <azure-storage.version>12.24.0</azure-storage.version>
         <wiremock.version>3.3.1</wiremock.version>
     </properties>

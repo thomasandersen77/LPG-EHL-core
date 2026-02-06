@@ -6,8 +6,8 @@ import no.cloudberries.lpg.communication.EhlCommunicator
 import no.cloudberries.lpg.communication.HardwareWatchdogCapable
 import no.cloudberries.lpg.communication.SerialPortConfig
 import no.cloudberries.lpg.communication.SerialPortManager
-import no.cloudberries.lpg.emulator.EhlDispenserEmulator
-import no.cloudberries.lpg.emulator.InMemorySerialPort
+import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
+import no.cloudberries.lpg.emulator.impl.InMemorySerialPort
 import no.cloudberries.lpg.service.operations.EhlOperationsService
 import no.cloudberries.lpg.service.service.SerialConfigurationService
 import no.cloudberries.lpg.transport.SerialTransport
@@ -58,7 +58,7 @@ class TransportConfiguration {
     @Primary
     @Profile("lab", "default")
     fun labModeTransport(
-        emulator: EhlDispenserEmulator,
+        emulator: IEhlDispenserEmulator,
         @Value("\${ehl.emulator.latency-ms:20}") latencyMs: Long
     ): SerialTransport {
         logger.info("")

@@ -3,7 +3,9 @@ package no.cloudberries.lpg.api.config
 import no.cloudberries.lpg.api.adapter.EmulatorSerialPortAdapter
 import no.cloudberries.lpg.communication.EhlCommunicator
 import no.cloudberries.lpg.transport.SerialTransport
-import no.cloudberries.lpg.emulator.EhlDispenserEmulator
+import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
+import no.cloudberries.lpg.emulator.impl.EhlDispenserEmulatorImpl
+import no.cloudberries.lpg.emulator.impl.DispenserSimulatorImpl
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -61,11 +63,14 @@ class CommunicationConfig(
     fun dispenserEmulator(
         @Value("\${ehl.emulator.dispenser-address:1}") dispenserAddress: Int,
         @Value("\${ehl.emulator.price-per-liter-cents:1590}") pricePerLiterCents: Int
-    ): EhlDispenserEmulator {
+    ): IEhlDispenserEmulator {
         logger.info("🧪 Creating EhlDispenserEmulator (address=$dispenserAddress, price=$pricePerLiterCents)")
-        return EhlDispenserEmulator(
+        val simulator = DispenserSimulatorImpl(litresPerSecond = 0.5, pricePerLitreCents = pricePerLiterCents)
+        return EhlDispenserEmulatorImpl(
+            simulator = simulator,
             address = dispenserAddress,
-            pricePerLitreCents = pricePerLiterCents
+            pricePerLitreCents = pricePerLiterCents,
+            litresPerSecond = 0.5
         )
     }
     

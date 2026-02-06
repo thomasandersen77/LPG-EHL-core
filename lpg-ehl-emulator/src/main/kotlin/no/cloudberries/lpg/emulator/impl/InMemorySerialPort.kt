@@ -1,5 +1,6 @@
-package no.cloudberries.lpg.emulator
+package no.cloudberries.lpg.emulator.impl
 
+import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
 import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -19,7 +20,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * @param simulatedLatencyMs Simulert ventetid for å etterligne ekte serial port (default: 20ms)
  */
 class InMemorySerialPort(
-    private val emulator: EhlDispenserEmulator,
+    private val emulator: IEhlDispenserEmulator,
     private val simulatedLatencyMs: Long = 20
 ) : SerialTransport {
     

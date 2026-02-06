@@ -54,13 +54,13 @@ class PumpAuthorizationService(
      * @param dispenserAddress Pumpe-adresse (default 1)
      * @param maxAmountKr Maks beløp å reservere (default 2000 kr)
      * @param triggeredBy Hvem/hva som trigget (for logging)
-     * @param paymentMethod Betalingsmetode (SIMULATION, CARD, CREDIT, CASH)
+     * @param paymentMethod Betalingsmetode (CARD, CREDIT)
      */
     fun simulateCardSwipe(
         dispenserAddress: Int = 1,
         maxAmountKr: Double = 2000.0,
-        triggeredBy: String = "SIMULATION",
-        paymentMethod: String = "SIMULATION",
+        triggeredBy: String = "WEBAPP_GUI",
+        paymentMethod: String = "CARD",
         cardNumberMasked: String? = null
     ): PumpAuthorization {
         // Sjekk om det allerede finnes en aktiv autorisasjon
@@ -254,5 +254,42 @@ class PumpAuthorizationService(
     @Transactional(readOnly = true)
     fun getLatestAuthorization(dispenserAddress: Int): PumpAuthorization? {
         return authorizationRepository.findFirstByDispenserAddressOrderByCreatedAtDesc(dispenserAddress)
+    }
+    
+    /**
+     * Kanseller ALLE stuck autorisasjoner.
+     * 
+     * Brukes for cleanup når autorisasjoner har hengt seg fra tidligere kjøringer.
+     * VIKTIG: Denne metoden er ment for admin/debugging - bruk med forsiktighet!
+     * 
+     * @return Antall autorisasjoner som ble kansellert
+     */
+    fun cancelAllStuckAuthorizations(): Int {
+        val stuckStatuses = listOf(
+            AuthorizationStatus.PENDING,
+            AuthorizationStatus.AUTHORIZED,
+            AuthorizationStatus.PUMPING
+        )
+        
+        val stuckAuths = authorizationRepository.findAll()
+            .filter { it.status in stuckStatuses }
+        
+        if (stuckAuths.isEmpty()) {
+            logger.info("ℹ️ No stuck authorizations found")
+            return 0
+        }
+        
+        logger.warn("🧹 Cancelling ${stuckAuths.size} stuck authorization(s)...")
+        
+        stuckAuths.forEach { auth ->
+            auth.status = AuthorizationStatus.CANCELLED
+            auth.errorMessage = "Admin cleanup - stuck from previous session"
+            auth.completedAt = LocalDateTime.now()
+            authorizationRepository.save(auth)
+            
+            logger.info("   ❌ Cancelled: ${auth.authorizationId} (was ${auth.status})")
+        }
+        
+        return stuckAuths.size
     }
 }

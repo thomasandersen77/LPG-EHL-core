@@ -48,7 +48,34 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
             
             val port = SerialPort.getCommPort(config.portName)
             
-            // Configure port settings
+            // Open the port FIRST (must be done before configuring parameters)
+            if (!port.openPort()) {
+                // Provide detailed diagnostics
+                val availablePorts = SerialPort.getCommPorts().map { it.systemPortName }
+                val errorMsg = buildString {
+                    appendLine("Failed to open serial port ${config.portName}")
+                    appendLine("Possible causes:")
+                    appendLine("  1. Port does not exist or is a dead symlink")
+                    appendLine("  2. Port is already in use by another process")
+                    appendLine("  3. Insufficient permissions (try: chmod 666 <device>)")
+                    appendLine("  4. Device path is incorrect")
+                    appendLine()
+                    appendLine("Available serial ports detected by jSerialComm:")
+                    if (availablePorts.isEmpty()) {
+                        appendLine("  (none detected)")
+                    } else {
+                        availablePorts.forEach { appendLine("  - $it") }
+                    }
+                    appendLine()
+                    appendLine("Tip: On macOS with socat virtual ports, jSerialComm may not")
+                    appendLine("enumerate them but can still open them if the underlying")
+                    appendLine("device has correct permissions (crw-rw-rw-).")
+                }
+                logger.error(errorMsg)
+                throw IOException("Failed to open serial port ${config.portName}")
+            }
+            
+            // Configure port settings AFTER opening
             port.baudRate = config.baudRate
             port.numDataBits = config.dataBits
             port.numStopBits = config.stopBits
@@ -60,13 +87,6 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
                 config.readTimeout,
                 config.writeTimeout
             )
-
-            // Open the port
-            if (!port.openPort()) {
-                val error = "Failed to open serial port ${config.portName}"
-                logger.error(error)
-                throw IOException(error)
-            }
 
             serialPort = port
             logger.info("Serial port ${config.portName} opened successfully: ${config}")

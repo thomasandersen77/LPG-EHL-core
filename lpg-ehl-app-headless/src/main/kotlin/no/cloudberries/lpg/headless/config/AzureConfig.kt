@@ -29,7 +29,7 @@ class AzureConfig(
             .queueName(queueName)
             .buildClient()
 
-        // Create queue if it doesn't exist
+        // Create queue if it doesn't exist (works with both Azurite and Azure)
         try {
             client.createIfNotExists()
             logger.info("Azure Queue '$queueName' is ready")

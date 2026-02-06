@@ -53,3 +53,28 @@ export async function settlePayment(dispenserId: number, method: 'CARD' | 'CREDI
   );
   return res.data;
 }
+
+export interface ConfirmPaymentResponse {
+  success: boolean;
+  message: string;
+  authorization?: {
+    authorizationId: string;
+    status: string;
+    actualVolumeLiters: number;
+    actualAmountKr: number;
+    completedAt: string;
+  };
+  error?: string;
+}
+
+export async function confirmPayment(
+  address: number, 
+  paymentMethod: 'CARD' | 'CREDIT' | 'SIMULATION' = 'SIMULATION'
+): Promise<ConfirmPaymentResponse> {
+  const res = await axios.post<ConfirmPaymentResponse>(
+    `${EMULATOR_URL}/emulator/pump/${address}/confirm-payment`,
+    { paymentMethod },
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+  return res.data;
+}

@@ -240,8 +240,8 @@ class PumpController(
             val auth = authorizationService.simulateCardSwipe(
                 dispenserAddress = address,
                 maxAmountKr = request?.maxAmountKr ?: 2000.0,
-                triggeredBy = request?.triggeredBy ?: "WEBAPP_SIMULATION",
-                paymentMethod = request?.paymentMethod ?: "SIMULATION"
+                triggeredBy = request?.triggeredBy ?: "WEBAPP_GUI",
+                paymentMethod = request?.paymentMethod ?: "CARD"
             )
             
             logger.info("✅ Autorisasjon opprettet: ${auth.authorizationId}")
@@ -297,8 +297,8 @@ class PumpController(
                     "status" to auth.status.name,
                     "maxAmountKr" to auth.maxAmountKr,
                     "pricePerLiterKr" to auth.pricePerLiterKr,
-                    "actualVolumeLiters" to (auth.actualVolumeLiters ?: 0.0),
-                    "actualAmountKr" to (auth.actualAmountKr ?: 0.0),
+                    "actualVolumeLiters" to (auth.actualVolumeLiters),
+                    "actualAmountKr" to (auth.actualAmountKr),
                     "triggeredBy" to auth.triggeredBy,
                     "paymentMethod" to auth.paymentMethod,
                     "createdAt" to auth.createdAt.toString(),
@@ -338,7 +338,7 @@ class PumpController(
         
         try {
             // Bekreft betaling og marker autorisasjon som COMPLETED
-            val paymentMethod = request?.paymentMethod ?: auth.paymentMethod ?: "SIMULATION"
+            val paymentMethod = request?.paymentMethod ?: auth.paymentMethod ?: "CARD"
             val completed = authorizationService.confirmPayment(
                 authorizationId = auth.authorizationId,
                 paymentMethod = paymentMethod
@@ -414,14 +414,14 @@ class PumpController(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class CardSwipeRequest(
     val maxAmountKr: Double? = 2000.0,
-    val triggeredBy: String? = "WEBAPP_SIMULATION",
-    val paymentMethod: String? = "SIMULATION"
+    val triggeredBy: String? = "WEBAPP_GUI",
+    val paymentMethod: String? = "CARD"
     // NOTE: 'immediate' parameter removed - card-swipe should NEVER auto-unblock
     // User must explicitly click "FRI DISPENSER" to send UNBLOCK
 )
 
 data class ConfirmPaymentRequest(
-    val paymentMethod: String? = "SIMULATION"
+    val paymentMethod: String? = "CARD"
 )
 
 data class CancelRequest(

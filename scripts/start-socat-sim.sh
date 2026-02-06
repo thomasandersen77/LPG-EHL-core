@@ -5,13 +5,30 @@
 #
 # Usage: ./scripts/start-socat-sim.sh [options]
 #
-# Options:
-#   --address=<1-8>    Dispenser address (default: 1)
-#   --price=<cents>    Price in cents, e.g. 1590 = 15.90 kr/L (default: 1590)
-#   --baud=<rate>      Baud rate (default: 9600)
-#   --parity=<type>    Parity: NONE, EVEN, ODD (default: NONE)
-#   --blocked=<bool>   Initial blocked state (default: true)
-#   --help             Show help
+# Dispenser Options:
+#   --address=<1-8>       Dispenser address (default: 1)
+#   --price=<cents>       Price in cents, e.g. 1590 = 15.90 kr/L (default: 1590)
+#   --blocked=<bool>      Initial blocked state (default: true)
+#   --legacy-address=<bool> Also respond to 32+address (default: true)
+#
+# Serial Options:
+#   --baud=<rate>         Baud rate (default: 9600)
+#   --parity=<type>       Parity: NONE, EVEN, ODD (default: NONE)
+#   --mode=<mode>         Frame mode: line, stxetx, ehl (default: ehl)
+#   --chunk=<bool>        Enable chunked responses (default: false)
+#   --latencyMs=<ms>      Add latency jitter to read loop (default: 0)
+#   --logHex=<bool>       Log raw bytes as hex (default: true)
+#
+# Logging Options:
+#   --heartbeatIntervalMs=<ms>  Heartbeat log interval (default: 60000)
+#
+# Fault Injection (for testing error handling):
+#   --disconnectAfterSeconds=<sec>  Disconnect after N seconds
+#   --badChecksumRate=<rate>       Bad checksum rate 0.0-1.0 (default: 0.0)
+#   --powerfaultAfterSeconds=<sec> Power fault after N seconds
+#
+# Other:
+#   --help, -h            Show this help message
 #
 # Note: DEBUG logging is enabled by default to show RX/TX HEX bytes.
 #
@@ -29,6 +46,15 @@ PRICE_CENTS=1590
 BAUD_RATE=9600
 PARITY="NONE"
 BLOCKED="true"
+LEGACY_ADDRESS="true"
+MODE="ehl"
+CHUNK="false"
+LATENCY_MS=0
+LOG_HEX="true"
+HEARTBEAT_INTERVAL_MS=60000
+DISCONNECT_AFTER_SECONDS=""
+BAD_CHECKSUM_RATE=""
+POWERFAULT_AFTER_SECONDS=""
 
 # Colors
 GREEN='\033[0;32m'
@@ -45,7 +71,7 @@ SOCAT_PID=""
 SIM_PID=""
 
 show_help() {
-    sed -n '2,18p' "$0" | sed 's/^# //' | sed 's/^#//'
+    sed -n '2,36p' "$0" | sed 's/^# //' | sed 's/^#//'
     exit 0
 }
 
@@ -54,9 +80,18 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --address=*) DISPENSER_ADDRESS="${1#*=}"; shift ;;
         --price=*) PRICE_CENTS="${1#*=}"; shift ;;
+        --blocked=*) BLOCKED="${1#*=}"; shift ;;
+        --legacy-address=*) LEGACY_ADDRESS="${1#*=}"; shift ;;
         --baud=*) BAUD_RATE="${1#*=}"; shift ;;
         --parity=*) PARITY="${1#*=}"; shift ;;
-        --blocked=*) BLOCKED="${1#*=}"; shift ;;
+        --mode=*) MODE="${1#*=}"; shift ;;
+        --chunk=*) CHUNK="${1#*=}"; shift ;;
+        --latencyMs=*) LATENCY_MS="${1#*=}"; shift ;;
+        --logHex=*) LOG_HEX="${1#*=}"; shift ;;
+        --heartbeatIntervalMs=*) HEARTBEAT_INTERVAL_MS="${1#*=}"; shift ;;
+        --disconnectAfterSeconds=*) DISCONNECT_AFTER_SECONDS="${1#*=}"; shift ;;
+        --badChecksumRate=*) BAD_CHECKSUM_RATE="${1#*=}"; shift ;;
+        --powerfaultAfterSeconds=*) POWERFAULT_AFTER_SECONDS="${1#*=}"; shift ;;
         --help|-h) show_help ;;
         *) echo "Unknown option: $1"; show_help ;;
     esac
@@ -76,7 +111,8 @@ cleanup() {
         echo "  ✓ socat stopped"
     fi
     
-    rm -f /tmp/vserial0 /tmp/vserial1 "$BUILD_LOG"
+    rm -f /tmp/vserial0 /tmp/vserial1 /dev/cu.vserial0 /dev/cu.vserial1 "$BUILD_LOG" 2>/dev/null || \
+        sudo rm -f /dev/cu.vserial0 /dev/cu.vserial1 2>/dev/null || true
     echo ""
     echo "Cleanup complete. Bye!"
     exit 0
@@ -112,42 +148,105 @@ echo -e "      Port 0: ${BOLD}/tmp/vserial0${NC}  ${GRAY}← Simulator${NC}"
 echo -e "      Port 1: ${BOLD}/tmp/vserial1${NC}  ${GRAY}← Python/Webapp${NC}"
 echo ""
 
-# Start socat with verbose output redirected
+# Start socat and capture PTY device names
+SOCAT_OUTPUT=$(mktemp)
 socat -d -d \
     pty,rawer,echo=0,link=/tmp/vserial0 \
     pty,rawer,echo=0,link=/tmp/vserial1 \
-    2>&1 | grep --line-buffered "N PTY" &
+    2>"$SOCAT_OUTPUT" &
 
 SOCAT_PID=$!
 sleep 1
 
 if [[ ! -e /tmp/vserial0 ]] || [[ ! -e /tmp/vserial1 ]]; then
     echo -e "${RED}Kunne ikke opprette virtuelle serial ports${NC}"
+    cat "$SOCAT_OUTPUT"
+    rm -f "$SOCAT_OUTPUT"
     exit 1
 fi
 
+# Extract actual PTY device paths from socat output
+PTY0=$(grep "N PTY is" "$SOCAT_OUTPUT" | head -1 | sed 's/.*PTY is //')
+PTY1=$(grep "N PTY is" "$SOCAT_OUTPUT" | tail -1 | sed 's/.*PTY is //')
+
+# Show socat output for debugging
+cat "$SOCAT_OUTPUT"
+rm -f "$SOCAT_OUTPUT"
+
+if [[ -z "$PTY0" ]] || [[ -z "$PTY1" ]]; then
+    echo -e "${RED}Failed to detect PTY device paths${NC}"
+    exit 1
+fi
+
+# On macOS, jSerialComm can't enumerate PTY devices created by socat,
+# but it CAN open them if given the exact path. Just use the PTY directly.
+CU_PORT0="$PTY0"
+CU_PORT1="$PTY1"
+
+# Fix permissions on PTY devices (jSerialComm needs read access)
+if [[ -e "$PTY0" ]]; then
+    chmod 666 "$PTY0" 2>/dev/null || echo -e "${YELLOW}Warning: Could not set permissions on $PTY0${NC}"
+fi
+if [[ -e "$PTY1" ]]; then
+    chmod 666 "$PTY1" 2>/dev/null || echo -e "${YELLOW}Warning: Could not set permissions on $PTY1${NC}"
+fi
+
 echo -e "${GREEN}      ✓ socat running (PID: $SOCAT_PID)${NC}"
+echo -e "${GRAY}      PTY devices:    $PTY0 <-> $PTY1${NC}"
+echo -e "${GRAY}      Serial ports:   $CU_PORT0 <-> $CU_PORT1${NC}"
 echo ""
 LEGACY_ADDR=$((32 + DISPENSER_ADDRESS))
 echo -e "${CYAN}[2/2] Starting PLS Simulator...${NC}"
-echo -e "      Address:   ${BOLD}$DISPENSER_ADDRESS${NC} ${GRAY}(also responds to $LEGACY_ADDR)${NC}"
-echo -e "      Price:     ${BOLD}$(echo "scale=2; $PRICE_CENTS / 100" | bc) kr/L${NC}"
-echo -e "      Baud:      ${BOLD}$BAUD_RATE${NC}"
-echo -e "      Parity:    ${BOLD}$PARITY${NC}"
-echo -e "      Blocked:   ${BOLD}$BLOCKED${NC}"
-echo -e "      Commands:  ${GRAY}STATE, ERROR_QUERY, VOLUME, TANKBIT${NC}"
+echo -e "      Address:      ${BOLD}$DISPENSER_ADDRESS${NC} ${GRAY}(legacy: $LEGACY_ADDR = $LEGACY_ADDRESS)${NC}"
+echo -e "      Price:        ${BOLD}$(echo "scale=2; $PRICE_CENTS / 100" | bc) kr/L${NC}"
+echo -e "      Baud:         ${BOLD}$BAUD_RATE${NC}"
+echo -e "      Parity:       ${BOLD}$PARITY${NC}"
+echo -e "      Data bits:    ${BOLD}8${NC}"
+echo -e "      Stop bits:    ${BOLD}1${NC}"
+echo -e "      Blocked:      ${BOLD}$BLOCKED${NC}"
+echo -e "      Mode:         ${BOLD}$MODE${NC}"
+echo -e "      Chunked:      ${BOLD}$CHUNK${NC}"
+echo -e "      Log hex:      ${BOLD}$LOG_HEX${NC}"
+if [[ -n "$DISCONNECT_AFTER_SECONDS" ]]; then
+    echo -e "      ${YELLOW}⚠️  Disconnect:  ${BOLD}${DISCONNECT_AFTER_SECONDS}s${NC}"
+fi
+if [[ -n "$BAD_CHECKSUM_RATE" ]]; then
+    echo -e "      ${YELLOW}⚠️  Bad checksum: ${BOLD}${BAD_CHECKSUM_RATE}${NC}"
+fi
+if [[ -n "$POWERFAULT_AFTER_SECONDS" ]]; then
+    echo -e "      ${YELLOW}⚠️  Power fault:  ${BOLD}${POWERFAULT_AFTER_SECONDS}s${NC}"
+fi
 echo ""
 
+# Build simulator command
+# Use cu.* port for jSerialComm compatibility on macOS
+SIM_CMD="java -Dsim.log.level=DEBUG -jar \"$SIM_JAR\""
+SIM_CMD+=" --port=$CU_PORT0"
+SIM_CMD+=" --address=$DISPENSER_ADDRESS"
+SIM_CMD+=" --price=$PRICE_CENTS"
+SIM_CMD+=" --baud=$BAUD_RATE"
+SIM_CMD+=" --parity=$PARITY"
+SIM_CMD+=" --blocked=$BLOCKED"
+SIM_CMD+=" --legacy-address=$LEGACY_ADDRESS"
+SIM_CMD+=" --mode=$MODE"
+SIM_CMD+=" --chunk=$CHUNK"
+SIM_CMD+=" --latencyMs=$LATENCY_MS"
+SIM_CMD+=" --logHex=$LOG_HEX"
+SIM_CMD+=" --heartbeatIntervalMs=$HEARTBEAT_INTERVAL_MS"
+
+# Add fault injection if specified
+if [[ -n "$DISCONNECT_AFTER_SECONDS" ]]; then
+    SIM_CMD+=" --disconnectAfterSeconds=$DISCONNECT_AFTER_SECONDS"
+fi
+if [[ -n "$BAD_CHECKSUM_RATE" ]]; then
+    SIM_CMD+=" --badChecksumRate=$BAD_CHECKSUM_RATE"
+fi
+if [[ -n "$POWERFAULT_AFTER_SECONDS" ]]; then
+    SIM_CMD+=" --powerfaultAfterSeconds=$POWERFAULT_AFTER_SECONDS"
+fi
+
 # Start simulator with full logging to console
-java -Dsim.log.level=DEBUG -jar "$SIM_JAR" \
-    --port=/tmp/vserial0 \
-    --address="$DISPENSER_ADDRESS" \
-    --price="$PRICE_CENTS" \
-    --baud="$BAUD_RATE" \
-    --parity="$PARITY" \
-    --blocked="$BLOCKED" \
-    --mode=ehl \
-    --logHex=true &
+eval "$SIM_CMD" &
 
 SIM_PID=$!
 sleep 2
@@ -175,18 +274,49 @@ echo -e "${BOLD}Test med REST API (scan adresser som Alejandros 02_scan_addresse
 echo -e "  ${GRAY}# Start webapp først, deretter:${NC}"
 echo -e "  curl -X POST \"http://localhost:8080/api/debug/serial/scan-addresses?port=/tmp/vserial1&start=1&end=40\""
 echo ""
-echo -e "${BOLD}Start webapp:${NC}"
-echo -e "  ./scripts/start-webapp-field.sh --auto-detect"
-echo -e "  ${GRAY}# eller:${NC}"
+echo -e "${BOLD}Start webapp (Web UI + REST API):${NC}"
+echo -e "  ${GRAY}# Lab-modus (in-memory emulator):${NC}"
+echo -e "  java -jar release/lpg-ehl-webapp.jar --spring.profiles.active=lab"
+echo -e ""
+echo -e "  ${GRAY}# Field-modus (SOCAT virtuell port):${NC}"
 echo -e "  java -jar release/lpg-ehl-webapp.jar \\"
 echo -e "    --spring.profiles.active=field \\"
-echo -e "    --ehl.serial.port=/tmp/vserial1 --ehl.serial.parity=$PARITY"
+echo -e "    --ehl.serial.port=/tmp/vserial1 \\"
+echo -e "    --ehl.serial.baud-rate=$BAUD_RATE \\"
+echo -e "    --ehl.serial.data-bits=8 \\"
+echo -e "    --ehl.serial.parity=$PARITY \\"
+echo -e "    --ehl.serial.stop-bits=1"
+echo -e ""
+echo -e "  ${GRAY}# Field-modus med JVM-tuning:${NC}"
+echo -e "  java -Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=100 \\"
+echo -e "    -jar release/lpg-ehl-webapp.jar \\"
+echo -e "    --spring.profiles.active=field \\"
+echo -e "    --ehl.serial.port=/tmp/vserial1 \\"
+echo -e "    --ehl.serial.baud-rate=$BAUD_RATE \\"
+echo -e "    --ehl.serial.parity=$PARITY"
 echo -e "  • GUI: ${CYAN}http://localhost:8080${NC}"
 echo ""
-echo -e "${BOLD}Start headless med debug API:${NC}"
+echo -e "${BOLD}Start headless (Background Service):${NC}"
+echo -e "  ${GRAY}# Lab-modus (in-memory emulator):${NC}"
+echo -e "  java -jar release/lpg-ehl-headless.jar --spring.profiles.active=lab"
+echo -e ""
+echo -e "  ${GRAY}# Field-modus med debug API:${NC}"
 echo -e "  java -jar release/lpg-ehl-headless.jar \\"
 echo -e "    --spring.profiles.active=field,debug-api \\"
-echo -e "    --ehl.serial.port=/tmp/vserial1"
+echo -e "    --ehl.serial.port=/tmp/vserial1 \\"
+echo -e "    --ehl.serial.baud-rate=$BAUD_RATE \\"
+echo -e "    --ehl.serial.parity=$PARITY"
+echo -e ""
+echo -e "  ${GRAY}# Field-modus med JVM-tuning:${NC}"
+echo -e "  java -Xms128m -Xmx256m -XX:+UseG1GC -XX:MaxGCPauseMillis=50 \\"
+echo -e "    -XX:+HeapDumpOnOutOfMemoryError \\"
+echo -e "    -jar release/lpg-ehl-headless.jar \\"
+echo -e "    --spring.profiles.active=field \\"
+echo -e "    --ehl.serial.port=/tmp/vserial1 \\"
+echo -e "    --ehl.serial.baud-rate=$BAUD_RATE \\"
+echo -e "    --ehl.serial.data-bits=8 \\"
+echo -e "    --ehl.serial.parity=$PARITY \\"
+echo -e "    --ehl.serial.stop-bits=1"
 echo ""
 echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
 echo -e "${GRAY}Logs will appear below. Press Ctrl+C to stop.${NC}"

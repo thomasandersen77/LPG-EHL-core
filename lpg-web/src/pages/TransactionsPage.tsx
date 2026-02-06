@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { fetchTransactions, updateTransactionPayment, type TransactionFilter, type PaymentType } from '../api/transactions';
+import { fetchTransactions, type TransactionFilter, type PaymentType } from '../api/transactions';
+import { confirmPayment } from '../api/emulator';
 import { format } from 'date-fns';
 import { nb } from 'date-fns/locale';
 import { AzureSyncStatus } from '../components/AzureSyncStatus';
@@ -21,11 +22,18 @@ export function TransactionsPage() {
   });
 
   const settleMutation = useMutation({
-    mutationFn: ({ transactionId, paymentMethod }: { transactionId: string; paymentMethod: PaymentType }) =>
-      updateTransactionPayment(transactionId, paymentMethod),
+    mutationFn: ({ dispenserAddress, paymentMethod }: { dispenserAddress: number; paymentMethod: PaymentType }) => {
+      // Convert PaymentType to accepted payment method (exclude UNKNOWN)
+      const method = paymentMethod === 'UNKNOWN' ? 'CARD' : paymentMethod;
+      return confirmPayment(dispenserAddress, method);
+    },
     onSuccess: () => {
-      // Invalidate and refetch transactions
+      // Invalidate and refetch both transactions and pump status
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['pump-status'] });
+    },
+    onError: (error: any) => {
+      console.error('Kunne ikke bekrefte betaling:', error);
     },
   });
 
@@ -123,14 +131,14 @@ export function TransactionsPage() {
                     {tx.paymentStatus === 'PENDING' ? (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => settleMutation.mutate({ transactionId: tx.transactionId, paymentMethod: 'CARD' })}
+                          onClick={() => settleMutation.mutate({ dispenserAddress: tx.dispenserAddress, paymentMethod: 'CARD' })}
                           disabled={settleMutation.isPending}
                           className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-xs font-medium"
                         >
                           💳 Kort
                         </button>
                         <button
-                          onClick={() => settleMutation.mutate({ transactionId: tx.transactionId, paymentMethod: 'CREDIT' })}
+                          onClick={() => settleMutation.mutate({ dispenserAddress: tx.dispenserAddress, paymentMethod: 'CREDIT' })}
                           disabled={settleMutation.isPending}
                           className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 text-xs font-medium"
                         >

@@ -2,7 +2,7 @@ package no.cloudberries.lpg.api.controller
 
 import no.cloudberries.lpg.service.service.WireTraceService
 import no.cloudberries.lpg.service.service.WireTraceResult
-import no.cloudberries.lpg.emulator.EhlDispenserEmulator
+import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
 import no.cloudberries.lpg.protocol.EhlCommand
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/v1/protocol/test")
 class ProtocolTestController(
     private val wireTraceService: WireTraceService,
-    private val emulator: EhlDispenserEmulator? = null  // Kun tilgjengelig i local/dev
+    private val emulator: IEhlDispenserEmulator? = null  // Kun tilgjengelig i local/dev
 ) {
     private val logger = LoggerFactory.getLogger(ProtocolTestController::class.java)
     

@@ -8,6 +8,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
+/**
+ * Azure Queue configuration for headless application.
+ * Only active when azure.enabled=true.
+ */
 @Configuration
 @ConditionalOnProperty(name = ["azure.enabled"], havingValue = "true")
 class AzureConfig(

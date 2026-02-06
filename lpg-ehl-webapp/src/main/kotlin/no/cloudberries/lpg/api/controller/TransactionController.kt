@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
-import no.cloudberries.lpg.emulator.EhlDispenserEmulator
+import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
 import no.cloudberries.lpg.service.dto.CreateTransactionRequest
 import no.cloudberries.lpg.service.dto.ErrorResponse
 import no.cloudberries.lpg.service.dto.PageResponse
@@ -32,7 +32,7 @@ class TransactionController(
     private val transactionService: TransactionService
 ) {
     @Autowired(required = false)
-    private var dispenserEmulator: EhlDispenserEmulator? = null
+    private var dispenserEmulator: IEhlDispenserEmulator? = null
     private val logger = LoggerFactory.getLogger(TransactionController::class.java)
 
     @GetMapping

@@ -1,7 +1,11 @@
-package no.cloudberries.lpg.emulator
+package no.cloudberries.lpg.emulator.impl
 
 import kotlinx.coroutines.*
+import no.cloudberries.lpg.emulator.ActiveTransaction
+import no.cloudberries.lpg.emulator.IDispenserSimulator
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Profile
+import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
@@ -17,23 +21,24 @@ import kotlin.math.roundToInt
  * - Immediate coroutine cancellation
  * - No updates after stopImmediately() is called
  */
-class DispenserSimulator(
+@Component
+@Profile("LAB")
+class DispenserSimulatorImpl(
     private val litresPerSecond: Double = 0.5,
     pricePerLitreCents: Int = 1590  // 15.90 kr/l
-) {
-    private val logger = LoggerFactory.getLogger(DispenserSimulator::class.java)
+) : IDispenserSimulator {
+    private val logger = LoggerFactory.getLogger(DispenserSimulatorImpl::class.java)
     private val simRunning = AtomicBoolean(false)
     private var simJob: Job? = null
     
     // Mutable price that can be updated dynamically
     @Volatile
-    var currentPricePerLitreCents: Int = pricePerLitreCents
-        private set
+    private var currentPricePerLitreCents: Int = pricePerLitreCents
     
     /**
      * Update the price per litre. Takes effect for future calculations.
      */
-    fun updatePrice(pricePerLitreCents: Int) {
+    override fun updatePrice(pricePerLitreCents: Int) {
         this.currentPricePerLitreCents = pricePerLitreCents
     }
     
@@ -44,9 +49,9 @@ class DispenserSimulator(
      * @param activeTx The active transaction to update
      * @param onUpdate Callback invoked on each update with current values
      */
-    fun start(
+    override fun start(
         activeTx: ActiveTransaction,
-        onUpdate: (volumeLitres: Double, amountCents: Int) -> Unit = { _, _ -> }
+        onUpdate: (volumeLitres: Double, amountCents: Int) -> Unit
     ) {
         if (simRunning.get()) {
             logger.warn("Simulator already running, stopping previous simulation")
@@ -89,7 +94,7 @@ class DispenserSimulator(
      * Stop simulation immediately without further updates.
      * Uses atomic operations to prevent race conditions.
      */
-    fun stopImmediately() {
+    override fun stopImmediately() {
         logger.debug("Stopping simulation immediately")
         simRunning.set(false)
         simJob?.cancel()
@@ -99,28 +104,5 @@ class DispenserSimulator(
     /**
      * Check if simulation is currently running.
      */
-    fun isRunning(): Boolean = simRunning.get()
+    override fun isRunning(): Boolean = simRunning.get()
 }
-
-/**
- * Represents an active transaction being simulated.
- * Values are updated by DispenserSimulator during delivery.
- */
-data class ActiveTransaction(
-    val startMs: Long,
-    var volumeLitres: Double = 0.0,
-    var amountCents: Int = 0
-)
-
-/**
- * Represents a completed transaction with frozen totals.
- * Created when STOP/BLOCK is received during delivery.
- */
-data class CompletedTransaction(
-    val id: String,
-    val volumeLitres: Double,
-    val amountCents: Int,
-    val unitPriceCents: Int,
-    val startedAt: Long,
-    val stoppedAt: Long
-)

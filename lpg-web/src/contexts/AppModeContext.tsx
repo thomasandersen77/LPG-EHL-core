@@ -6,6 +6,8 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 export type AppMode = 'LAB' | 'KIOSK' | 'LOADING';
 export type HardwareMode = 'LAB' | 'FIELD' | 'LOADING';
 
+export type ConnectionKind = 'SOCAT_VIRTUAL' | 'REAL_SERIAL' | null;
+
 interface AppModeContextType {
   mode: AppMode;
   isLab: boolean;
@@ -18,6 +20,10 @@ interface AppModeContextType {
   hardwareDescription: string;
   serialPort?: string;
   baudRate?: number;
+  parity?: string;
+  dataBits?: number;
+  stopBits?: number;
+  connectionKind: ConnectionKind;
 }
 
 const AppModeContext = createContext<AppModeContextType | undefined>(undefined);
@@ -31,6 +37,10 @@ export function AppModeProvider({ children }: { children: ReactNode }) {
   const [hardwareDescription, setHardwareDescription] = useState('');
   const [serialPort, setSerialPort] = useState<string | undefined>();
   const [baudRate, setBaudRate] = useState<number | undefined>();
+  const [parity, setParity] = useState<string | undefined>();
+  const [dataBits, setDataBits] = useState<number | undefined>();
+  const [stopBits, setStopBits] = useState<number | undefined>();
+  const [connectionKind, setConnectionKind] = useState<ConnectionKind>(null);
 
   useEffect(() => {
     async function fetchModes() {
@@ -49,6 +59,10 @@ export function AppModeProvider({ children }: { children: ReactNode }) {
           setHardwareDescription(hwResponse.data.description);
           setSerialPort(hwResponse.data.serialPort);
           setBaudRate(hwResponse.data.baudRate);
+          setParity(hwResponse.data.parity);
+          setDataBits(hwResponse.data.dataBits);
+          setStopBits(hwResponse.data.stopBits);
+          setConnectionKind(hwResponse.data.connectionKind || null);
         } catch (hwError) {
           console.warn('Failed to fetch hardware mode:', hwError);
           // Default to LAB if hardware-mode endpoint fails
@@ -79,6 +93,10 @@ export function AppModeProvider({ children }: { children: ReactNode }) {
     hardwareDescription,
     serialPort,
     baudRate,
+    parity,
+    dataBits,
+    stopBits,
+    connectionKind,
   };
 
   return <AppModeContext.Provider value={value}>{children}</AppModeContext.Provider>;

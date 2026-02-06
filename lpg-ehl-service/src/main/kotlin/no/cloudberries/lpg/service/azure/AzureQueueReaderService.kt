@@ -68,9 +68,9 @@ class AzureQueueReaderService(
         // Decode the base64-encoded message body
         val messageBody = message.body.toString()
         val payload = objectMapper.readValue(messageBody, Map::class.java) as Map<String, Any>
-        
+
         // Extract transaction data from payload
-        val payloadData = payload["payload"] as? Map<String, Any>
+        val payloadData = payload["payload"] as? Map<*, *>
         val transactionData = payloadData?.let {
             AzureQueueMessageDto.TransactionData(
                 dispenserAddress = (it["dispenserAddress"] as? Number)?.toInt(),

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppMode } from '../contexts/AppModeContext';
+import { confirmPayment } from '../api/emulator';
 // Build: 2026-01-29T01:00 - Hide emulator in FIELD mode
 
 // API configuration
@@ -50,17 +51,15 @@ const pumpApi = {
     });
     return res.json();
   },
-  startPumping: async (address: number = 1) => {
-    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/start-pumping`, {
+  cleanupAuthorizations: async () => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/admin/cleanup-authorizations`, {
       method: 'POST'
     });
     return res.json();
   },
-  confirmPayment: async (address: number = 1) => {
-    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/confirm-payment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentMethod: 'SIMULATION' })
+  startPumping: async (address: number = 1) => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/start-pumping`, {
+      method: 'POST'
     });
     return res.json();
   },
@@ -128,10 +127,14 @@ export function ControlPanel() {
 
   // Confirm payment mutation
   const confirmPaymentMutation = useMutation({
-    mutationFn: () => pumpApi.confirmPayment(1),
+    mutationFn: () => confirmPayment(1, 'SIMULATION'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pump-status'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setErrorMessage(null);
+    },
+    onError: (error: any) => {
+      setErrorMessage(error.message || 'Kunne ikke bekrefte betaling');
     }
   });
 
@@ -153,6 +156,19 @@ export function ControlPanel() {
     },
     onError: (error: any) => {
       setErrorMessage(error.message || 'Kunne ikke frigjøre pumpen');
+    }
+  });
+  
+  // Cleanup stuck authorizations mutation
+  const cleanupMutation = useMutation({
+    mutationFn: () => pumpApi.cleanupAuthorizations(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pump-status'] });
+      setErrorMessage(null);
+      alert(`✅ Cleanup vellykket! Kansellerte ${data.cancelledCount} autorisasjoner.`);
+    },
+    onError: (error: any) => {
+      setErrorMessage(error.message || 'Kunne ikke kjøre cleanup');
     }
   });
 
@@ -598,6 +614,28 @@ export function ControlPanel() {
             <p className="text-sm text-gray-400">
               <strong>💡 Tips:</strong> Du har 60 sekunder på deg etter kortdragning før pumpen automatisk blokkeres. Kun faktisk fylt volum trekkes fra kortet.
             </p>
+          </div>
+        </div>
+        
+        {/* Admin Section */}
+        <div className="mt-6 bg-red-900/20 rounded-xl p-6 border border-red-700/50">
+          <h3 className="text-xl font-bold mb-4 text-red-400">🔧 Admin - Feilsøking</h3>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                if (confirm('Er du sikker på at du vil kansellere alle stuck autorisasjoner og resette pumpene?')) {
+                  cleanupMutation.mutate();
+                }
+              }}
+              disabled={cleanupMutation.isPending}
+              className="px-6 py-3 rounded-lg font-bold bg-red-600 hover:bg-red-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+            >
+              {cleanupMutation.isPending ? '🧹 Rydder opp...' : '🧹 RESET AUTORISASJONER'}
+            </button>
+            <div className="text-sm text-gray-400">
+              <p>Bruk denne hvis du får "har allerede aktiv autorisasjon" feil.</p>
+              <p className="text-xs mt-1 text-red-400">⚠️ Dette vil kansellere alle aktive autorisasjoner og resette alle pumper til IDLE.</p>
+            </div>
           </div>
         </div>
       </div>

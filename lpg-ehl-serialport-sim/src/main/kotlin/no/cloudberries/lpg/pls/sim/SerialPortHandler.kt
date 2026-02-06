@@ -39,21 +39,43 @@ class SerialPortHandler(
     fun start() {
         log.info("Opening serial port: {} at {} baud, parity={}, mode={}, chunked={}", portName, baud, parity, mode, chunked)
 
+        // Debug: List all available ports
+        val availablePorts = SerialPort.getCommPorts()
+        if (availablePorts.isEmpty()) {
+            log.warn("jSerialComm found no serial ports on this system")
+        } else {
+            log.info("Available serial ports detected by jSerialComm:")
+            availablePorts.forEach { p ->
+                log.info("  - {} ({})", p.systemPortName, p.descriptivePortName)
+            }
+        }
+
         val port = SerialPort.getCommPort(portName)
+        log.info("Port object created: {} (descriptor: {})", port.systemPortName, port.descriptivePortName)
+        log.info("Port exists check: isOpen={}", port.isOpen)
         
-        // Configure port with specified parity
-        port.baudRate = baud
-        port.numDataBits = 8
-        port.numStopBits = SerialPort.ONE_STOP_BIT
-        port.parity = when (parity.uppercase()) {
-            "NONE" -> SerialPort.NO_PARITY
-            "EVEN" -> SerialPort.EVEN_PARITY
-            "ODD" -> SerialPort.ODD_PARITY
-            "MARK" -> SerialPort.MARK_PARITY
-            "SPACE" -> SerialPort.SPACE_PARITY
-            else -> {
-                log.warn("Unknown parity '{}', defaulting to NONE", parity)
-                SerialPort.NO_PARITY
+        // Detect PTY/pseudo-terminal devices (common on macOS/Linux with socat)
+        // PTY devices don't support serial port configuration ioctls, which causes ENOTTY errors
+        val isPtyDevice = portName.contains("/dev/tty") || portName.contains("/dev/pts/")
+        
+        if (isPtyDevice) {
+            log.info("Detected PTY device - disabling port configuration to avoid ENOTTY errors")
+            port.disablePortConfiguration()
+        } else {
+            // Configure port with specified parity (only for real serial ports)
+            port.baudRate = baud
+            port.numDataBits = 8
+            port.numStopBits = SerialPort.ONE_STOP_BIT
+            port.parity = when (parity.uppercase()) {
+                "NONE" -> SerialPort.NO_PARITY
+                "EVEN" -> SerialPort.EVEN_PARITY
+                "ODD" -> SerialPort.ODD_PARITY
+                "MARK" -> SerialPort.MARK_PARITY
+                "SPACE" -> SerialPort.SPACE_PARITY
+                else -> {
+                    log.warn("Unknown parity '{}', defaulting to NONE", parity)
+                    SerialPort.NO_PARITY
+                }
             }
         }
         
@@ -64,8 +86,14 @@ class SerialPortHandler(
             0
         )
 
-        if (!port.openPort()) {
-            throw RuntimeException("Failed to open serial port: $portName")
+        log.info("Attempting to open port...")
+        val openResult = port.openPort()
+        log.info("Open result: {}", openResult)
+        log.info("After open attempt - isOpen: {}, lastErrorCode: {}, lastErrorLocation: {}", 
+            port.isOpen, port.lastErrorCode, port.lastErrorLocation)
+        
+        if (!openResult) {
+            throw RuntimeException("Failed to open serial port: $portName (errorCode=${port.lastErrorCode}, errorLocation=${port.lastErrorLocation})")
         }
 
         serialPort = port
@@ -86,6 +114,16 @@ class SerialPortHandler(
         serialPort?.closePort()
         serialPort = null
         log.info("Serial port closed")
+    }
+
+    /**
+     * Force immediate disconnect (for fault injection).
+     */
+    fun forceDisconnect() {
+        log.warn("🔌 FAULT INJECTION: Force disconnect triggered")
+        running.set(false)
+        serialPort?.closePort()
+        serialPort = null
     }
 
     /**
@@ -157,7 +195,8 @@ class SerialPortHandler(
             }
             
             val (responseCmd, responseData, responseAddr) = when (result) {
-                is EhlCommandResult.OkAck -> Triple(EhlFrameCodec.CMD_OK, ByteArray(0), result.addr)
+                is EhlCommandResult.OkAck -> Triple(EhlFrameCodec.CMD_OK, byteArrayOf(0x30), result.addr)  // VB6: OK with data[0]=0x30
+                is EhlCommandResult.LinetestResponse -> Triple(EhlFrameCodec.CMD_LINETEST, byteArrayOf(0x55.toByte(), 0xAA.toByte()), result.addr)  // VB6: LINETEST echoes command with 0x55 0xAA pattern
                 is EhlCommandResult.StateResponse -> Triple(EhlFrameCodec.CMD_STATE, result.data, result.addr)
                 is EhlCommandResult.VolumeResponse -> Triple(EhlFrameCodec.CMD_VOLUME, result.data, result.addr)
                 is EhlCommandResult.PriceResponse -> Triple(EhlFrameCodec.CMD_PRICE, result.data, result.addr)
@@ -236,22 +275,35 @@ class SerialPortHandler(
 
     /**
      * Send response, optionally in chunks for realism.
+     * For EHL mode, may corrupt checksum if fault injection is enabled.
      */
     private fun sendResponse(response: ByteArray) {
         val port = serialPort ?: return
-
-        if (logHex) {
-            log.debug("TX: {} bytes: {}", response.size, response.toHexString())
+        
+        // Apply checksum corruption for EHL frames if fault injection enabled
+        val finalResponse = if (mode == FrameMode.EHL && response.size >= 6 && state.shouldCorruptChecksum()) {
+            log.warn("⚠️  FAULT INJECTION: Corrupting checksum")
+            response.clone().also { corrupted ->
+                // Flip random bits in checksum byte (second-to-last byte)
+                val chkIdx = corrupted.size - 2
+                corrupted[chkIdx] = (corrupted[chkIdx].toInt() xor Random.nextInt(1, 256)).toByte()
+            }
+        } else {
+            response
         }
 
-        if (chunked && response.size > 1) {
-            writeChunked(port, response)
+        if (logHex) {
+            log.debug("TX: {} bytes: {}", finalResponse.size, finalResponse.toHexString())
+        }
+
+        if (chunked && finalResponse.size > 1) {
+            writeChunked(port, finalResponse)
         } else {
-            port.writeBytes(response, response.size)
+            port.writeBytes(finalResponse, finalResponse.size)
             if (mode != FrameMode.EHL) {
-                log.debug("TX: '{}'", String(response, Charsets.US_ASCII).trim())
+                log.debug("TX: '{}'", String(finalResponse, Charsets.US_ASCII).trim())
             } else {
-                log.debug("TX: EHL frame {} bytes", response.size)
+                log.debug("TX: EHL frame {} bytes", finalResponse.size)
             }
         }
     }
@@ -284,7 +336,7 @@ class SerialPortHandler(
             offset += thisChunk
             chunkNum++
             
-            if (offset < response.size) {
+            if (offset < response.size && running.get()) {
                 Thread.sleep(Random.nextLong(5, 31))
             }
         }

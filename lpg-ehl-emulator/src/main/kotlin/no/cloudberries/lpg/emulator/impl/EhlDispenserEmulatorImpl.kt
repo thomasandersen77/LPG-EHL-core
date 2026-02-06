@@ -1,7 +1,11 @@
-package no.cloudberries.lpg.emulator
+package no.cloudberries.lpg.emulator.impl
 
+import no.cloudberries.lpg.emulator.*
 import no.cloudberries.lpg.protocol.*
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.annotation.Profile
+import org.springframework.stereotype.Component
 import kotlin.math.roundToInt
 
 /**
@@ -17,23 +21,25 @@ import kotlin.math.roundToInt
  * @param address Dispenser address (1-255)
  * @param pricePerLitreCents Price in cents (e.g., 1590 = 15.90 kr/L)
  * @param litresPerSecond Flow rate for simulation (default: 0.5 L/s)
+ * @param simulator The simulator for fuel flow
  */
-class EhlDispenserEmulator(
-    private val address: Int = 1,
-    pricePerLitreCents: Int = 1590,
-    private val litresPerSecond: Double = 0.5
-) {
-    private val logger = LoggerFactory.getLogger(EhlDispenserEmulator::class.java)
+@Component
+@Profile("LAB")
+class EhlDispenserEmulatorImpl(
+    private val simulator: IDispenserSimulator,
+    @Value("\${emulator.address:1}") private val address: Int = 1,
+    @Value("\${emulator.price-per-litre-cents:1590}") pricePerLitreCents: Int = 1590,
+    @Value("\${emulator.litres-per-second:0.5}") private val litresPerSecond: Double = 0.5
+) : IEhlDispenserEmulator {
+    private val logger = LoggerFactory.getLogger(EhlDispenserEmulatorImpl::class.java)
     
     // Mutable price - can be changed dynamically
     @Volatile
-    var currentPricePerLitreCents: Int = pricePerLitreCents
-        private set
+    private var currentPricePerLitreCents: Int = pricePerLitreCents
     
     private var state: EmulatorState = EmulatorState.IDLE
     private var activeTx: ActiveTransaction? = null
     private var completedTx: CompletedTransaction? = null
-    private val simulator = DispenserSimulator(litresPerSecond, pricePerLitreCents)
     
     init {
         require(address in 1..255) { "Address must be 1-255" }
@@ -44,7 +50,7 @@ class EhlDispenserEmulator(
      * Update the price per litre.
      * Takes effect immediately for new transactions.
      */
-    fun setPrice(pricePerLitreCents: Int) {
+    override fun setPrice(pricePerLitreCents: Int) {
         logger.info("💰 Pris oppdatert: ${this.currentPricePerLitreCents/100.0} kr/L → ${pricePerLitreCents/100.0} kr/L")
         this.currentPricePerLitreCents = pricePerLitreCents
         simulator.updatePrice(pricePerLitreCents)
@@ -53,7 +59,7 @@ class EhlDispenserEmulator(
     /**
      * Get the current price per litre in kr.
      */
-    fun getPricePerLitreKr(): Double = currentPricePerLitreCents / 100.0
+    override fun getPricePerLitreKr(): Double = currentPricePerLitreCents / 100.0
     
     /**
      * Process bytes from controller and return response packets.
@@ -61,7 +67,7 @@ class EhlDispenserEmulator(
      * @param bytes Raw bytes from controller
      * @return List of response packet bytes
      */
-    fun onBytesFromHost(bytes: ByteArray): List<ByteArray> {
+    override fun onBytesFromHost(bytes: ByteArray): List<ByteArray> {
         if (bytes.isEmpty()) return emptyList()
         
         return when (val parsed = EhlCodec.decode(bytes)) {
@@ -301,18 +307,18 @@ class EhlDispenserEmulator(
     /**
      * Get current completed transaction (if any).
      */
-    fun getCurrentTransaction(): CompletedTransaction? = completedTx
+    override fun getCurrentTransaction(): CompletedTransaction? = completedTx
     
     /**
      * Get current state.
      */
-    fun getCurrentState(): EmulatorState = state
+    override fun getCurrentState(): EmulatorState = state
     
     /**
      * Mark transaction as paid and reset to IDLE.
      * This simulates the operator clearing the pump after payment.
      */
-    fun markTransactionPaid(): Boolean {
+    override fun markTransactionPaid(): Boolean {
         if (state != EmulatorState.PAYMENT_PENDING || completedTx == null) {
             logger.warn("markTransactionPaid: No transaction pending (state=$state)")
             return false
@@ -328,7 +334,7 @@ class EhlDispenserEmulator(
     /**
      * Clear transaction without payment (for testing).
      */
-    fun clearTransaction(): Boolean {
+    override fun clearTransaction(): Boolean {
         if (state != EmulatorState.PAYMENT_PENDING || completedTx == null) {
             logger.warn("clearTransaction: No transaction pending (state=$state)")
             return false
@@ -342,21 +348,11 @@ class EhlDispenserEmulator(
     /**
      * Reset to IDLE state with cleared totals.
      */
-    fun resetToIdle() {
+    override fun resetToIdle() {
         completedTx = null
         activeTx = null
         simulator.stopImmediately()
         state = EmulatorState.IDLE
         logger.info("Emulator reset to IDLE - ready for new transaction")
     }
-}
-
-/**
- * Emulator state machine.
- */
-enum class EmulatorState {
-    IDLE,           // No transaction, ready to start
-    AUTHORIZED,     // Product selected, ready for UNBLOCK
-    DELIVERING,     // Active delivery in progress
-    PAYMENT_PENDING // Transaction complete, totals frozen, awaiting reset
 }

@@ -312,3 +312,9 @@ class NetsCloudSocketClient(
         }
     }
 }
+
+fun main() {
+    val client = NetsCloudSocketClient(host = "localhost", port = 6001)
+    client.connect()
+    client.sendCommand(byteArrayOf(0x01, 0x02, 0x03))
+}
