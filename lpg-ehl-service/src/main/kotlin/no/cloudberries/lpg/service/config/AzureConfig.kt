@@ -1,4 +1,4 @@
-package no.cloudberries.lpg.api.config
+package no.cloudberries.lpg.service.config
 
 import com.azure.storage.queue.QueueClient
 import com.azure.storage.queue.QueueClientBuilder
@@ -23,7 +23,7 @@ class AzureConfig(
     @Bean
     fun queueClient(): QueueClient {
         logger.info("Initializing Azure Queue client for queue: $queueName")
-        
+
         val client = QueueClientBuilder()
             .connectionString(connectionString)
             .queueName(queueName)

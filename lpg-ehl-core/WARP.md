@@ -341,6 +341,128 @@ CREATE TABLE price_history (
 - API on 8080, Emulator on 9001
 - Allows testing with both prod endpoints and mock dispenser
 
+## Production Deployment
+
+### Hardware Configuration
+
+**Target Hardware**: ARK-3360 or similar industrial PC with RS-485 serial port
+
+**Serial Port Configuration**:
+- Device: `/dev/ttyS3` (ARK-3360 default)
+- Baud rate: 9600
+- Data bits: 8
+- Parity: NONE
+- Stop bits: 1
+- Configuration: 8N1 (8 data bits, No parity, 1 stop bit)
+
+**Alternative Hardware**:
+- Raspberry Pi with USB-to-RS485 adapter: `/dev/ttyUSB0` or `/dev/ttyAMA0`
+- Other Linux systems: Check `dmesg` or `/dev/` for serial port device names
+
+### Production Startup Scripts
+
+**Webapp (with Web GUI)**:
+```bash
+# Start webapp on port 8080 with production defaults
+./scripts/start-webapp-production.sh
+
+# Override serial port
+./scripts/start-webapp-production.sh --port=/dev/ttyUSB0
+
+# Custom baud rate and parity
+./scripts/start-webapp-production.sh --baud=19200 --parity=EVEN
+
+# Use external config file
+./scripts/start-webapp-production.sh --config=application-production.yaml
+```
+
+**Headless (background service)**:
+```bash
+# Start headless app (no web server)
+./scripts/start-headless-production.sh
+
+# Enable debug REST API on port 8080
+./scripts/start-headless-production.sh --debug-api
+
+# Override configuration
+./scripts/start-headless-production.sh --port=/dev/ttyS3 --baud=9600
+```
+
+### Production Configuration
+
+**External Config File**: `application-production.yaml` (project root)
+
+Key production settings:
+- Serial port: `/dev/ttyS3`
+- Database: H2 file-based (`./data/lpgdb`)
+- Logging: Console + file (`logs/lpg-ehl.log`)
+- JVM: Optimized for production (G1GC, heap dumps on OOM)
+- Azure/NETS: Disabled by default, enable via environment variables
+
+**Environment Variables**:
+```bash
+export EHL_SERIAL_PORT=/dev/ttyS3
+export EHL_BAUD_RATE=9600
+export EHL_SERIAL_PARITY=NONE
+export AZURE_ENABLED=true
+export AZURE_STORAGE_CONNECTION_STRING="..."
+export NETS_ENABLED=true
+```
+
+### Development vs Production
+
+**Development Scripts** (SOCAT simulator testing):
+- `scripts/start-webapp-field.sh` - Uses `/tmp/vserial1` (virtual port)
+- `scripts/start-headless-field.sh` - Uses `/tmp/vserial1` (virtual port)
+- `scripts/start-socat-sim.sh` - Starts simulator with virtual serial ports
+
+**Production Scripts** (real hardware):
+- `scripts/start-webapp-production.sh` - Uses `/dev/ttyS3` (ARK-3360)
+- `scripts/start-headless-production.sh` - Uses `/dev/ttyS3` (ARK-3360)
+- Validates serial port exists before starting
+- Production JVM settings for stability
+
+### JVM Settings
+
+**Webapp** (256-512MB heap):
+```bash
+-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=100
+-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=logs/heap-dump.hprof
+```
+
+**Headless** (128-256MB heap):
+```bash
+-Xms128m -Xmx256m -XX:+UseG1GC -XX:MaxGCPauseMillis=50
+-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=logs/heap-dump-headless.hprof
+```
+
+### Dispenser Address Configuration
+
+**Standard Addresses**: 1-8
+**Legacy Addresses**: 33-40 (standard + 32)
+
+**ARK-3360 Example**:
+- Physical dispenser: Address 2
+- Legacy mode: Responds to address 34 (2 + 32)
+- The simulator supports both modes via `--legacy-address=true` (default)
+
+### Monitoring and Logs
+
+**Log Files**:
+- Location: `logs/lpg-ehl.log` (webapp) or `logs/lpg-ehl-headless.log` (headless)
+- Rotation: 10MB max size, 30 files retained, 300MB total cap
+- Format: Timestamp, level, thread, logger, message
+
+**Database**:
+- Location: `data/lpgdb.mv.db` (H2 file-based)
+- Console: `http://localhost:8080/h2-console` (if webapp running)
+- JDBC URL: `jdbc:h2:file:./data/lpgdb`
+
+**Heap Dumps**:
+- Webapp: `logs/heap-dump.hprof`
+- Headless: `logs/heap-dump-headless.hprof`
+- Automatically created on OutOfMemoryError
+
 ## Future Extensions
 
 The architecture is designed to support:
