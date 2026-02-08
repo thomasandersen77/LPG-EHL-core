@@ -1,0 +1,137 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRODUCTION MODE - External Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Production configuration for lpg-ehl-webapp and lpg-ehl-headless on ARK-3360
+# or similar industrial hardware with RS-485 serial port.
+#
+# Usage with webapp:
+#   ./scripts/start-webapp-production.sh
+#   OR
+#   java -jar release/lpg-ehl-webapp.jar --spring.profiles.active=field \
+#     --spring.config.location=application-production.yaml
+#
+# Usage with headless:
+#   ./scripts/start-headless-production.sh
+#   OR
+#   java -jar release/lpg-ehl-headless.jar --spring.profiles.active=field \
+#     --spring.config.location=application-production.yaml
+#
+# All parameters can be overridden from command line or environment variables.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────────────────────
+# SERIAL PORT CONFIGURATION - Production Hardware (ARK-3360)
+# ───────────────────────────────────────────────────────────────────────────────
+ehl:
+  serial:
+    port: ${EHL_SERIAL_PORT:/dev/ttyS3}  # ARK-3360 serial port
+    baud-rate: ${EHL_BAUD_RATE:9600}
+    data-bits: 8
+    parity: ${EHL_SERIAL_PARITY:NONE}    # 8N1 configuration
+    stop-bits: 1
+    read-timeout-ms: 3000
+    write-timeout-ms: 1000
+    parity-auto-detect: false
+
+# ───────────────────────────────────────────────────────────────────────────────
+# DATABASE - H2 File-Based (Persistent)
+# ───────────────────────────────────────────────────────────────────────────────
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/lpgdb;MODE=PostgreSQL;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: false
+
+  liquibase:
+    enabled: true
+
+# ───────────────────────────────────────────────────────────────────────────────
+# LOGGING - Console + File
+# ───────────────────────────────────────────────────────────────────────────────
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg: INFO
+    no.cloudberries.lpg.protocol: INFO
+    no.cloudberries.lpg.communication: INFO
+    no.cloudberries.lpg.service: INFO
+    org.springframework: WARN
+    org.hibernate.SQL: WARN
+    liquibase: WARN
+  
+  # Log to file (automatically created by startup scripts)
+  file:
+    name: logs/lpg-ehl.log
+    max-size: 10MB
+    max-history: 30
+    total-size-cap: 300MB
+  
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%15.15thread] %logger{25} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+
+# ───────────────────────────────────────────────────────────────────────────────
+# EXTERNAL SERVICES - Production Configuration
+# ───────────────────────────────────────────────────────────────────────────────
+azure:
+  enabled: ${AZURE_ENABLED:false}
+  storage:
+    connection-string: ${AZURE_STORAGE_CONNECTION_STRING:}
+    queue-name: ${AZURE_QUEUE_NAME:lpg-transactions}
+
+nets:
+  cloud-connect:
+    host: ${NETS_CLOUD_HOST:localhost}
+    port: ${NETS_CLOUD_PORT:6001}
+    enabled: ${NETS_ENABLED:false}
+
+# ───────────────────────────────────────────────────────────────────────────────
+# NOTES
+# ───────────────────────────────────────────────────────────────────────────────
+#
+# Serial Port Configuration:
+#   ARK-3360: /dev/ttyS3, 9600 baud, 8N1 (8 data bits, No parity, 1 stop bit)
+#   Other hardware: May use /dev/ttyUSB0, /dev/ttyAMA0, etc.
+#
+# Dispenser Addresses:
+#   Standard: 1-8
+#   Legacy: 33-40 (= standard + 32)
+#   ARK-3360 pumpe: adresse 34 (= dispenser 2 in legacy mode)
+#
+# Override from command line:
+#   --ehl.serial.port=/dev/ttyS3
+#   --ehl.serial.parity=EVEN
+#   --server.port=8080
+#   --azure.enabled=true
+#   --nets.cloud-connect.enabled=true
+#
+# Override from environment variables:
+#   export EHL_SERIAL_PORT=/dev/ttyS3
+#   export EHL_BAUD_RATE=9600
+#   export EHL_SERIAL_PARITY=NONE
+#   export AZURE_ENABLED=true
+#   export AZURE_STORAGE_CONNECTION_STRING="..."
+#   export NETS_ENABLED=true
+#
+# ───────────────────────────────────────────────────────────────────────────────
