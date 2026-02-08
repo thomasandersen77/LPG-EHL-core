@@ -76,6 +76,12 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+
 # Logs
 *.log
 logs/
@@ -92,6 +98,13 @@ local-data/
 .env
 .env.local
 !.env.example
+
+# Database files (H2, SQLite, etc.)
+*.db
+*.db-shm
+*.db-wal
+*.mv.db
+*.trace.db
 
 # Backups
 backups/
