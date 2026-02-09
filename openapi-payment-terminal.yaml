@@ -26,8 +26,10 @@ info:
     name: Proprietary
 
 servers:
-  - url: http://localhost:5000
-    description: Local payment terminal server
+  - url: http://localhost:8080
+    description: Local payment terminal server (default port, configurable via server.json)
+  - url: http://localhost:18080
+    description: Alternative port (as configured in production server.json)
 
 tags:
   - name: Health
@@ -79,6 +81,24 @@ components:
           nullable: true
           description: Last error message (if any)
 
+    # Simple Response (used by terminal open/close)
+    SimpleResponse:
+      type: object
+      required:
+        - Success
+      properties:
+        Success:
+          type: boolean
+          description: Operation success flag
+        Message:
+          type: string
+          nullable: true
+          description: Success message
+        Error:
+          type: string
+          nullable: true
+          description: Error message (if failed)
+
     # Operation Response (used by all financial/admin operations)
     OperationResponse:
       type: object
@@ -108,13 +128,14 @@ components:
             - terminal_busy
             - terminal_not_ready
             - operation_timeout
+            - operation_rejected
             - vendor_call_failure
             - diagnostics_disabled
           description: Error code (if operation failed)
         ErrorMessage:
           type: string
           nullable: true
-          description: Human-readable error message
+          description: Human-readable error message (legacy field, use Error instead)
 
         # Terminal outcome fields
         LocalModeResult:
@@ -208,11 +229,7 @@ components:
             Client-provided idempotency key.
             Recommended format: "fuelingSession:<session-id>"
         PreAvstemming:
-          type: object
-          properties:
-            Enabled:
-              type: boolean
-              default: false
+          $ref: '#/components/schemas/PreAvstemmingConfig'
 
     # Refund Request
     RefundRequest:
@@ -234,26 +251,55 @@ components:
           type: string
           nullable: true
           description: Client-provided idempotency key
+        PreAvstemming:
+          $ref: '#/components/schemas/PreAvstemmingConfig'
+
+    # Pre-avstemming Configuration
+    PreAvstemmingConfig:
+      type: object
+      properties:
+        Enabled:
+          type: boolean
+          default: false
+          description: Enable pre-avstemming before operation
+        Password:
+          type: string
+          default: "0000"
+          description: Admin password for avstemming
+        TimeoutSeconds:
+          type: integer
+          nullable: true
+          description: Timeout in seconds (optional)
 
     # Cashback Request
     CashbackRequest:
       type: object
       required:
-        - PurchaseAmountMinor
-        - CashbackAmountMinor
+        - PurchaseMinor
+        - CashbackMinor
       properties:
-        PurchaseAmountMinor:
+        PurchaseMinor:
           type: integer
-          description: Purchase amount in minor units
-        CashbackAmountMinor:
+          description: Purchase amount in minor units (CORRECTED FIELD NAME)
+        CashbackMinor:
           type: integer
-          description: Cashback amount in minor units
+          description: Cashback amount in minor units (CORRECTED FIELD NAME)
+        Currency:
+          type: string
+          default: "NOK"
+          description: Currency code
         OperatorId:
           type: string
-          default: "0000"
+          default: "4321"
+          description: Operator ID (note different default than purchase/refund)
+        OptionalData:
+          type: string
+          nullable: true
+          description: Optional text for receipt
         ClientRequestId:
           type: string
           nullable: true
+          description: Client-provided idempotency key
 
     # Admin Request (for operations requiring password)
     AdminRequest:
@@ -289,6 +335,7 @@ components:
       type: object
       required:
         - Cursor
+        - EventId
         - Timestamp
         - EventType
       properties:
@@ -296,6 +343,9 @@ components:
           type: integer
           format: int64
           description: Monotonic sequence number for event ordering
+        EventId:
+          type: string
+          description: Event identifier (CORRECTED - was missing)
         OperationId:
           type: string
           nullable: true
@@ -312,24 +362,38 @@ components:
           additionalProperties: true
           description: Event-specific payload data
 
+    # Diagnostics Response (lowercase keys, anonymous object)
+    DiagnosticsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Operation success (lowercase)
+        callResult:
+          type: integer
+          description: Vendor call result (lowercase)
+
     # Error Response
     ErrorResponse:
       type: object
       required:
+        - Error
         - ErrorCode
-        - ErrorMessage
       properties:
+        Error:
+          type: string
+          description: Human-readable error message (CORRECTED FIELD NAME)
         ErrorCode:
           type: string
           description: Machine-readable error code
-        ErrorMessage:
+        OperationId:
           type: string
-          description: Human-readable error message
-        Details:
-          type: object
           nullable: true
-          additionalProperties: true
-          description: Additional error details
+          description: Operation ID (if applicable)
+        Details:
+          type: string
+          nullable: true
+          description: Additional error details as string (CORRECTED TYPE)
 
   responses:
     BadRequest:
@@ -346,8 +410,8 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
+            Error: "Terminal operation did not complete within timeout"
             ErrorCode: "operation_timeout"
-            ErrorMessage: "Terminal operation did not complete within timeout"
 
     Conflict:
       description: Terminal busy (another operation in progress)
@@ -356,8 +420,18 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
+            Error: "Another operation is currently in progress"
             ErrorCode: "terminal_busy"
-            ErrorMessage: "Another operation is currently in progress"
+
+    UnprocessableEntity:
+      description: Operation rejected by terminal
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            Error: "Terminal rejected the operation"
+            ErrorCode: "operation_rejected"
 
     ServiceUnavailable:
       description: Terminal not ready
@@ -366,8 +440,8 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
+            Error: "Terminal is not ready for operations"
             ErrorCode: "terminal_not_ready"
-            ErrorMessage: "Terminal is not ready for operations"
 
     InternalServerError:
       description: Vendor call failure or server error
@@ -376,8 +450,8 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
+            Error: "Vendor DLL call failed"
             ErrorCode: "vendor_call_failure"
-            ErrorMessage: "Vendor DLL call failed"
 
 paths:
   # Health
@@ -430,13 +504,17 @@ paths:
       operationId: openTerminal
       responses:
         '200':
-          description: Terminal opened successfully
+          description: Terminal opened (check Success field)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationResponse'
+                $ref: '#/components/schemas/SimpleResponse'
         '500':
-          $ref: '#/components/responses/InternalServerError'
+          description: Terminal open failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleResponse'
 
   /v1/terminal/close:
     post:
@@ -449,11 +527,17 @@ paths:
       operationId: closeTerminal
       responses:
         '200':
-          description: Terminal closed successfully
+          description: Terminal closed (check Success field)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationResponse'
+                $ref: '#/components/schemas/SimpleResponse'
+        '500':
+          description: Terminal close failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleResponse'
 
   # Financial Operations
   /v1/payments/purchase:
@@ -495,6 +579,8 @@ paths:
           $ref: '#/components/responses/Timeout'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
         '500':
@@ -531,8 +617,12 @@ paths:
           $ref: '#/components/responses/Timeout'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /v1/payments/cashback:
     post:
@@ -562,8 +652,12 @@ paths:
           $ref: '#/components/responses/Timeout'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   # Administrative Operations
   /v1/admin/avstemming:
@@ -864,12 +958,6 @@ paths:
           schema:
             type: string
             default: "0"
-        - name: limit
-          in: query
-          description: Maximum number of events to return
-          schema:
-            type: integer
-            default: 100
       responses:
         '200':
           description: Events retrieved
@@ -930,11 +1018,11 @@ paths:
                   description: JSON string to send to terminal
       responses:
         '200':
-          description: JSON sent
+          description: JSON sent (lowercase response keys)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationResponse'
+                $ref: '#/components/schemas/DiagnosticsResponse'
         '403':
           description: Diagnostics disabled
 
@@ -964,11 +1052,11 @@ paths:
                   description: Base64-encoded TLD data
       responses:
         '200':
-          description: TLD sent
+          description: TLD sent (lowercase response keys)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationResponse'
+                $ref: '#/components/schemas/DiagnosticsResponse'
         '403':
           description: Diagnostics disabled
 
@@ -997,10 +1085,17 @@ paths:
                   description: Allow (true) or deny (false)
       responses:
         '200':
-          description: Confirmation processed
+          description: Confirmation processed (lowercase response keys)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationResponse'
+                $ref: '#/components/schemas/DiagnosticsResponse'
         '403':
           description: Diagnostics disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                Error: "Diagnostics endpoints are disabled"
+                ErrorCode: "diagnostics_disabled"

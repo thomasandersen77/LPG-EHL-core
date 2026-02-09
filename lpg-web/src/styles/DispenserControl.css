@@ -1,0 +1,824 @@
+/* Dispenser Control Dashboard - Dark Theme */
+
+.dispenser-control {
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  color: #ffffff;
+}
+
+/* ==================== Station Header ==================== */
+.station-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: rgba(30, 30, 46, 0.95);
+  border-bottom: 2px solid rgba(76, 175, 80, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.station-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.station-icon {
+  font-size: 2rem;
+}
+
+.station-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #4caf50;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.diagnose-link {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.diagnose-link:hover {
+  background: linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%);
+  transform: translateY(-1px);
+}
+
+.logout-btn {
+  background: rgba(231, 76, 60, 0.8);
+  color: white;
+  border: none;
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+  background: rgba(231, 76, 60, 1);
+}
+
+/* ==================== Control Container ==================== */
+.control-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* Tablet and up: 2 columns */
+@media (min-width: 1024px) {
+  .control-container {
+    grid-template-columns: 400px 1fr;
+    gap: 2rem;
+  }
+}
+
+/* ==================== Error Banner ==================== */
+.error-banner {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
+  padding: 1rem 1.5rem;
+  margin: 1rem 2rem 0;
+  border-radius: 8px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+  animation: slideDown 0.3s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.error-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.2s;
+}
+
+.error-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==================== Left Panel ==================== */
+.left-panel {
+  background: rgba(30, 30, 46, 0.9);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.panel-header h2 {
+  color: #4caf50;
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.panel-subtitle {
+  color: #b0b0b0;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.control-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.menu-item {
+  background: rgba(52, 73, 94, 0.5);
+  color: #ecf0f1;
+  border: none;
+  border-radius: 8px;
+  padding: 0.875rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: block;
+}
+
+.menu-item:hover {
+  background: rgba(52, 73, 94, 0.8);
+  transform: translateX(4px);
+}
+
+.menu-item.active {
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+}
+
+.menu-item.link {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+}
+
+.menu-item.link:hover {
+  background: linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%);
+}
+
+.panel-content {
+  background: rgba(44, 62, 80, 0.3);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.info-section h3 {
+  color: #4caf50;
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+}
+
+.info-section p {
+  color: #b0b0b0;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.info-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem 0;
+}
+
+.info-section li {
+  color: #95a5a6;
+  padding: 0.5rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+}
+
+.info-section li:before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #4caf50;
+  font-weight: bold;
+}
+
+.secondary-btn {
+  background: rgba(52, 152, 219, 0.8);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  margin-top: 0.5rem;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.secondary-btn:hover {
+  background: rgba(52, 152, 219, 1);
+  transform: translateY(-1px);
+}
+
+/* Status Details */
+.status-details {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  color: #b0b0b0;
+}
+
+.state-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.state-badge.idle {
+  background: rgba(52, 152, 219, 0.3);
+  color: #3498db;
+}
+
+.state-badge.ready {
+  background: rgba(46, 204, 113, 0.3);
+  color: #2ecc71;
+}
+
+.state-badge.delivering {
+  background: rgba(243, 156, 18, 0.3);
+  color: #f39c12;
+}
+
+.state-badge.finished {
+  background: rgba(155, 89, 182, 0.3);
+  color: #9b59b6;
+}
+
+.state-badge.error {
+  background: rgba(231, 76, 60, 0.3);
+  color: #e74c3c;
+}
+
+/* Price Control */
+.price-control {
+  margin-top: 1rem;
+}
+
+.price-control label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: #ecf0f1;
+}
+
+.price-input {
+  background: rgba(52, 73, 94, 0.6);
+  border: 2px solid rgba(76, 175, 80, 0.3);
+  border-radius: 6px;
+  padding: 0.75rem;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: bold;
+  width: 120px;
+}
+
+.price-input:focus {
+  outline: none;
+  border-color: #4caf50;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
+}
+
+/* ==================== Right Panel ==================== */
+.right-panel {
+  background: rgba(30, 30, 46, 0.9);
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.control-header h2 {
+  color: #3498db;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.control-subtitle {
+  color: #b0b0b0;
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+/* ==================== Status Section ==================== */
+.status-section {
+  margin-bottom: 2rem;
+}
+
+.status-label {
+  color: #95a5a6;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+}
+
+.status-indicator.online {
+  background: rgba(46, 204, 113, 0.2);
+  border: 2px solid #2ecc71;
+  color: #2ecc71;
+}
+
+.status-indicator.offline {
+  background: rgba(231, 76, 60, 0.2);
+  border: 2px solid #e74c3c;
+  color: #e74c3c;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.online .status-dot {
+  background: #2ecc71;
+  box-shadow: 0 0 8px #2ecc71;
+}
+
+.status-indicator.offline .status-dot {
+  background: #e74c3c;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ==================== Control Options ==================== */
+.control-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 600px) {
+  .control-options {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.option-group label {
+  color: #95a5a6;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.option-input,
+.option-select {
+  background: rgba(52, 73, 94, 0.6);
+  border: 2px solid rgba(52, 152, 219, 0.3);
+  border-radius: 6px;
+  padding: 0.75rem;
+  color: white;
+  font-size: 0.95rem;
+}
+
+.option-input:focus,
+.option-select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 8px rgba(52, 152, 219, 0.3);
+}
+
+/* ==================== Displays ==================== */
+.displays {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.display-box {
+  background: rgba(44, 62, 80, 0.8);
+  border: 3px solid rgba(52, 152, 219, 0.5);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.display-label {
+  color: #95a5a6;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.display-value {
+  font-family: 'Courier New', monospace;
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #3498db;
+  letter-spacing: 2px;
+}
+
+/* ==================== Price Display ==================== */
+.price-display {
+  background: rgba(44, 62, 80, 0.8);
+  border: 3px solid rgba(243, 156, 18, 0.5);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.price-label {
+  color: #95a5a6;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.price-value {
+  font-family: 'Courier New', monospace;
+  font-size: 2rem;
+  font-weight: bold;
+  color: #f39c12;
+  letter-spacing: 2px;
+}
+
+/* ==================== Control Buttons ==================== */
+.control-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.control-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 1.5rem 2rem;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  transition: all 0.2s ease;
+  min-height: 80px;
+}
+
+.start-btn {
+  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(46, 204, 113, 0.4);
+}
+
+.start-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(46, 204, 113, 0.6);
+}
+
+.stop-btn {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(231, 76, 60, 0.4);
+}
+
+.stop-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(231, 76, 60, 0.6);
+}
+
+.control-btn.credit-btn {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(155, 89, 182, 0.4);
+}
+
+.control-btn.credit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8e44ad 0%, #7d3c98 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(155, 89, 182, 0.6);
+}
+
+.control-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.control-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* ==================== Settlement Section ==================== */
+.settlement-section {
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  background: rgba(155, 89, 182, 0.1);
+  border: 2px solid rgba(155, 89, 182, 0.3);
+  border-radius: 12px;
+}
+
+.settlement-label {
+  color: #9b59b6;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.settlement-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* ==================== Action Buttons ==================== */
+.action-btn {
+  background: rgba(243, 156, 18, 0.8);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.card-btn {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+}
+
+.card-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%);
+}
+
+.credit-btn {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+}
+
+.credit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8e44ad 0%, #7d3c98 100%);
+}
+
+.reset-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+  margin-bottom: 1.5rem;
+}
+
+.reset-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7f8c8d 0%, #6c7a7b 100%);
+}
+
+/* ==================== Status Messages ==================== */
+.filling-status {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  color: white;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.1rem;
+  animation: fillPulse 1.5s infinite;
+}
+
+@keyframes fillPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(243, 156, 18, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(243, 156, 18, 0.8);
+  }
+}
+
+.finished-status {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.info-status {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin-top: 1rem;
+}
+
+/* ==================== Countdown Display ==================== */
+.countdown-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(241, 196, 15, 0.2);
+  border: 2px solid #f1c40f;
+  border-radius: 8px;
+}
+
+.countdown-value {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #f1c40f;
+  font-family: 'Courier New', monospace;
+}
+
+.countdown-label {
+  color: #f39c12;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* State-specific status indicator colors */
+.status-indicator.authorized_waiting {
+  background: rgba(241, 196, 15, 0.2);
+  border: 2px solid #f1c40f;
+  color: #f1c40f;
+  animation: pulse 1.5s infinite;
+}
+
+.status-indicator.ready_to_pump {
+  background: rgba(46, 204, 113, 0.2);
+  border: 2px solid #2ecc71;
+  color: #2ecc71;
+}
+
+.status-indicator.pumping {
+  background: rgba(52, 152, 219, 0.2);
+  border: 2px solid #3498db;
+  color: #3498db;
+  animation: pulse 1s infinite;
+}
+
+.status-indicator.payment_pending {
+  background: rgba(155, 89, 182, 0.2);
+  border: 2px solid #9b59b6;
+  color: #9b59b6;
+}
+
+.status-indicator.idle {
+  background: rgba(149, 165, 166, 0.2);
+  border: 2px solid #95a5a6;
+  color: #95a5a6;
+}
+
+/* Single button layout when only one button */
+.control-buttons:has(> :only-child) {
+  grid-template-columns: 1fr;
+}
+
+.option-input {
+  background: rgba(52, 73, 94, 0.6);
+  border: 2px solid rgba(52, 152, 219, 0.3);
+  border-radius: 6px;
+  padding: 0.75rem;
+  color: white;
+  font-size: 0.95rem;
+  width: 100%;
+}
+
+.option-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==================== Mobile Responsiveness ==================== */
+@media (max-width: 600px) {
+  .station-header {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .control-container {
+    padding: 1rem;
+  }
+
+  .left-panel,
+  .right-panel {
+    padding: 1rem;
+  }
+
+  .control-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .displays {
+    grid-template-columns: 1fr;
+  }
+
+  .display-value {
+    font-size: 2rem;
+  }
+
+  .control-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .control-btn {
+    font-size: 1.25rem;
+    padding: 1.25rem;
+  }
+
+  .settlement-buttons {
+    grid-template-columns: 1fr;
+  }
+}

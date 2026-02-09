@@ -1,0 +1,41 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# EKSTERN KONFIGURASJON - Plasseres ved siden av JAR-filen
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Denne filen overstyrer innebygd konfigurasjon.
+# Kopier til samme mappe som JAR-filen og tilpass verdier.
+#
+# BRUK:
+#   java -jar lpg-ehl-webapp.jar --spring.config.additional-location=file:./config/
+#
+# ELLER automatisk hvis config/application.yaml ligger i samme mappe som JAR.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Seriell port - endre etter behov
+ehl:
+  serial:
+    port: /dev/ttyS3
+    #port: /tmp/vserial1  # For emulator/testing
+    baud-rate: 9600
+    parity: NONE
+
+# Stasjon
+lpg:
+  station:
+    id: STATION-001
+    name: Min Stasjon
+  price:
+    per-liter: 15.90
+
+# Azure (aktiver for sky-synkronisering)
+#azure:
+#  enabled: true
+#  storage:
+#    connection-string: ${AZURE_CONNECTION_STRING}
+#    queue-name: lpg-transactions
+
+# Logging (aktiver debug ved behov)
+#logging:
+#  level:
+#    no.cloudberries.lpg.protocol: DEBUG

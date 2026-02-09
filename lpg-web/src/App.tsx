@@ -1,4 +1,7 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { LoginPage } from './pages/LoginPage';
+import { StationOwnerPage } from './pages/StationOwnerPage';
+import { DiagnosePage } from './pages/DiagnosePage';
 import { HomePage } from './pages/HomePage';
 import { DispenserSimulator } from './components/DispenserSimulator';
 import { ControlPanel } from './components/ControlPanel';
@@ -16,6 +19,7 @@ import { SerialPortConfigPage } from './pages/SerialPortConfigPage';
 import { Layout } from './components/Layout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppModeProvider, useAppMode } from './contexts/AppModeContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -71,16 +75,63 @@ function FieldModeBanner() {
   );
 }
 
+// Protected Route Component - requires login
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isLoggedIn } = useAuth();
+  
+  if (!isLoggedIn) {
+    return <Navigate to="/" replace />;
+  }
+  
+  return <>{children}</>;
+}
+
 function AppContent() {
   const { isLab } = useAppMode();
 
   return (
     <>
-      <LabModeBanner />
-      <FieldModeBanner />
       <Routes>
-        <Route path="/" element={<Layout />}>
+        {/* Login Page - Public */}
+        <Route path="/" element={<LoginPage />} />
+        
+        {/* Station Owner Page - Main page after login */}
+        <Route path="/station" element={
+          <ProtectedRoute>
+            <LabModeBanner />
+            <FieldModeBanner />
+            <StationOwnerPage />
+          </ProtectedRoute>
+        } />
+        
+        {/* Diagnose Page - Tool overview */}
+        <Route path="/diagnose" element={
+          <ProtectedRoute>
+            <LabModeBanner />
+            <FieldModeBanner />
+            <DiagnosePage />
+          </ProtectedRoute>
+        } />
+        
+        {/* Legacy Home Page - accessible from diagnose */}
+        <Route path="/home" element={
+          <ProtectedRoute>
+            <LabModeBanner />
+            <FieldModeBanner />
+            <Layout />
+          </ProtectedRoute>
+        }>
           <Route index element={<HomePage />} />
+        </Route>
+        
+        {/* All other pages with Layout */}
+        <Route element={
+          <ProtectedRoute>
+            <LabModeBanner />
+            <FieldModeBanner />
+            <Layout />
+          </ProtectedRoute>
+        }>
           <Route path="simulator" element={<DispenserSimulator />} />
           <Route path="control" element={<ControlPanel />} />
           <Route path="fueling" element={<FuelingPage />} />
@@ -104,9 +155,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppModeProvider>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
+        <AuthProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </AuthProvider>
       </AppModeProvider>
     </QueryClientProvider>
   );

@@ -46,7 +46,7 @@ const pumpApi = {
       body: JSON.stringify({ 
         maxAmountKr, 
         triggeredBy: 'WEBAPP_GUI', 
-        paymentMethod: 'SIMULATION'
+        paymentMethod: 'CARD'
       })
     });
     return res.json();
@@ -127,7 +127,7 @@ export function ControlPanel() {
 
   // Confirm payment mutation
   const confirmPaymentMutation = useMutation({
-    mutationFn: () => confirmPayment(1, 'SIMULATION'),
+    mutationFn: () => confirmPayment(1, 'CARD'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pump-status'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });

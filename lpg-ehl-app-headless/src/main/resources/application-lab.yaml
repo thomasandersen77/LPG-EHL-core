@@ -1,29 +1,12 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# LAB PROFILE - Headless with Emulator
+# LAB PROFIL - Utvikling med emulator
 # ═══════════════════════════════════════════════════════════════════════════════
+# Bruk: java -jar lpg-ehl-headless.jar --spring.profiles.active=lab
 #
-# Start: java -jar lpg-ehl-headless.jar --spring.profiles.active=lab
-#
-# Features:
-#   - H2 in-memory database (nullstilles ved restart)
-#   - Built-in EHL emulator (ingen hardware)
-#   - INFO logging (DEBUG aktiveres manuelt med JVM-flagg)
-#   - NONE parity for simulator-kompatibilitet
-#
-# DEBUG aktivering:
-#   java -Dlogging.level.no.cloudberries.lpg.protocol=DEBUG \
-#        -Dlogging.level.no.cloudberries.lpg.communication=DEBUG \
-#        -jar lpg-ehl-headless.jar --spring.profiles.active=lab
-#
+# Arver alt fra application.yaml, overstyrer kun:
+# - Seriell port til virtuell port (socat)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Serial port for lab - NONE parity for simulator
 ehl:
   serial:
     port: /tmp/vserial1
-    parity: NONE
-
-# INFO logging som default (ikke DEBUG)
-logging:
-  level:
-    no.cloudberries.lpg: INFO

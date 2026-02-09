@@ -69,7 +69,7 @@ export interface ConfirmPaymentResponse {
 
 export async function confirmPayment(
   address: number, 
-  paymentMethod: 'CARD' | 'CREDIT' | 'SIMULATION' = 'SIMULATION'
+  paymentMethod: 'CARD' | 'CREDIT' = 'CARD'
 ): Promise<ConfirmPaymentResponse> {
   const res = await axios.post<ConfirmPaymentResponse>(
     `${EMULATOR_URL}/emulator/pump/${address}/confirm-payment`,

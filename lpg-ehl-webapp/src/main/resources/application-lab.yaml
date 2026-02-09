@@ -1,71 +1,12 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# LAB PROFILE - Development & Testing with Emulator
+# LAB PROFIL - Utvikling med emulator
 # ═══════════════════════════════════════════════════════════════════════════════
+# Bruk: java -jar lpg-ehl-webapp.jar --spring.profiles.active=lab
 #
-# Start: java -jar lpg-ehl-webapp.jar --spring.profiles.active=lab
-#
-# Features:
-#   - H2 in-memory database (nullstilles ved restart)
-#   - Built-in EHL emulator (ingen hardware)
-#   - H2 console på /h2-console
-#   - INFO logging (DEBUG aktiveres manuelt med JVM-flagg)
-#   - NONE parity for simulator-kompatibilitet
-#
-# DEBUG aktivering:
-#   java -Dlogging.level.no.cloudberries.lpg.protocol=DEBUG \
-#        -Dlogging.level.no.cloudberries.lpg.communication=DEBUG \
-#        -jar lpg-ehl-webapp.jar --spring.profiles.active=lab
-#
+# Arver alt fra application.yaml, overstyrer kun:
+# - Seriell port til virtuell port (socat)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-spring:
-  # H2 In-Memory Database
-  datasource:
-    url: jdbc:h2:mem:lpgdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 30000
-
-  jpa:
-    hibernate:
-      ddl-auto: none
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
-        format_sql: false
-
-  # H2 Console for debugging
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-      settings:
-        web-allow-others: true
-
-  liquibase:
-    enabled: true
-
-# External services disabled for offline testing
-azure:
-  enabled: false
-
-nets:
-  cloud-connect:
-    host: localhost
-    port: 6001
-
-# Serial port for lab - NONE parity for simulator
 ehl:
   serial:
     port: /tmp/vserial1
-    parity: NONE
-
-# INFO logging som default (ikke DEBUG)
-logging:
-  level:
-    no.cloudberries.lpg: INFO

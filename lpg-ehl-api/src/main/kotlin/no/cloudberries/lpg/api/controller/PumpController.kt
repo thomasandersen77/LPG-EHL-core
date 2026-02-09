@@ -158,16 +158,15 @@ class PumpController(
     ): ResponseEntity<Map<String, Any>> {
         logger.info("💳 Settle payment request: dispenserId=$id, method=$method")
         
-        // Map frontend payment methods
+        // Map frontend payment methods - only CARD and CREDIT are valid
         val emulatorMethod = when (method.uppercase()) {
-            "CASH" -> "CASH"
             "CARD" -> "CARD"
             "CREDIT" -> "CREDIT"
             else -> {
                 logger.warn("⚠️ Invalid payment method: $method")
                 return ResponseEntity.badRequest().body(mapOf(
                     "status" to "error",
-                    "message" to "Invalid payment method. Use CASH, CARD, or CREDIT"
+                    "message" to "Invalid payment method. Use CARD or CREDIT"
                 ))
             }
         }
@@ -225,7 +224,7 @@ class PumpController(
      * Request body:
      * - maxAmountKr: Maks beløp å reservere (default: 2000)
      * - triggeredBy: Hvem/hva som trigget (for logging)
-     * - paymentMethod: SIMULATION, CARD, CREDIT, CASH
+     * - paymentMethod: CARD eller CREDIT
      */
     @PostMapping("/pump/{address}/card-swipe")
     fun simulateCardSwipe(

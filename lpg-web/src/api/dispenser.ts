@@ -25,8 +25,9 @@ export const dispenserApi = {
 
   /**
    * Start fuel delivery (unblock)
+   * @deprecated Use pumpApi instead - this is the old demo API
    */
-  unblock: async (paymentType: string = 'CASH'): Promise<DispenserStateDto> => {
+  unblock: async (paymentType: 'CARD' | 'CREDIT' = 'CARD'): Promise<DispenserStateDto> => {
     const response = await api.post<DispenserStateDto>(`/api/v1/dispenser/unblock?paymentType=${paymentType}`);
     return response.data;
   },

@@ -1,32 +1,27 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# LPG-EHL WEBAPP - Common Configuration
+# LPG-EHL WEBAPP - Unified Configuration
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# PROFILES:
-#   lab   - Development with H2 + emulator (default)
-#   field - Production with real serial port
+# DATABASE: H2 file-basert (./data/lpgdb) - persisterer data
+# SERIAL:   Konfigurerbart via kommandolinje
 #
-# USAGE:
-#   LAB:   java -jar lpg-ehl-webapp.jar --spring.profiles.active=lab
-#   FIELD: java -jar lpg-ehl-webapp.jar --spring.profiles.active=field
+# BRUK:
+#   java -jar lpg-ehl-webapp.jar
+#   java -jar lpg-ehl-webapp.jar --ehl.serial.port=/tmp/vserial1
+#   java -jar lpg-ehl-webapp.jar --ehl.serial.port=/dev/ttyS3
 #
-# EXTERNAL CONFIG:
-#   Override serial params in config/application.yaml:
-#   --spring.config.additional-location=file:./config/
+# EKSTERN KONFIG (valgfritt):
+#   java -jar lpg-ehl-webapp.jar --spring.config.additional-location=file:./config/
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
 spring:
   application:
     name: lpg-ehl-webapp
-  security:
-    user:
-      name: ${SECURITY_USER_NAME:admin}
-      password: ${SECURITY_USER_PASSWORD:admin123}
   
-  # Default: H2 in-memory (overridden by profiles or external config)
+  # H2 File Database - persisterer data mellom restarts
   datasource:
-    url: jdbc:h2:mem:lpgdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    url: jdbc:h2:file:./data/lpgdb;MODE=PostgreSQL;AUTO_SERVER=TRUE
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -42,7 +37,14 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
-        format_sql: true
+        format_sql: false
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
   
   liquibase:
     enabled: true
@@ -53,7 +55,7 @@ spring:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
 
-# Azure Storage Queue Configuration (disabled by default, override in profiles)
+# Azure Storage Queue (deaktivert som standard)
 azure:
   enabled: ${AZURE_ENABLED:false}
   storage:
@@ -71,12 +73,6 @@ nets:
     port: ${NETS_CLOUD_PORT:6001}
     connect-timeout-ms: ${NETS_CONNECT_TIMEOUT_MS:10000}
     read-timeout-ms: ${NETS_READ_TIMEOUT_MS:30000}
-
-# Security
-security:
-  api-token: ${API_AUTH_TOKEN:dev-token-12345}
-  cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3001,http://localhost:8080,http://localhost:5173}
 
 # Actuator
 management:
@@ -103,8 +99,7 @@ server:
   compression:
     enabled: true
 
-# Logging - INFO som default, DEBUG aktiveres via JVM-flagg
-# Eksempel: java -Dlogging.level.no.cloudberries.lpg.protocol=DEBUG -jar ...
+# Logging
 logging:
   level:
     root: INFO
@@ -114,7 +109,7 @@ logging:
     liquibase: WARN
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LPG APPLICATION CONFIGURATION
+# LPG APPLIKASJON
 # ═══════════════════════════════════════════════════════════════════════════════
 lpg:
   dispenser:
@@ -128,8 +123,8 @@ lpg:
     name: ${STATION_NAME:Test Station}
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# EHL SERIAL DEFAULTS - bekreftet av Alejandro (2026-02-09)
-# /dev/ttyS3, 9600 baud, NONE parity (8N1)
+# EHL SERIELL KOMMUNIKASJON
+# Standard: 9600 baud, 8N1 (NONE parity)
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
   emulator:

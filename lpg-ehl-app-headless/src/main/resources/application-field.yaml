@@ -1,39 +1,12 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIELD PROFILE - Headless with Real Serial Port / Produksjon
+# FIELD PROFIL - Produksjon med ekte dispenser
 # ═══════════════════════════════════════════════════════════════════════════════
+# Bruk: java -jar lpg-ehl-headless.jar --spring.profiles.active=field
 #
-# Start: java -jar lpg-ehl-headless.jar --spring.profiles.active=field
-#
-# Features:
-#   - H2 file-basert database (./data/lpgdb) - persisterer data
-#   - NONE parity (8N1) - bekreftet av Alejandro
-#   - INFO logging
-#
-# Serial port override (for SOCAT simulator):
-#   --ehl.serial.port=/tmp/vserial1
-#
+# Arver alt fra application.yaml, overstyrer kun:
+# - Seriell port til ekte enhet
 # ═══════════════════════════════════════════════════════════════════════════════
 
-spring:
-  # H2 File Database - persisterer data mellom restarts
-  datasource:
-    url: jdbc:h2:file:./data/lpgdb;MODE=PostgreSQL;AUTO_SERVER=TRUE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-
-  jpa:
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
-
-# Serial defaults - bekreftet av Alejandro (2026-02-09)
 ehl:
   serial:
-    port: ${EHL_SERIAL_PORT:/dev/ttyS3}
-    parity: ${EHL_SERIAL_PARITY:NONE}
-
-# INFO logging for production
-logging:
-  level:
-    no.cloudberries.lpg: INFO
+    port: /dev/ttyS3

@@ -20,7 +20,7 @@ import java.time.LocalDateTime
  * 
  * Enabled for local development and demo profiles.
  */
-@Profile("local", "demo", "field")
+@Profile("local", "lab", "demo", "field")
 @RestController
 @RequestMapping("/api/v1/dispenser")
 @Tag(name = "Demo Dispenser", description = "Demo endpoints for frontend testing (deprecated)")
