@@ -30,16 +30,29 @@ class TransactionService(
         page: Int = 0,
         size: Int = 50
     ): PageResponse<TransactionResponse> {
+        logger.info("🔍 getTransactions: dispenserAddress={}, paymentType={}, paymentStatus={}", dispenserAddress, paymentType, paymentStatus)
         val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"))
         
-        val resultPage = transactionRepository.findWithFilters(
-            paymentType = paymentType,
-            paymentStatus = paymentStatus,
-            customerId = customerId,
-            from = from,
-            to = to,
-            pageable = pageable
-        )
+        // Bruk enkel metode når bare dispenserAddress er satt
+        val resultPage = when {
+            dispenserAddress != null && from == null && to == null && paymentType == null && paymentStatus == null && customerId == null -> {
+                logger.debug("Using findByDispenserAddress for simple filter")
+                transactionRepository.findByDispenserAddress(dispenserAddress, pageable)
+            }
+            else -> {
+                logger.debug("Using findWithFilters for complex filter")
+                transactionRepository.findWithFilters(
+                    dispenserAddress = dispenserAddress,
+                    paymentType = paymentType,
+                    paymentStatus = paymentStatus,
+                    customerId = customerId,
+                    from = from,
+                    to = to,
+                    pageable = pageable
+                )
+            }
+        }
+        logger.info("🔍 findWithFilters returned {} transactions", resultPage.content.size)
 
         return PageResponse(
             content = resultPage.content.map { TransactionResponse.from(it) },

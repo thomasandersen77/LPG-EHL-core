@@ -55,11 +55,11 @@ class CommunicationConfig(
     }
     
     /**
-     * Eksponerer EhlDispenserEmulator kun i LAB MODE.
-     * Brukes av ProtocolTestController for debugging.
+     * Eksponerer EhlDispenserEmulator i LAB/TEST MODE.
+     * Brukes av ProtocolTestController for debugging og integrasjonstester.
      */
     @Bean
-    @Profile("lab", "default")
+    @Profile("lab", "test", "default")
     fun dispenserEmulator(
         @Value("\${ehl.emulator.dispenser-address:1}") dispenserAddress: Int,
         @Value("\${ehl.emulator.price-per-liter-cents:1590}") pricePerLiterCents: Int

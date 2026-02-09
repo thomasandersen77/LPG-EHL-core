@@ -1,12 +1,26 @@
-# Test Profile Configuration
+# Test Profile Configuration - H2 in-memory
 spring:
   application:
     name: lpg-ehl-api-test
   
+  # H2 In-Memory Database
+  datasource:
+    url: jdbc:h2:mem:lpg_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  
   jpa:
     hibernate:
-      ddl-auto: validate
-    show-sql: true
+      ddl-auto: none  # Liquibase manages schema
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
   
   jackson:
     serialization:
@@ -16,7 +30,7 @@ spring:
 azure:
   enabled: false
 
-# Test security
+# Test security - permitAll
 security:
   api-token: test-token-12345
   cors:
@@ -32,9 +46,10 @@ management:
     health:
       show-details: always
 
-# Logging
+# Logging - minimal for tests
 logging:
   level:
-    root: INFO
-    no.cloudberries.lpg: DEBUG
-    org.springframework.security: DEBUG
+    root: WARN
+    no.cloudberries.lpg: INFO
+    org.springframework.security: WARN
+    liquibase: WARN

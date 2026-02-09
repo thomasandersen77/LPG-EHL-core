@@ -74,22 +74,34 @@ interface TransactionRepository : JpaRepository<Transaction, UUID> {
      * Find transactions with flexible filtering
      */
     @Query(
-        """
-        SELECT t FROM Transaction t
-        WHERE (:paymentType IS NULL OR t.paymentType = :paymentType)
-        AND (:paymentStatus IS NULL OR t.paymentStatus = :paymentStatus)
-        AND (CAST(:customerId AS string) IS NULL OR t.customerId = :customerId)
-        AND (CAST(:from AS timestamp) IS NULL OR t.timestamp >= :from)
-        AND (CAST(:to AS timestamp) IS NULL OR t.timestamp <= :to)
+        nativeQuery = true,
+        value = """
+        SELECT * FROM transactions t
+        WHERE (COALESCE(:dispenserAddress, -999) = -999 OR t.dispenser_address = :dispenserAddress)
+        AND (COALESCE(:paymentType, '') = '' OR t.payment_type = :paymentType)
+        AND (COALESCE(:paymentStatus, '') = '' OR t.payment_status = :paymentStatus)
+        AND (COALESCE(CAST(:customerId AS VARCHAR), '') = '' OR t.customer_id = :customerId)
+        AND (COALESCE(:fromDate, TIMESTAMP '1900-01-01 00:00:00') = TIMESTAMP '1900-01-01 00:00:00' OR t.timestamp >= :fromDate)
+        AND (COALESCE(:toDate, TIMESTAMP '9999-12-31 23:59:59') = TIMESTAMP '9999-12-31 23:59:59' OR t.timestamp <= :toDate)
         ORDER BY t.timestamp DESC
+        """,
+        countQuery = """
+        SELECT COUNT(*) FROM transactions t
+        WHERE (COALESCE(:dispenserAddress, -999) = -999 OR t.dispenser_address = :dispenserAddress)
+        AND (COALESCE(:paymentType, '') = '' OR t.payment_type = :paymentType)
+        AND (COALESCE(:paymentStatus, '') = '' OR t.payment_status = :paymentStatus)
+        AND (COALESCE(CAST(:customerId AS VARCHAR), '') = '' OR t.customer_id = :customerId)
+        AND (COALESCE(:fromDate, TIMESTAMP '1900-01-01 00:00:00') = TIMESTAMP '1900-01-01 00:00:00' OR t.timestamp >= :fromDate)
+        AND (COALESCE(:toDate, TIMESTAMP '9999-12-31 23:59:59') = TIMESTAMP '9999-12-31 23:59:59' OR t.timestamp <= :toDate)
         """
     )
     fun findWithFilters(
+        @Param("dispenserAddress") dispenserAddress: Int?,
         @Param("paymentType") paymentType: String?,
         @Param("paymentStatus") paymentStatus: String?,
         @Param("customerId") customerId: UUID?,
-        @Param("from") from: LocalDateTime?,
-        @Param("to") to: LocalDateTime?,
+        @Param("fromDate") from: LocalDateTime?,
+        @Param("toDate") to: LocalDateTime?,
         pageable: Pageable
     ): Page<Transaction>
 

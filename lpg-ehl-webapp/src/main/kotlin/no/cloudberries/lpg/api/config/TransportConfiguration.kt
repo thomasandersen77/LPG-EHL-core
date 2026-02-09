@@ -53,11 +53,11 @@ class TransportConfiguration {
     
     /**
      * LAB MODE: In-memory serial port with emulator.
-     * Active when profile=lab OR when no profile is specified (default).
+     * Active when profile=lab, test, OR when no profile is specified (default).
      */
     @Bean
     @Primary
-    @Profile("lab", "default")
+    @Profile("lab", "test", "default")
     fun labModeTransport(
         emulator: IEhlDispenserEmulator,
         @Value("\${ehl.emulator.latency-ms:20}") latencyMs: Long
