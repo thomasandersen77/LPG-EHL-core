@@ -17,6 +17,7 @@
     <modules>
         <module>lpg-ehl-core</module>
         <module>lpg-ehl-emulator</module>
+        <module>lpg-ehl-api</module>
         <module>lpg-ehl-webapp</module>
         <module>lpg-transport</module>
         <module>lpg-ehl-serialport-sim</module>

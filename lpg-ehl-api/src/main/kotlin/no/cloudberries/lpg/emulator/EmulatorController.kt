@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/v1/emulator")
 @Profile("local", "dev", "h2")
 class EmulatorController(
-    private val emulatorService: EmulatorService
+    private val emulatorScenarioService: EmulatorScenarioService
 ) {
     private val logger = LoggerFactory.getLogger(EmulatorController::class.java)
 
@@ -21,18 +21,18 @@ class EmulatorController(
     @PostMapping("/scenario")
     fun setScenario(@RequestBody body: SetScenarioRequest): EmulatorStatus {
         logger.info("🎬 Setting emulator scenario: address=${body.dispenserAddress}, scenario=${body.scenario}")
-        emulatorService.setScenario(body.dispenserAddress, body.scenario)
-        return emulatorService.status(body.dispenserAddress)
+        emulatorScenarioService.setScenario(body.dispenserAddress, body.scenario)
+        return emulatorScenarioService.status(body.dispenserAddress)
     }
 
     @PostMapping("/reset/{address}")
     fun reset(@PathVariable("address") dispenserAddress: Int): EmulatorStatus {
         logger.info("🔄 Resetting emulator: address=${dispenserAddress}")
-        emulatorService.reset(dispenserAddress)
-        return emulatorService.status(dispenserAddress)
+        emulatorScenarioService.reset(dispenserAddress)
+        return emulatorScenarioService.status(dispenserAddress)
     }
 
     @GetMapping("/status/{address}")
     fun status(@PathVariable("address") dispenserAddress: Int): EmulatorStatus =
-        emulatorService.status(dispenserAddress)
+        emulatorScenarioService.status(dispenserAddress)
 }
