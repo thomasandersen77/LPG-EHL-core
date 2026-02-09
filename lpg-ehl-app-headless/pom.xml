@@ -14,6 +14,13 @@
     <!-- Inherit Java target from parent (Java 17) -->
 
     <dependencies>
+        <!-- lpg-ehl-api dependency -->
+        <dependency>
+            <groupId>no.cloudberries.lpg</groupId>
+            <artifactId>lpg-ehl-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- lpg-ehl-service dependency -->
         <dependency>
             <groupId>no.cloudberries.lpg</groupId>

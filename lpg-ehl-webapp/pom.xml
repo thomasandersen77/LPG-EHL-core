@@ -16,6 +16,13 @@
     <description>Spring Boot REST API for LPG EHL system</description>
 
     <dependencies>
+        <!-- lpg-ehl-api dependency -->
+        <dependency>
+            <groupId>no.cloudberries.lpg</groupId>
+            <artifactId>lpg-ehl-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
