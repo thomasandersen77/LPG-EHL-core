@@ -1,30 +1,39 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIELD PROFILE - Headless with Real Serial Port
+# FIELD PROFILE - Headless with Real Serial Port / Produksjon
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # Start: java -jar lpg-ehl-headless.jar --spring.profiles.active=field
 #
-# For SOCAT testing:
-#   1. ./scripts/start-socat-sim.sh
-#   2. java -jar lpg-ehl-headless.jar --spring.profiles.active=field
+# Features:
+#   - H2 file-basert database (./data/lpgdb) - persisterer data
+#   - NONE parity (8N1) - bekreftet av Alejandro
+#   - INFO logging
 #
-# Serial port override via config/application.yaml:
-#   ehl:
-#     serial:
-#       port: /dev/ttyUSB0
-#       parity: EVEN
+# Serial port override (for SOCAT simulator):
+#   --ehl.serial.port=/tmp/vserial1
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Serial defaults for SOCAT simulator
+spring:
+  # H2 File Database - persisterer data mellom restarts
+  datasource:
+    url: jdbc:h2:file:./data/lpgdb;MODE=PostgreSQL;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+# Serial defaults - bekreftet av Alejandro (2026-02-09)
 ehl:
   serial:
-    port: ${EHL_SERIAL_PORT:/tmp/vserial1}
+    port: ${EHL_SERIAL_PORT:/dev/ttyS3}
     parity: ${EHL_SERIAL_PARITY:NONE}
 
-# Production-level logging
+# INFO logging for production
 logging:
   level:
     no.cloudberries.lpg: INFO
-    no.cloudberries.lpg.communication: INFO
-    no.cloudberries.lpg.protocol: INFO

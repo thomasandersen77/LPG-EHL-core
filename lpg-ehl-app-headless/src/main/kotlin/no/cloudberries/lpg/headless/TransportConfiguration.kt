@@ -4,6 +4,7 @@ import com.fazecast.jSerialComm.SerialPort
 import kotlinx.coroutines.runBlocking
 import no.cloudberries.lpg.communication.EhlCommunicator
 import no.cloudberries.lpg.communication.HardwareWatchdogCapable
+import no.cloudberries.lpg.communication.RetryConfig
 import no.cloudberries.lpg.communication.SerialPortConfig
 import no.cloudberries.lpg.communication.SerialPortManager
 import no.cloudberries.lpg.emulator.impl.EhlDispenserEmulatorImpl
@@ -202,12 +203,38 @@ class TransportConfiguration {
     
     /**
      * EHL Communicator - Uses whichever transport is configured.
+     * 
+     * Retry Configuration (via ehl.retry.*):
+     *   ehl.retry.max-retries      - Maximum retry attempts (default: 3)
+     *   ehl.retry.initial-delay-ms - Initial delay before first retry (default: 100ms)
+     *   ehl.retry.max-delay-ms     - Maximum delay between retries (default: 2000ms)
+     *   ehl.retry.backoff-multiplier - Exponential backoff multiplier (default: 2.0)
      */
     @Bean
-    fun ehlCommunicator(transport: SerialTransport): EhlCommunicator {
+    fun ehlCommunicator(
+        transport: SerialTransport,
+        @Value("\${ehl.retry.max-retries:3}") maxRetries: Int,
+        @Value("\${ehl.retry.initial-delay-ms:100}") initialDelayMs: Long,
+        @Value("\${ehl.retry.max-delay-ms:2000}") maxDelayMs: Long,
+        @Value("\${ehl.retry.backoff-multiplier:2.0}") backoffMultiplier: Double
+    ): EhlCommunicator {
         logger.info("Creating EhlCommunicator with ${transport.javaClass.simpleName}")
         
-        val communicator = EhlCommunicator(transport)
+        val retryConfig = RetryConfig(
+            maxRetries = maxRetries,
+            initialDelayMs = initialDelayMs,
+            maxDelayMs = maxDelayMs,
+            backoffMultiplier = backoffMultiplier
+        )
+        
+        logger.info("🔄 Retry config: maxRetries=$maxRetries, initialDelay=${initialDelayMs}ms, " +
+                "maxDelay=${maxDelayMs}ms, backoff=$backoffMultiplier")
+        
+        val communicator = EhlCommunicator(
+            transport = transport,
+            enableRawLogging = true,
+            retryConfig = retryConfig
+        )
         
         if (!transport.isConnected) {
             val connected = transport.connect()

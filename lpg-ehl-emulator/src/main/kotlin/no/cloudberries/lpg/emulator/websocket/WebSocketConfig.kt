@@ -12,6 +12,11 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
  */
 @Configuration
 @EnableWebSocket
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class WebSocketConfig(
     private val logWebSocketHandler: LogWebSocketHandler
 ) : WebSocketConfigurer {

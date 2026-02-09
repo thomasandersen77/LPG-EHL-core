@@ -1,10 +1,9 @@
-package no.cloudberries.lpg.service.controller
+package no.cloudberries.lpg.api.controller
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import no.cloudberries.lpg.service.pump.PumpAuthorizationService
 import no.cloudberries.lpg.service.pump.PumpStateService
 import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -416,8 +415,6 @@ data class CardSwipeRequest(
     val maxAmountKr: Double? = 2000.0,
     val triggeredBy: String? = "WEBAPP_GUI",
     val paymentMethod: String? = "CARD"
-    // NOTE: 'immediate' parameter removed - card-swipe should NEVER auto-unblock
-    // User must explicitly click "FRI DISPENSER" to send UNBLOCK
 )
 
 data class ConfirmPaymentRequest(

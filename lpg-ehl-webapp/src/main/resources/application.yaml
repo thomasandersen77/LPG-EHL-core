@@ -103,13 +103,15 @@ server:
   compression:
     enabled: true
 
-# Default logging (overridden by profiles)
+# Logging - INFO som default, DEBUG aktiveres via JVM-flagg
+# Eksempel: java -Dlogging.level.no.cloudberries.lpg.protocol=DEBUG -jar ...
 logging:
   level:
     root: INFO
     no.cloudberries.lpg: INFO
-  pattern:
-    console: "%d{HH:mm:ss.SSS} %-5level [%15.15thread] %logger{25} - %msg%n"
+    org.hibernate.SQL: WARN
+    org.springframework: WARN
+    liquibase: WARN
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LPG APPLICATION CONFIGURATION
@@ -126,7 +128,8 @@ lpg:
     name: ${STATION_NAME:Test Station}
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# EHL SERIAL DEFAULTS (overridden by profiles or external config)
+# EHL SERIAL DEFAULTS - bekreftet av Alejandro (2026-02-09)
+# /dev/ttyS3, 9600 baud, NONE parity (8N1)
 # ═══════════════════════════════════════════════════════════════════════════════
 ehl:
   emulator:
@@ -134,7 +137,7 @@ ehl:
     price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
     latency-ms: ${EHL_LATENCY_MS:20}
   serial:
-    port: ${EHL_SERIAL_PORT:/tmp/vserial1}
+    port: ${EHL_SERIAL_PORT:/dev/ttyS3}
     baud-rate: ${EHL_BAUD_RATE:9600}
     data-bits: 8
     parity: ${EHL_SERIAL_PARITY:NONE}

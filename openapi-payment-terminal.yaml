@@ -1,0 +1,1006 @@
+openapi: 3.0.3
+info:
+  title: Payment Terminal Mono Server API
+  version: 1.0.0
+  description: |
+    REST API for Baxi/Nets payment terminal integration.
+
+    This API provides a modern HTTP interface for payment terminal operations,
+    replacing the legacy VB6 COM/ActiveX integration pattern.
+
+    **Key Concepts:**
+    - Single terminal, single in-flight operation
+    - Terminal readiness is mandatory for financial operations
+    - Operations are non-cancellable by HTTP disconnect
+    - Idempotency support via ClientRequestId
+
+    **Response Field Casing:**
+    - Responses use PascalCase (Success, OperationId, ErrorCode)
+    - Exception: /health returns lowercase keys
+    - Requests are case-insensitive
+
+  contact:
+    name: Cloudberries
+    url: https://cloudberries.no
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:5000
+    description: Local payment terminal server
+
+tags:
+  - name: Health
+    description: Server health and readiness checks
+  - name: Terminal
+    description: Terminal lifecycle management (open/close)
+  - name: Payments
+    description: Financial operations (purchase, refund, cashback)
+  - name: Administration
+    description: Administrative operations (avstemming, reversal, reports)
+  - name: Events
+    description: Real-time event streaming (SSE)
+  - name: Diagnostics
+    description: Low-level diagnostic operations (disabled by default)
+
+components:
+  schemas:
+    # Health
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "ok"
+          description: Overall health status (lowercase)
+        timestamp:
+          type: string
+          format: date-time
+          description: Server timestamp (lowercase)
+        configLoaded:
+          type: boolean
+          description: Whether configuration loaded successfully (lowercase)
+
+    # Terminal Status
+    TerminalStatusResponse:
+      type: object
+      properties:
+        VendorDllLoadable:
+          type: boolean
+          description: Whether vendor DLL is loadable
+        TerminalOpen:
+          type: boolean
+          description: Whether terminal is currently open
+        TerminalReady:
+          type: boolean
+          description: Whether terminal is ready for operations
+        LastError:
+          type: string
+          nullable: true
+          description: Last error message (if any)
+
+    # Operation Response (used by all financial/admin operations)
+    OperationResponse:
+      type: object
+      required:
+        - Success
+        - OperationId
+        - CallResult
+      properties:
+        Success:
+          type: boolean
+          description: |
+            Overall success flag computed server-side.
+            For financial operations: true when CallResult==1 AND (LocalModeResult==0 OR ResponseCode=="00")
+        OperationId:
+          type: string
+          description: Server-generated operation identifier
+        CallResult:
+          type: integer
+          description: |
+            Vendor DLL call result.
+            1 = call started successfully
+            Other values = call failed to start
+        ErrorCode:
+          type: string
+          nullable: true
+          enum:
+            - terminal_busy
+            - terminal_not_ready
+            - operation_timeout
+            - vendor_call_failure
+            - diagnostics_disabled
+          description: Error code (if operation failed)
+        ErrorMessage:
+          type: string
+          nullable: true
+          description: Human-readable error message
+
+        # Terminal outcome fields
+        LocalModeResult:
+          type: integer
+          nullable: true
+          description: |
+            Terminal local mode result.
+            0 = approved
+            2 = rejected/cancelled
+        ResponseCode:
+          type: string
+          nullable: true
+          description: |
+            Terminal response code.
+            "00" = approved
+            "Z1" = wrong PIN
+            Empty = user cancel
+        RejectionSource:
+          type: string
+          nullable: true
+          description: Rejection source code (e.g. "3" for PIN error)
+        RejectionReason:
+          type: string
+          nullable: true
+          description: Detailed rejection reason (e.g. "3:2:Z1" for wrong PIN)
+
+        # Evidence/receipt data
+        PrintTextRaw:
+          type: string
+          nullable: true
+          description: Raw receipt text from terminal
+        PrintTextSanitized:
+          type: string
+          nullable: true
+          description: Sanitized receipt text (cleaned formatting)
+        LastDisplayText:
+          type: string
+          nullable: true
+          description: Last display prompt shown to customer
+
+        # Terminal identification
+        LocalModeFields:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Terminal and merchant identifier fields
+
+        # Server persistence references
+        DbRowId:
+          type: integer
+          nullable: true
+          description: Database row ID for this operation
+        ReceiptFileId:
+          type: string
+          nullable: true
+          description: Receipt file identifier
+
+        # Report-specific fields (for Z/X reports, avstemming)
+        ReportFields:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Parsed report fields (when available)
+
+    # Purchase Request
+    PurchaseRequest:
+      type: object
+      required:
+        - AmountMinor
+      properties:
+        AmountMinor:
+          type: integer
+          description: Amount in minor units (øre for NOK)
+          example: 12500
+        OperatorId:
+          type: string
+          default: "0000"
+          description: Operator ID (typically "0000" to match VB6)
+        Currency:
+          type: string
+          default: "NOK"
+          description: Currency code
+        OptionalData:
+          type: string
+          nullable: true
+          description: Optional text for receipt (e.g. "LPG Autogas")
+        ClientRequestId:
+          type: string
+          nullable: true
+          description: |
+            Client-provided idempotency key.
+            Recommended format: "fuelingSession:<session-id>"
+        PreAvstemming:
+          type: object
+          properties:
+            Enabled:
+              type: boolean
+              default: false
+
+    # Refund Request
+    RefundRequest:
+      type: object
+      required:
+        - AmountMinor
+      properties:
+        AmountMinor:
+          type: integer
+          description: Amount in minor units (øre for NOK)
+        OperatorId:
+          type: string
+          default: "0000"
+        OptionalData:
+          type: string
+          nullable: true
+          description: Optional text for receipt (e.g. "Return LPG Autogas")
+        ClientRequestId:
+          type: string
+          nullable: true
+          description: Client-provided idempotency key
+
+    # Cashback Request
+    CashbackRequest:
+      type: object
+      required:
+        - PurchaseAmountMinor
+        - CashbackAmountMinor
+      properties:
+        PurchaseAmountMinor:
+          type: integer
+          description: Purchase amount in minor units
+        CashbackAmountMinor:
+          type: integer
+          description: Cashback amount in minor units
+        OperatorId:
+          type: string
+          default: "0000"
+        ClientRequestId:
+          type: string
+          nullable: true
+
+    # Admin Request (for operations requiring password)
+    AdminRequest:
+      type: object
+      required:
+        - Password
+      properties:
+        Password:
+          type: string
+          default: "0000"
+          description: Admin password (typically "0000")
+
+    # Admin Code Request (for generic admin codes)
+    AdminCodeRequest:
+      type: object
+      required:
+        - Code
+      properties:
+        Code:
+          type: integer
+          description: |
+            Admin code in decimal.
+            Examples:
+            - 12593 (0x3131) = Empty printer buffer
+            - 12598 (0x3136) = X-report
+            - 12603 (0x313B) = Unknown/other
+        Password:
+          type: string
+          default: "0000"
+
+    # Event Envelope (for SSE and polling)
+    EventEnvelope:
+      type: object
+      required:
+        - Cursor
+        - Timestamp
+        - EventType
+      properties:
+        Cursor:
+          type: integer
+          format: int64
+          description: Monotonic sequence number for event ordering
+        OperationId:
+          type: string
+          nullable: true
+          description: Operation ID (if event is tied to an operation)
+        Timestamp:
+          type: string
+          format: date-time
+          description: Event timestamp
+        EventType:
+          type: string
+          description: Event type identifier
+        Payload:
+          type: object
+          additionalProperties: true
+          description: Event-specific payload data
+
+    # Error Response
+    ErrorResponse:
+      type: object
+      required:
+        - ErrorCode
+        - ErrorMessage
+      properties:
+        ErrorCode:
+          type: string
+          description: Machine-readable error code
+        ErrorMessage:
+          type: string
+          description: Human-readable error message
+        Details:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Bad request (invalid parameters)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Timeout:
+      description: Operation timeout
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ErrorCode: "operation_timeout"
+            ErrorMessage: "Terminal operation did not complete within timeout"
+
+    Conflict:
+      description: Terminal busy (another operation in progress)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ErrorCode: "terminal_busy"
+            ErrorMessage: "Another operation is currently in progress"
+
+    ServiceUnavailable:
+      description: Terminal not ready
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ErrorCode: "terminal_not_ready"
+            ErrorMessage: "Terminal is not ready for operations"
+
+    InternalServerError:
+      description: Vendor call failure or server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            ErrorCode: "vendor_call_failure"
+            ErrorMessage: "Vendor DLL call failed"
+
+paths:
+  # Health
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: |
+        Verify that the server process is running.
+        Returns lowercase keys (exception to PascalCase rule).
+      operationId: getHealth
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # Terminal Management
+  /v1/terminal/status:
+    get:
+      tags:
+        - Terminal
+      summary: Get terminal status
+      description: |
+        Check terminal readiness before attempting operations.
+        Verify that:
+        - VendorDllLoadable = true
+        - TerminalOpen = true
+        - TerminalReady = true
+      operationId: getTerminalStatus
+      responses:
+        '200':
+          description: Terminal status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TerminalStatusResponse'
+
+  /v1/terminal/open:
+    post:
+      tags:
+        - Terminal
+      summary: Open terminal
+      description: |
+        Initialize and open the terminal connection.
+        Call this if TerminalOpen = false.
+      operationId: openTerminal
+      responses:
+        '200':
+          description: Terminal opened successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/terminal/close:
+    post:
+      tags:
+        - Terminal
+      summary: Close terminal
+      description: |
+        Close the terminal connection.
+        Used for terminal restart: close → sleep → open.
+      operationId: closeTerminal
+      responses:
+        '200':
+          description: Terminal closed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+
+  # Financial Operations
+  /v1/payments/purchase:
+    post:
+      tags:
+        - Payments
+      summary: Purchase (card payment)
+      description: |
+        Perform a card purchase operation.
+
+        VB6 equivalent: `TransferAmount_V2("0000", &H30, amountMinor, ...)`
+
+        **Typical flow:**
+        1. Call this endpoint with amount
+        2. Customer interacts with terminal (insert card, enter PIN)
+        3. Response indicates success or failure
+        4. If Success=true, proceed with dispenser operations
+        5. If dispenser fails after approval, call /v1/admin/reversal
+
+        **Idempotency:**
+        Send ClientRequestId to enable idempotent retries.
+      operationId: purchase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseRequest'
+      responses:
+        '200':
+          description: Purchase completed (check Success field)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/payments/refund:
+    post:
+      tags:
+        - Payments
+      summary: Refund (return)
+      description: |
+        Perform a refund/return operation.
+
+        VB6 equivalent: `TransferAmount_V2("0000", &H31, amountMinor, ...)`
+
+        Despite VB6 calling this "cashback", it's actually a refund operation.
+      operationId: refund
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      responses:
+        '200':
+          description: Refund completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /v1/payments/cashback:
+    post:
+      tags:
+        - Payments
+      summary: Purchase with cashback
+      description: |
+        Perform a combined purchase + cashback operation.
+        Only use if your application explicitly needs this composite flow.
+      operationId: cashback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashbackRequest'
+      responses:
+        '200':
+          description: Cashback completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  # Administrative Operations
+  /v1/admin/avstemming:
+    post:
+      tags:
+        - Administration
+      summary: Avstemming (reconciliation)
+      description: |
+        Perform end-of-day reconciliation.
+
+        VB6 equivalent: `Administration &H3130`
+        Admin code: 0x3130
+      operationId: avstemming
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRequest'
+      responses:
+        '200':
+          description: Avstemming completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /v1/admin/cancel:
+    post:
+      tags:
+        - Administration
+      summary: Cancel current operation
+      description: |
+        Cancel the current terminal operation.
+
+        VB6 equivalent: `Administration &H3132`
+        Admin code: 0x3132
+      operationId: cancelOperation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRequest'
+      responses:
+        '200':
+          description: Cancel sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/admin/reversal:
+    post:
+      tags:
+        - Administration
+      summary: Reversal of last transaction
+      description: |
+        Reverse the last successful transaction.
+
+        VB6 equivalent: `Administration &H3134`
+        Admin code: 0x3134
+
+        **Important:** This is not reversible. VB6 shows warning:
+        "Annuler siste korttransaksjon? Dette er ikke reversibelt!"
+
+        **When to use:**
+        - Payment succeeded but dispenser communication failed
+        - Payment succeeded but delivery could not start
+      operationId: reversal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRequest'
+      responses:
+        '200':
+          description: Reversal completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /v1/admin/z-report:
+    post:
+      tags:
+        - Administration
+      summary: Z-report (end-of-day report)
+      description: |
+        Generate end-of-day Z-report.
+
+        VB6 equivalent: `Administration &H3137`
+        Admin code: 0x3137
+
+        **Note:** VB6 appends additional data from its own database
+        (technical refunds since last Z). This must be handled client-side.
+      operationId: zReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRequest'
+      responses:
+        '200':
+          description: Z-report completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/admin/last-receipt:
+    post:
+      tags:
+        - Administration
+      summary: Print last receipt
+      description: |
+        Print/retrieve the last financial receipt.
+
+        VB6 equivalent: `Administration &H313C`
+        Admin code: 0x313C
+      operationId: lastReceipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRequest'
+      responses:
+        '200':
+          description: Last receipt retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/admin/software:
+    post:
+      tags:
+        - Administration
+      summary: Software download
+      description: |
+        Download software update to terminal.
+
+        VB6 equivalent: `Administration &H313E`
+        Admin code: 0x313E
+
+        **Note:** This is a long-running operation. May timeout.
+      operationId: softwareDownload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRequest'
+      responses:
+        '200':
+          description: Software download completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/admin/dataset:
+    post:
+      tags:
+        - Administration
+      summary: Dataset download
+      description: |
+        Download dataset to terminal.
+
+        VB6 equivalent: `Administration &H313F`
+        Admin code: 0x313F
+
+        **Note:** This is a long-running operation. May timeout.
+      operationId: datasetDownload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRequest'
+      responses:
+        '200':
+          description: Dataset download completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/admin/code:
+    post:
+      tags:
+        - Administration
+      summary: Generic admin code
+      description: |
+        Execute a generic admin code not covered by specific endpoints.
+
+        **Common codes:**
+        - 12593 (0x3131) = Empty printer buffer
+        - 12598 (0x3136) = X-report
+        - 12603 (0x313B) = Unknown/other (seen in VB6)
+      operationId: genericAdminCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCodeRequest'
+      responses:
+        '200':
+          description: Admin code executed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # Events
+  /v1/events/stream:
+    get:
+      tags:
+        - Events
+      summary: Subscribe to event stream (SSE)
+      description: |
+        Subscribe to real-time events via Server-Sent Events (SSE).
+
+        **Cursor strategy:**
+        - First connect: `?since=0`
+        - Reconnect: `?since=<last-cursor>` (persist last delivered cursor)
+
+        **Event format:**
+        - `event:` field = EventType
+        - `data:` field = JSON EventEnvelope
+      operationId: streamEvents
+      parameters:
+        - name: since
+          in: query
+          description: Start from cursor (0 for beginning, or ISO timestamp)
+          schema:
+            type: string
+            default: "0"
+      responses:
+        '200':
+          description: SSE stream established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream
+
+  /v1/events:
+    get:
+      tags:
+        - Events
+      summary: Poll for events
+      description: |
+        Poll for events since a given cursor (alternative to SSE).
+
+        Returns array of EventEnvelope objects.
+      operationId: pollEvents
+      parameters:
+        - name: since
+          in: query
+          description: Start from cursor (0 for beginning, or ISO timestamp)
+          schema:
+            type: string
+            default: "0"
+        - name: limit
+          in: query
+          description: Maximum number of events to return
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Events retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventEnvelope'
+
+  # Diagnostics (disabled by default)
+  /v1/diag/schema:
+    get:
+      tags:
+        - Diagnostics
+      summary: Get terminal schema
+      description: |
+        Retrieve terminal schema information (for investigation).
+
+        **Note:** Only available when diagnostics are enabled.
+      operationId: getDiagSchema
+      responses:
+        '200':
+          description: Schema retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '403':
+          description: Diagnostics disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                ErrorCode: "diagnostics_disabled"
+                ErrorMessage: "Diagnostics endpoints are disabled"
+
+  /v1/diag/sendjson:
+    post:
+      tags:
+        - Diagnostics
+      summary: Send raw JSON to terminal
+      description: Send raw JSON command to terminal (for debugging)
+      operationId: sendDiagJson
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - json
+              properties:
+                json:
+                  type: string
+                  description: JSON string to send to terminal
+      responses:
+        '200':
+          description: JSON sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '403':
+          description: Diagnostics disabled
+
+  /v1/diag/sendtld:
+    post:
+      tags:
+        - Diagnostics
+      summary: Send TLD data to terminal
+      description: Send raw TLD (Tag-Length-Data) to terminal
+      operationId: sendDiagTld
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tldType
+                - tldData
+              properties:
+                tldType:
+                  type: string
+                  description: TLD type identifier
+                tldData:
+                  type: string
+                  format: base64
+                  description: Base64-encoded TLD data
+      responses:
+        '200':
+          description: TLD sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '403':
+          description: Diagnostics disabled
+
+  /v1/diag/confirm:
+    post:
+      tags:
+        - Diagnostics
+      summary: Confirm diagnostic operation
+      description: Confirm or deny a pending diagnostic operation
+      operationId: confirmDiag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - allow
+              properties:
+                id:
+                  type: integer
+                  description: Operation ID to confirm
+                allow:
+                  type: boolean
+                  description: Allow (true) or deny (false)
+      responses:
+        '200':
+          description: Confirmation processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '403':
+          description: Diagnostics disabled

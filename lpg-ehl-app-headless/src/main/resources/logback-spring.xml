@@ -1,100 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════════
+  LPG-EHL HEADLESS - Logback konfigurasjon
+  ═══════════════════════════════════════════════════════════════════════════════
+
+  Bruker felles konfigurasjon fra lpg-ehl-core/logback-include.xml
+
+  LOGGFILER (i ${LOG_DIR:-./logs}/):
+    application.log  - App-logger (startup, services, transaksjoner)
+    protocol.log     - TX/RX HEX + protokollmeldinger
+
+  KONFIGURASJON:
+    LOG_DIR=./release/logs java -jar lpg-ehl-headless.jar
+
+  DEBUG AKTIVERING:
+    java -Dlogging.level.no.cloudberries.lpg.protocol=DEBUG \
+         -Dlogging.level.no.cloudberries.lpg.communication=DEBUG \
+         -jar lpg-ehl-headless.jar
+
+  ═══════════════════════════════════════════════════════════════════════════════
+-->
 <configuration>
-    <!-- Properties from Spring -->
-    <springProperty scope="context" name="LOG_FILE" source="logging.file.name" defaultValue="logs/headless.log"/>
-    
-    <!-- Console Appender - concise format for terminal -->
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) %cyan(%logger{20}) - %msg%n</pattern>
-        </encoder>
-    </appender>
-    
-    <!-- File Appender - detailed format for analysis -->
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_FILE}</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <!-- Daily rollover with max 100MB per file -->
-            <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
-            <maxFileSize>100MB</maxFileSize>
-            <!-- Keep 30 days of history -->
-            <maxHistory>30</maxHistory>
-            <!-- Total size cap of 3GB -->
-            <totalSizeCap>3GB</totalSizeCap>
-        </rollingPolicy>
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-    
-    <!-- Protocol Log File - separate file for EHL protocol traffic -->
-    <appender name="PROTOCOL_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/protocol.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>logs/protocol.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
-            <maxFileSize>50MB</maxFileSize>
-            <maxHistory>7</maxHistory>
-            <totalSizeCap>500MB</totalSizeCap>
-        </rollingPolicy>
-        <encoder>
-            <pattern>%d{HH:mm:ss.SSS} %msg%n</pattern>
-        </encoder>
-    </appender>
-    
-    <!-- Async wrapper for FILE to prevent blocking -->
-    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
-        <queueSize>512</queueSize>
-        <discardingThreshold>0</discardingThreshold>
-        <appender-ref ref="FILE"/>
-    </appender>
-    
-    <!-- Root Logger -->
-    <root level="INFO">
+    <!-- Inkluder felles konfigurasjon -->
+    <include resource="logback-include.xml"/>
+
+    <!-- Headless-spesifikke loggere -->
+    <logger name="no.cloudberries.lpg.headless" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="ASYNC_FILE"/>
-    </root>
-    
-    <!-- LPG Application Logging -->
-    <logger name="no.cloudberries.lpg" level="INFO" additivity="false">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="ASYNC_APPLICATION"/>
     </logger>
-    
-    <!-- Heartbeat Scheduler - always INFO -->
+
     <logger name="no.cloudberries.lpg.headless.service.HeartbeatScheduler" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="ASYNC_APPLICATION"/>
     </logger>
-    
-    <!-- Protocol Logger - separate file for TX/RX analysis -->
-    <logger name="no.cloudberries.lpg.protocol" level="INFO" additivity="false">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="PROTOCOL_FILE"/>
-        <appender-ref ref="ASYNC_FILE"/>
-    </logger>
-    
-    <!-- Emulator Logging - verbose for LAB testing -->
-    <logger name="no.cloudberries.lpg.emulator" level="INFO" additivity="false">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="ASYNC_FILE"/>
-    </logger>
-    
-    <!-- PumpStateService - important state transitions -->
-    <logger name="no.cloudberries.lpg.service.pump" level="INFO" additivity="false">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="ASYNC_FILE"/>
-    </logger>
-    
-    <!-- Debug Controller - request logging -->
+
     <logger name="no.cloudberries.lpg.headless.debug" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="ASYNC_APPLICATION"/>
     </logger>
-    
-    <!-- Silence noisy frameworks -->
-    <logger name="org.springframework" level="WARN"/>
-    <logger name="org.hibernate" level="WARN"/>
-    <logger name="liquibase" level="WARN"/>
-    <logger name="com.zaxxer.hikari" level="WARN"/>
-    <logger name="io.undertow" level="WARN"/>
 </configuration>

@@ -10,6 +10,11 @@ import org.springframework.context.annotation.Configuration
  * This allows real-time streaming of logs to frontend clients.
  */
 @Configuration
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+    name = ["emulator.standalone.enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
 class LoggingConfiguration(
     private val logBuffer: LogBuffer,
     private val logWebSocketHandler: LogWebSocketHandler

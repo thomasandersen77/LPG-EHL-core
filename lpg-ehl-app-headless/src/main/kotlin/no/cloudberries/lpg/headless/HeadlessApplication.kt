@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.scheduling.annotation.EnableScheduling
+import kotlin.system.exitProcess
 
 /**
  * Headless LPG EHL Application
@@ -53,7 +54,12 @@ fun main(args: Array<String>) {
     // Web application type is controlled by spring.main.web-application-type in yaml:
     //   - Default (application.yaml): NONE (headless mode)
     //   - debug-api profile: SERVLET (Undertow web server for curl testing)
-    runApplication<HeadlessApplication>(*args)
+    val context = runApplication<HeadlessApplication>(*args)
+    
+    val env = context.environment
+    if (env.activeProfiles.contains("debug-api")) {
+        logger.warn("⚠️  DEBUG API ER AKTIVT - TESTING MODE (Security Disabled)")
+    }
     
     // Note: HeadlessStartupRunner executes automatically via CommandLineRunner
     // Scheduled tasks (@Scheduled) keep the application alive

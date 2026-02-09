@@ -790,8 +790,10 @@ class PumpStateService(
      * Scheduled task to poll dispenser state when pump is in READY_TO_PUMP.
      * Detects when customer starts pumping (raw state 0x06/0x07 = PUMPING).
      * Runs every 500ms.
+     * 
+     * NOTE: Disabled to avoid mutex contention with HeadlessPollingService.
      */
-    @Scheduled(fixedRate = 500)
+    // @Scheduled(fixedRate = 500)
     fun pollStateForReadyPumps() {
         pumpStates.values.filter { it.state == "READY_TO_PUMP" }.forEach { state ->
             try {
@@ -850,8 +852,10 @@ class PumpStateService(
      * Runs every 500ms and logs every 0.5L milestone.
      * 
      * Sends VOLUME-kommando til emulator og logger HEX.
+     * 
+     * NOTE: Disabled to avoid mutex contention with HeadlessPollingService.
      */
-    @Scheduled(fixedRate = 500)
+    // @Scheduled(fixedRate = 500)
     fun pollVolume() {
         pumpStates.values.filter { it.state == "PUMPING" }.forEach { state ->
             try {

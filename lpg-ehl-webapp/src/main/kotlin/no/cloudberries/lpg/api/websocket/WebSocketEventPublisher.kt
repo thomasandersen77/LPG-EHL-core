@@ -144,8 +144,13 @@ class WebSocketEventPublisher(
     }
     
     override fun publishPumpStatusUpdate(pumpStatus: PumpStatusEvent) {
-        if (allSessions.isEmpty()) return
-        
+        if (allSessions.isEmpty()) {
+            logger.debug("📡 No WebSocket clients connected - skipping pump status broadcast for pump ${pumpStatus.address}")
+            return
+        }
+
+        logger.debug("📡 Broadcasting pump status: pump=${pumpStatus.address} state=${pumpStatus.state} clients=${allSessions.size}")
+
         val event = mapOf(
             "type" to "pump_update",
             "timestamp" to pumpStatus.timestamp.toString(),
@@ -157,7 +162,7 @@ class WebSocketEventPublisher(
             "nozzleLifted" to pumpStatus.nozzleLifted,
             "hasPendingTransaction" to pumpStatus.hasPendingTransaction
         )
-        
+
         broadcastToAll(event)
     }
     

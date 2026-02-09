@@ -101,23 +101,38 @@ cleanup() {
     echo ""
     echo -e "${CYAN}🛑 Stopping services...${NC}"
     
+    # Kill simulator by PID first
     if [ -n "${SIM_PID:-}" ] && kill -0 $SIM_PID 2>/dev/null; then
         kill $SIM_PID 2>/dev/null || true
-        echo "  ✓ Simulator stopped"
+        sleep 0.5
     fi
     
+    # Force kill any remaining pls-sim.jar processes
+    if pgrep -f "pls-sim.jar" > /dev/null 2>&1; then
+        pkill -f "pls-sim.jar" 2>/dev/null || true
+        sleep 0.5
+    fi
+    
+    # Verify all pls-sim.jar processes are dead
+    if pgrep -f "pls-sim.jar" > /dev/null 2>&1; then
+        echo -e "${YELLOW}  ⚠️  Force killing remaining pls-sim.jar processes...${NC}"
+        pkill -9 -f "pls-sim.jar" 2>/dev/null || true
+    fi
+    echo "  ✓ Simulator stopped"
+    
+    # Kill socat
     if [ -n "${SOCAT_PID:-}" ] && kill -0 $SOCAT_PID 2>/dev/null; then
         kill $SOCAT_PID 2>/dev/null || true
         echo "  ✓ socat stopped"
     fi
     
+    # Cleanup virtual serial ports
     rm -f /tmp/vserial0 /tmp/vserial1 /dev/cu.vserial0 /dev/cu.vserial1 "$BUILD_LOG" 2>/dev/null || \
         sudo rm -f /dev/cu.vserial0 /dev/cu.vserial1 2>/dev/null || true
     echo ""
     echo "Cleanup complete. Bye!"
-    exit 0
 }
-trap cleanup SIGINT SIGTERM
+trap cleanup EXIT SIGINT SIGTERM
 
 # Check socat
 if ! command -v socat &> /dev/null; then
@@ -192,8 +207,9 @@ if [[ -e "$PTY1" ]]; then
 fi
 
 echo -e "${GREEN}      ✓ socat running (PID: $SOCAT_PID)${NC}"
-echo -e "${GRAY}      PTY devices:    $PTY0 <-> $PTY1${NC}"
-echo -e "${GRAY}      Serial ports:   $CU_PORT0 <-> $CU_PORT1${NC}"
+echo -e "${GRAY}      Dev PTYs:       $PTY0 <-> $PTY1${NC}"
+echo -e "${GRAY}      Symlinks:       /tmp/vserial0 <-> /tmp/vserial1${NC}"
+echo -e "${YELLOW}      Production:     /dev/ttyS3 (physical pump hardware)${NC}"
 echo ""
 LEGACY_ADDR=$((32 + DISPENSER_ADDRESS))
 echo -e "${CYAN}[2/2] Starting PLS Simulator...${NC}"
@@ -220,7 +236,8 @@ echo ""
 
 # Build simulator command
 # Use cu.* port for jSerialComm compatibility on macOS
-SIM_CMD="java -Dsim.log.level=DEBUG -jar \"$SIM_JAR\""
+# Cap heap at 128 MB for ARK-3360 compatibility
+SIM_CMD="java -Xmx128m -Dsim.log.level=DEBUG -jar \"$SIM_JAR\""
 SIM_CMD+=" --port=$CU_PORT0"
 SIM_CMD+=" --address=$DISPENSER_ADDRESS"
 SIM_CMD+=" --price=$PRICE_CENTS"
@@ -334,8 +351,7 @@ echo -e "${BLUE}═════════════════════�
 echo ""
 
 # Keep script alive - wait for any background process
+# Cleanup will be called automatically by EXIT trap
 while kill -0 "$SOCAT_PID" 2>/dev/null && kill -0 "$SIM_PID" 2>/dev/null; do
     sleep 1
 done
-
-cleanup

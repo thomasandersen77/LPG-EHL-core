@@ -60,6 +60,14 @@ safe_zip lpg-ehl-core-for-ai.zip lpg-ehl-core/src \
     lpg-ehl-core/*.md \
     -x "*/target/*" "*/.idea/*"
 
+# API module (REST API contracts, DTOs, OpenAPI)
+echo "📦 lpg-ehl-api (REST API contracts, DTOs, OpenAPI)..."
+safe_zip lpg-ehl-api-for-ai.zip lpg-ehl-api/src \
+    lpg-ehl-api/pom.xml \
+    lpg-ehl-api/README.md \
+    lpg-ehl-api/*.md \
+    -x "*/target/*" "*/.idea/*"
+
 # Service module (business logic, repositories, domain services)
 echo "📦 lpg-ehl-service (business logic, JPA, services)..."
 safe_zip lpg-ehl-service-for-ai.zip lpg-ehl-service/src \
@@ -159,6 +167,7 @@ echo "📤 Upload these files to AI (Claude, ChatGPT, Gemini) for analysis:"
 echo ""
 echo "   MAVEN MODULES:"
 echo "   • lpg-ehl-core-for-ai.zip         - Core EHL protocol implementation"
+echo "   • lpg-ehl-api-for-ai.zip          - REST API contracts, DTOs, OpenAPI"
 echo "   • lpg-ehl-service-for-ai.zip      - Business logic, JPA, domain services"
 echo "   • lpg-transport-for-ai.zip        - Serial port transport abstraction"
 echo "   • lpg-ehl-emulator-for-ai.zip     - Virtual dispenser for testing"

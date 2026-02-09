@@ -2,25 +2,21 @@
 # FIELD PROFILE - Production / Real Hardware
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Start with: java -jar lpg-ehl-webapp.jar --spring.profiles.active=field
+# Start: java -jar lpg-ehl-webapp.jar --spring.profiles.active=field
 #
-# For SOCAT testing (virtual PTY):
-#   1. Run: ./scripts/start-socat-sim.sh
-#   2. Start app with: --spring.profiles.active=field
-#   3. Override serial port via config/application.yaml or CLI
+# Features:
+#   - H2 file-basert database (./data/lpgdb) - persisterer data
+#   - NONE parity (8N1) - bekreftet av Alejandro
+#   - H2 console på /h2-console
+#   - INFO logging
 #
-# For real hardware:
-#   1. Connect RS-485 adapter
-#   2. Configure serial port in config/application.yaml:
-#      ehl:
-#        serial:
-#          port: /dev/ttyUSB0
-#          parity: EVEN
+# Serial port override (for SOCAT simulator):
+#   --ehl.serial.port=/tmp/vserial1
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
 spring:
-  # H2 In-Memory Database (use config/application.yaml for PostgreSQL)
+  # H2 File Database - persisterer data mellom restarts
   datasource:
     url: jdbc:h2:file:./data/lpgdb;MODE=PostgreSQL;AUTO_SERVER=TRUE
     driver-class-name: org.h2.Driver
@@ -48,7 +44,7 @@ spring:
   liquibase:
     enabled: true
 
-# External services (override via config/application.yaml for production)
+# External services
 azure:
   enabled: ${AZURE_ENABLED:false}
 
@@ -57,35 +53,20 @@ nets:
     host: ${NETS_CLOUD_HOST:localhost}
     port: ${NETS_CLOUD_PORT:6001}
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SERIAL PORT DEFAULTS (override in config/application.yaml)
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# Standard EHL Protocol: 9600 baud, 8E1 (8 data bits, Even parity, 1 stop bit)
-# For PLS Simulator:     9600 baud, 8N1 (8 data bits, No parity, 1 stop bit)
-#
-# ═══════════════════════════════════════════════════════════════════════════════
+# Serial defaults - bekreftet av Alejandro (2026-02-09)
 ehl:
   emulator:
-    enabled: false  # Field mode uses real hardware or socat simulator
+    enabled: false
   serial:
-    port: ${EHL_SERIAL_PORT:/tmp/vserial1}
+    port: ${EHL_SERIAL_PORT:/dev/ttyS3}
     baud-rate: ${EHL_BAUD_RATE:9600}
     data-bits: 8
-    parity: ${EHL_SERIAL_PARITY:EVEN}  # EVEN for hardware and PLS Simulator
+    parity: ${EHL_SERIAL_PARITY:NONE}
     stop-bits: 1
     read-timeout-ms: 3000
     write-timeout-ms: 1000
 
-# Logging - production level
+# INFO logging for production
 logging:
   level:
-    root: INFO
     no.cloudberries.lpg: INFO
-    no.cloudberries.lpg.communication: INFO
-    no.cloudberries.lpg.protocol: INFO
-    org.hibernate.SQL: WARN
-    org.springframework: WARN
-    liquibase: WARN
-  pattern:
-    console: "%d{HH:mm:ss.SSS} %-5level [%15.15thread] %logger{25} - %msg%n"

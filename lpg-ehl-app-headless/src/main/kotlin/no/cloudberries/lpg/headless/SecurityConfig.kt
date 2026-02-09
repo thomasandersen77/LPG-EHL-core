@@ -27,9 +27,7 @@ class SecurityConfig {
             .cors { it.configurationSource(corsConfigurationSource()) }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
-                auth
-                    // All endpoints open for headless mode
-                    .requestMatchers("/**").permitAll()
+                auth.anyRequest().permitAll()
             }
 
         return http.build()

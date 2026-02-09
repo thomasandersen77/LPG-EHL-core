@@ -53,6 +53,7 @@ class HeadlessPollingService(
     private val consecutiveTimeouts = AtomicInteger(0)  // Track consecutive timeouts
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
     
+    @Volatile
     private var isRunning = false
     
     companion object {

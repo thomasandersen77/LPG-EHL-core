@@ -12,7 +12,7 @@
 
     <artifactId>lpg-ehl-webapp</artifactId>
     <packaging>jar</packaging>
-    <name>LPG EHL API</name>
+    <name>LPG EHL WebApp</name>
     <description>Spring Boot REST API for LPG EHL system</description>
 
     <dependencies>

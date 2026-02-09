@@ -8,53 +8,196 @@ import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeoutException
+import kotlin.math.min
+import kotlin.math.pow
+
+/**
+ * Configuration for serial communication retry behavior.
+ * 
+ * @property maxRetries Maximum number of retry attempts (0 = no retry)
+ * @property initialDelayMs Initial delay before first retry in milliseconds
+ * @property maxDelayMs Maximum delay between retries (caps exponential backoff)
+ * @property backoffMultiplier Multiplier for exponential backoff (e.g., 2.0 doubles delay each retry)
+ */
+data class RetryConfig(
+    val maxRetries: Int = 3,
+    val initialDelayMs: Long = 100,
+    val maxDelayMs: Long = 2000,
+    val backoffMultiplier: Double = 2.0
+) {
+    companion object {
+        /** No retry - fail immediately on first error */
+        val NO_RETRY = RetryConfig(maxRetries = 0)
+        
+        /** Default retry config for edge/industrial RS-485 environments */
+        val DEFAULT = RetryConfig(
+            maxRetries = 3,
+            initialDelayMs = 100,
+            maxDelayMs = 2000,
+            backoffMultiplier = 2.0
+        )
+        
+        /** Aggressive retry for unstable connections */
+        val AGGRESSIVE = RetryConfig(
+            maxRetries = 5,
+            initialDelayMs = 50,
+            maxDelayMs = 1000,
+            backoffMultiplier = 1.5
+        )
+    }
+}
 
 /**
  * Communicates with LPG dispensers using the EHL protocol over RS-485 serial connection.
- * Handles packet transmission, reception, buffering, and timeout management.
+ * Handles packet transmission, reception, buffering, timeout management, and automatic retry.
  * 
  * Uses SerialTransport interface for serial communication, allowing both real serial ports
  * and in-memory implementations for testing.
  * 
  * Thread-safety: Uses Mutex to ensure single-flight request/response pattern.
  * 
+ * **Retry Behavior:**
+ * - Timeouts trigger automatic retry with exponential backoff
+ * - Buffer is cleared between retries to ensure clean state
+ * - IOException (port disconnected) does NOT retry - fails immediately
+ * - Retry statistics are logged for monitoring
+ * 
+ * @property transport Serial transport implementation
  * @property enableRawLogging If true, logs raw TX/RX bytes at DEBUG level. If false, uses TRACE.
+ * @property retryConfig Configuration for retry behavior (default: 3 retries with exponential backoff)
  */
 class EhlCommunicator(
     private val transport: SerialTransport,
-    private val enableRawLogging: Boolean = true
+    private val enableRawLogging: Boolean = true,
+    private val retryConfig: RetryConfig = RetryConfig.DEFAULT
 ) {
     private val logger = LoggerFactory.getLogger(EhlCommunicator::class.java)
     private val receiveBuffer = mutableListOf<Byte>()
     private val bufferLock = Any()
     private val txMutex = Mutex()  // Ensures only one request/response at a time
+    
+    // Retry statistics for monitoring
+    @Volatile private var totalRetries: Long = 0
+    @Volatile private var successfulRetries: Long = 0
+    @Volatile private var failedAfterRetries: Long = 0
 
     /**
-     * Send an EHL packet and wait for a response.
+     * Send an EHL packet and wait for a response with automatic retry on timeout.
      * Uses Mutex to ensure single-flight pattern (no concurrent requests).
      * 
      * Since Mutex guarantees exclusive ownership of the line, the first valid
      * response received is always intended for us - no filtering needed.
+     * 
+     * **Retry behavior:**
+     * - TimeoutCancellationException triggers retry with exponential backoff
+     * - IOException (serial port error) fails immediately - no retry
+     * - Buffer is cleared between retries
      *
      * @param packet The EHL packet to send
      * @param timeoutMs Maximum time to wait for response in milliseconds
      * @return Response packet if successful
-     * @throws IOException if communication fails
-     * @throws TimeoutException if no response within timeout
+     * @throws IOException if communication fails (no retry)
+     * @throws TimeoutCancellationException if no response after all retries exhausted
      */
     suspend fun sendAndReceive(
         packet: EhlPacket, 
         timeoutMs: Long = 2000
     ): EhlPacket {
         return txMutex.withLock {
-            withTimeout(timeoutMs) {
-                // Send packet (do NOT clear buffer - may contain valid pending data)
-                send(packet)
+            sendAndReceiveWithRetry(packet, timeoutMs)
+        }
+    }
+    
+    /**
+     * Internal method that handles retry logic.
+     * Must be called while holding txMutex.
+     */
+    private suspend fun sendAndReceiveWithRetry(
+        packet: EhlPacket,
+        timeoutMs: Long
+    ): EhlPacket {
+        var lastException: Exception? = null
+        var attempt = 0
+        val maxAttempts = retryConfig.maxRetries + 1  // +1 for initial attempt
+        
+        while (attempt < maxAttempts) {
+            try {
+                return withTimeout(timeoutMs) {
+                    // Clear buffer on retry to ensure clean state
+                    if (attempt > 0) {
+                        clearBuffer()
+                        logger.debug("🔄 RETRY attempt $attempt/${retryConfig.maxRetries} for ${packet.command} to addr ${packet.address}")
+                    }
+                    
+                    // Send packet
+                    send(packet)
+                    
+                    // Since we own the mutex, first valid response is ours
+                    receive(timeoutMs)
+                }
+            } catch (e: TimeoutCancellationException) {
+                lastException = e
+                attempt++
+                totalRetries++
                 
-                // Since we own the mutex, first valid response is ours
-                receive(timeoutMs)
+                if (attempt < maxAttempts) {
+                    val delayMs = calculateBackoffDelay(attempt)
+                    logger.warn("⏱️ Timeout on ${packet.command} to addr ${packet.address} " +
+                            "(attempt $attempt/$maxAttempts), retrying in ${delayMs}ms...")
+                    delay(delayMs)
+                } else {
+                    failedAfterRetries++
+                    logger.error("❌ All ${retryConfig.maxRetries} retries exhausted for ${packet.command} " +
+                            "to addr ${packet.address}. Total timeout: ${timeoutMs * maxAttempts}ms")
+                }
+            } catch (e: IOException) {
+                // Serial port error - don't retry, fail immediately
+                logger.error("🔌 Serial port error (no retry): ${e.message}")
+                throw e
             }
         }
+        
+        // All retries exhausted - lastException is guaranteed to be set since we only get here
+        // after failing maxAttempts times, each of which sets lastException
+        throw lastException!!
+    }
+    
+    /**
+     * Calculate backoff delay for a given retry attempt using exponential backoff.
+     * 
+     * @param attempt Retry attempt number (1-based)
+     * @return Delay in milliseconds
+     */
+    private fun calculateBackoffDelay(attempt: Int): Long {
+        val exponentialDelay = (retryConfig.initialDelayMs * 
+            retryConfig.backoffMultiplier.pow(attempt - 1)).toLong()
+        return min(exponentialDelay, retryConfig.maxDelayMs)
+    }
+    
+    /**
+     * Get retry statistics for monitoring.
+     * 
+     * @return Map with retry statistics
+     */
+    fun getRetryStatistics(): Map<String, Any> = mapOf(
+        "totalRetries" to totalRetries,
+        "successfulRetries" to successfulRetries,
+        "failedAfterRetries" to failedAfterRetries,
+        "retryConfig" to mapOf(
+            "maxRetries" to retryConfig.maxRetries,
+            "initialDelayMs" to retryConfig.initialDelayMs,
+            "maxDelayMs" to retryConfig.maxDelayMs,
+            "backoffMultiplier" to retryConfig.backoffMultiplier
+        )
+    )
+    
+    /**
+     * Reset retry statistics (useful for testing or monitoring reset).
+     */
+    fun resetRetryStatistics() {
+        totalRetries = 0
+        successfulRetries = 0
+        failedAfterRetries = 0
     }
 
     /**

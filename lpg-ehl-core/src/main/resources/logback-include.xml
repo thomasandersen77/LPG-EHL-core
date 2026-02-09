@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════════
+  LPG-EHL FELLES LOGBACK KONFIGURASJON
+  ═══════════════════════════════════════════════════════════════════════════════
+
+  Inkluderes av både webapp og headless for konsistent logging.
+
+  LOGGFILER:
+    ${LOG_DIR}/application.log  - Alt fra app (startup, services, transaksjoner)
+    ${LOG_DIR}/protocol.log     - TX/RX HEX + protokollmeldinger
+
+  KONFIGURASJON:
+    LOG_DIR       - Loggkatalog (default: ./logs)
+    LOG_LEVEL     - Root-nivå (default: INFO)
+
+  DEBUG AKTIVERING (ved behov):
+    java -Dlogging.level.no.cloudberries.lpg.protocol=DEBUG \
+         -Dlogging.level.no.cloudberries.lpg.communication=DEBUG \
+         -jar lpg-ehl-*.jar
+
+  ═══════════════════════════════════════════════════════════════════════════════
+-->
+<included>
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         PROPERTIES
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <property name="LOG_DIR" value="${LOG_DIR:-./logs}"/>
+    <property name="LOG_PATTERN" value="%d{HH:mm:ss.SSS} %-5level %logger{25} - %msg%n"/>
+    <property name="FILE_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
+    <property name="PROTOCOL_PATTERN" value="%d{HH:mm:ss.SSS} %msg%n"/>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         CONSOLE APPENDER
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) %cyan(%logger{20}) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         APPLICATION LOG FILE
+         Alt fra applikasjonen: startup, services, transaksjoner, feil
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <appender name="APPLICATION_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/application.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/application.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>200MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         PROTOCOL LOG FILE
+         TX/RX HEX bytes og protokollmeldinger - separat fil for analyse
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <appender name="PROTOCOL_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/protocol.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/protocol.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>200MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PROTOCOL_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Async wrapper for APPLICATION_FILE for bedre ytelse -->
+    <appender name="ASYNC_APPLICATION" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <appender-ref ref="APPLICATION_FILE"/>
+    </appender>
+
+    <!-- Async wrapper for PROTOCOL_FILE -->
+    <appender name="ASYNC_PROTOCOL" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <appender-ref ref="PROTOCOL_FILE"/>
+    </appender>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         ROOT LOGGER
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_APPLICATION"/>
+    </root>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LPG APPLICATION LOGGERE
+         ═══════════════════════════════════════════════════════════════════════ -->
+    
+    <!-- Hoved LPG logger - INFO som default -->
+    <logger name="no.cloudberries.lpg" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_APPLICATION"/>
+    </logger>
+
+    <!-- Protokoll og kommunikasjon - INFO som default, logger til protocol.log -->
+    <!-- VIKTIG: Bruk DEBUG kun ved feilsøking, ellers fyller det disken -->
+    <logger name="no.cloudberries.lpg.protocol" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_PROTOCOL"/>
+        <appender-ref ref="ASYNC_APPLICATION"/>
+    </logger>
+    
+    <logger name="no.cloudberries.lpg.communication" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_PROTOCOL"/>
+        <appender-ref ref="ASYNC_APPLICATION"/>
+    </logger>
+
+    <!-- Emulator - INFO for state-endringer -->
+    <logger name="no.cloudberries.lpg.emulator" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_APPLICATION"/>
+    </logger>
+
+    <!-- Service-lag - INFO -->
+    <logger name="no.cloudberries.lpg.service" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_APPLICATION"/>
+    </logger>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         STØYREDUKSJON - Tredjeparts biblioteker
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="org.springframework.security" level="WARN"/>
+    <logger name="org.hibernate" level="WARN"/>
+    <logger name="org.hibernate.SQL" level="WARN"/>
+    <logger name="org.hibernate.type.descriptor.sql" level="WARN"/>
+    <logger name="org.hibernate.orm.jdbc.bind" level="WARN"/>
+    <logger name="liquibase" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="WARN"/>
+    <logger name="io.undertow" level="WARN"/>
+    <logger name="org.apache.catalina" level="WARN"/>
+    <logger name="org.apache.coyote" level="WARN"/>
+</included>

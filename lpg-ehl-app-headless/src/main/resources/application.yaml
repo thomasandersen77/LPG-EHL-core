@@ -88,22 +88,15 @@ server:
   port: ${PORT:8080}
   shutdown: graceful
 
-# Logging
+# Logging - INFO som default, DEBUG aktiveres via JVM-flagg
+# Eksempel: java -Dlogging.level.no.cloudberries.lpg.protocol=DEBUG -jar ...
 logging:
   level:
     root: INFO
-    no.cloudberries.lpg: ${LOG_LEVEL:INFO}
-    no.cloudberries.lpg.communication: ${LOG_LEVEL:INFO}
-    no.cloudberries.lpg.protocol: ${LOG_LEVEL:INFO}
+    no.cloudberries.lpg: INFO
     org.hibernate.SQL: WARN
     org.springframework: WARN
     liquibase: WARN
-  pattern:
-    console: "%d{HH:mm:ss} %-5level %logger{20} - %msg%n"
-  file:
-    name: ${LOG_FILE:./logs/headless.log}
-    max-size: 10MB
-    max-history: 30
 
 # LPG Application
 lpg:
@@ -117,17 +110,25 @@ lpg:
     id: ${STATION_ID:STATION-001}
     name: ${STATION_NAME:Test Station}
 
-# EHL Serial defaults (overridden by profiles or external config)
+# EHL Serial defaults - bekreftet av Alejandro (2026-02-09)
+# /dev/ttyS3, 9600 baud, NONE parity
 ehl:
   emulator:
     dispenser-address: ${EHL_DISPENSER_ADDRESS:1}
     price-per-liter-cents: ${EHL_PRICE_CENTS:1590}
     latency-ms: ${EHL_LATENCY_MS:20}
   serial:
-    port: ${EHL_SERIAL_PORT:/tmp/vserial1}
+    port: ${EHL_SERIAL_PORT:/dev/ttyS3}
     baud-rate: ${EHL_BAUD_RATE:9600}
     data-bits: 8
     parity: ${EHL_SERIAL_PARITY:NONE}
     stop-bits: 1
     read-timeout-ms: 3000
     write-timeout-ms: 1000
+  # Retry configuration for RS-485 communication
+  # Edge/industrial environments often have transient noise
+  retry:
+    max-retries: ${EHL_RETRY_MAX:3}
+    initial-delay-ms: ${EHL_RETRY_INITIAL_DELAY:100}
+    max-delay-ms: ${EHL_RETRY_MAX_DELAY:2000}
+    backoff-multiplier: ${EHL_RETRY_BACKOFF:2.0}

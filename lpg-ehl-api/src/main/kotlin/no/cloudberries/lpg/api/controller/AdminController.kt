@@ -1,4 +1,4 @@
-package no.cloudberries.lpg.service.controller
+package no.cloudberries.lpg.api.controller
 
 import no.cloudberries.lpg.service.pump.PumpAuthorizationService
 import no.cloudberries.lpg.service.pump.PumpStateService

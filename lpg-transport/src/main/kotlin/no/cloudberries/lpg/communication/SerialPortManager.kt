@@ -1,6 +1,7 @@
 package no.cloudberries.lpg.communication
 
 import com.fazecast.jSerialComm.SerialPort
+import jakarta.annotation.PreDestroy
 import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -97,6 +98,7 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
     /**
      * Close the serial port if it's open.
      */
+    @PreDestroy
     override fun disconnect() {
         synchronized(lock) {
             serialPort?.let { port ->
