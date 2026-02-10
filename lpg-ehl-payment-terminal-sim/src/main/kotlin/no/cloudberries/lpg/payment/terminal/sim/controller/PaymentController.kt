@@ -4,13 +4,16 @@ import jakarta.servlet.http.HttpServletRequest
 import no.cloudberries.lpg.payment.terminal.sim.config.SimulatorConfig
 import no.cloudberries.lpg.payment.terminal.sim.model.domain.Scenario
 import no.cloudberries.lpg.payment.terminal.sim.model.request.CashbackRequest
+import no.cloudberries.lpg.payment.terminal.sim.model.request.CompletionRequest
 import no.cloudberries.lpg.payment.terminal.sim.model.request.PurchaseRequest
 import no.cloudberries.lpg.payment.terminal.sim.model.request.RefundRequest
+import no.cloudberries.lpg.payment.terminal.sim.model.request.ReservationRequest
 import no.cloudberries.lpg.payment.terminal.sim.model.response.OperationResponse
 import no.cloudberries.lpg.payment.terminal.sim.model.scenario.ScenarioDefinition
 import no.cloudberries.lpg.payment.terminal.sim.model.scenario.ScenarioFlowEvent
 import no.cloudberries.lpg.payment.terminal.sim.service.EventStore
 import no.cloudberries.lpg.payment.terminal.sim.service.ReceiptGenerator
+import no.cloudberries.lpg.payment.terminal.sim.service.ReservationStore
 import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioManager
 import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioSelection
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalStateManager
@@ -34,6 +37,7 @@ class PaymentController(
     private val scenarioManager: ScenarioManager,
     private val receiptGenerator: ReceiptGenerator,
     private val eventStore: EventStore,
+    private val reservationStore: ReservationStore,
     private val config: SimulatorConfig
 ) {
     private val log = LoggerFactory.getLogger(PaymentController::class.java)
@@ -134,6 +138,185 @@ class PaymentController(
             }
 
             log.info("Purchase completed: operationId={}, success={}", operationId, response.Success)
+            return ResponseEntity.ok(response)
+        } finally {
+            stateManager.endOperation(operationId)
+        }
+    }
+
+    /**
+     * POST /v1/payments/reservation
+     *
+     * Reserve an amount on the card (pre-auth). Pump is freed after approval.
+     * Actual charge happens via completion when filling stops.
+     */
+    @PostMapping("/reservation")
+    fun reservation(
+        @RequestBody request: ReservationRequest,
+        httpRequest: HttpServletRequest
+    ): ResponseEntity<OperationResponse> {
+        log.info("Reservation request: amount={} kr, operatorId={}, clientRequestId={}",
+            request.amountMinor / 100.0, request.operatorId, request.clientRequestId)
+
+        request.clientRequestId?.let { clientId ->
+            operationCache[clientId]?.let { cached ->
+                log.info("Returning cached response for clientRequestId={}", clientId)
+                return ResponseEntity.ok(cached)
+            }
+        }
+
+        val scenarioSelection = scenarioManager.selectScenario(httpRequest)
+        scenarioManager.applyScenarioTerminalState(scenarioSelection)
+        val scenario = scenarioSelection.enumScenario
+
+        val operationId = UUID.randomUUID().toString()
+        val startedAt = Instant.now()
+
+        stateManager.beginOperation(operationId)
+        try {
+            eventStore.publishEvent(
+                eventType = "OperationStarted",
+                operationId = operationId,
+                payload = mapOf(
+                    "type" to "reservation",
+                    "amountMinor" to request.amountMinor,
+                    "OperationType" to "reservation",
+                    "AmountMinor" to request.amountMinor
+                )
+            )
+
+            val delay = scenarioManager.getOperationDelay(scenarioSelection)
+            val flow = scenarioSelection.definition?.flow?.takeIf { it.isNotEmpty() } ?: defaultPurchaseFlow()
+            publishDisplayFlow(operationId, flow, delay)
+
+            val completedAt = Instant.now()
+            val response = buildFinancialResponse(
+                scenarioSelection,
+                scenario,
+                operationId,
+                startedAt,
+                completedAt,
+                request.amountMinor,
+                defaultReceiptTemplate = "purchase"
+            )
+
+            if (response.Success) {
+                reservationStore.put(operationId, request.amountMinor)
+            }
+
+            eventStore.publishEvent(
+                eventType = "OperationCompleted",
+                operationId = operationId,
+                payload = mapOf(
+                    "success" to response.Success,
+                    "OperationType" to "reservation",
+                    "AmountMinor" to request.amountMinor,
+                    "ResponseCode" to (response.ResponseCode ?: ""),
+                    "EntryMode" to "CHIP"
+                )
+            )
+
+            request.clientRequestId?.let { clientId ->
+                operationCache[clientId] = response
+            }
+
+            log.info("Reservation completed: operationId={}, success={}, amount={} kr",
+                operationId, response.Success, request.amountMinor / 100.0)
+            return ResponseEntity.ok(response)
+        } finally {
+            stateManager.endOperation(operationId)
+        }
+    }
+
+    /**
+     * POST /v1/payments/completion
+     *
+     * Complete a prior reservation by charging the actual amount (e.g. after filling).
+     */
+    @PostMapping("/completion")
+    fun completion(
+        @RequestBody request: CompletionRequest,
+        httpRequest: HttpServletRequest
+    ): ResponseEntity<OperationResponse> {
+        log.info("Completion request: operationId={}, amount={} kr",
+            request.operationId, request.amountMinor / 100.0)
+
+        val reservedAmount = reservationStore.get(request.operationId)
+        if (reservedAmount == null) {
+            log.warn("Completion failed: no pending reservation for operationId={}", request.operationId)
+            return ResponseEntity.badRequest().body(
+                OperationResponse(
+                    Success = false,
+                    OperationId = request.operationId,
+                    StartedAt = Instant.now().toString(),
+                    CompletedAt = null,
+                    CallResult = 0,
+                    Error = "No pending reservation",
+                    ErrorCode = "invalid_operation"
+                )
+            )
+        }
+
+        if (request.amountMinor > reservedAmount) {
+            log.warn("Completion failed: amount {} exceeds reserved {}", request.amountMinor, reservedAmount)
+            return ResponseEntity.badRequest().body(
+                OperationResponse(
+                    Success = false,
+                    OperationId = request.operationId,
+                    StartedAt = Instant.now().toString(),
+                    CompletedAt = null,
+                    CallResult = 0,
+                    Error = "Amount exceeds reservation",
+                    ErrorCode = "amount_exceeded"
+                )
+            )
+        }
+
+        val operationId = request.operationId
+        val startedAt = Instant.now()
+
+        stateManager.beginOperation(operationId)
+        try {
+            val receipt = receiptGenerator.generatePurchaseReceipt(
+                request.amountMinor,
+                Instant.now(),
+                operationId,
+                approved = true,
+                responseCode = "00"
+            )
+
+            val completedAt = Instant.now()
+            val response = OperationResponse.approved(
+                operationId,
+                startedAt,
+                completedAt,
+                request.amountMinor,
+                config.terminalId,
+                config.merchantId,
+                receipt
+            )
+
+            reservationStore.remove(operationId)
+
+            eventStore.publishEvent(
+                eventType = "DisplayText",
+                operationId = operationId,
+                payload = mapOf("text" to "GODKJENT", "amountMinor" to request.amountMinor)
+            )
+            response.PrintTextRaw?.let {
+                eventStore.publishEvent("PrintText", operationId, mapOf("text" to it))
+            }
+            eventStore.publishEvent(
+                eventType = "OperationCompleted",
+                operationId = operationId,
+                payload = mapOf(
+                    "success" to true,
+                    "OperationType" to "completion",
+                    "AmountMinor" to request.amountMinor
+                )
+            )
+
+            log.info("Completion completed: operationId={}, amount={} kr", operationId, request.amountMinor / 100.0)
             return ResponseEntity.ok(response)
         } finally {
             stateManager.endOperation(operationId)

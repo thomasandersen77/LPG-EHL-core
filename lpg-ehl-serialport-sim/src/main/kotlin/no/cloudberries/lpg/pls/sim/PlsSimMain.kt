@@ -1,5 +1,7 @@
 package no.cloudberries.lpg.pls.sim
 
+import javafx.application.Application
+import javafx.stage.Stage
 import org.slf4j.LoggerFactory
 import java.util.concurrent.CountDownLatch
 import kotlin.system.exitProcess
@@ -73,7 +75,8 @@ fun main(args: Array<String>) {
         badChecksumRate = cliArgs.badChecksumRate,
         powerfaultAfterSeconds = cliArgs.powerfaultAfterSeconds,
         onDisconnect = { handler?.forceDisconnect() },
-        onPowerfault = { handler?.forceDisconnect() }
+        onPowerfault = { handler?.forceDisconnect() },
+        manualNozzleControl = cliArgs.gui
     )
 
     handler = SerialPortHandler(
@@ -101,7 +104,19 @@ fun main(args: Array<String>) {
         handler.start()
         log.info("PLS Simulator running. Press Ctrl+C to stop.")
 
-        // Periodic heartbeat (INFO) - shows simulator is alive + state
+        if (cliArgs.gui) {
+            log.info("Starting PLS GUI...")
+            PlsGuiApp.state = plsState
+            PlsGuiApp.onGuiClosed = {
+                plsState.shutdown()
+                handler.stop()
+                shutdownLatch.countDown()
+            }
+            Application.launch(PlsGuiApp::class.java)
+            // When GUI closes, launch() returns and we fall through
+        }
+
+        // Periodic heartbeat (skipped in GUI mode - launch blocks until GUI closed) (INFO) - shows simulator is alive + state
         val heartbeatIntervalMs = cliArgs.heartbeatIntervalMs
         val heartbeatThread = Thread({
             try {

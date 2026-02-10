@@ -33,7 +33,8 @@ class PlsState(
     val badChecksumRate: Double = 0.0,
     val powerfaultAfterSeconds: Double? = null,
     private val onDisconnect: (() -> Unit)? = null,  // Callback to disconnect serial port
-    private val onPowerfault: (() -> Unit)? = null   // Callback for power fault
+    private val onPowerfault: (() -> Unit)? = null,  // Callback for power fault
+    val manualNozzleControl: Boolean = false         // When true, UNBLOCK stays AUTHORIZED; GUI button controls nozzle
 ) {
     private val log = LoggerFactory.getLogger(PlsState::class.java)
     
@@ -399,15 +400,25 @@ class PlsState(
                     // Payment is webapp/service layer's responsibility
                     when (state) {
                         DispenserState.IDLE, DispenserState.AUTHORIZED, DispenserState.STOPPED -> {
-                            // Simulate automatic nozzle lift after UNBLOCK
-                            nozzleLifted = true
-                            state = DispenserState.PUMPING
-                            startedAtMs = System.currentTimeMillis()
-                            resetVolume()
-                            pumpingActive.set(true)
-                            log.info("✅ UNBLOCK addr=$addrInt from $previousState")
-                            log.info("🔄 STATE: $previousState → PUMPING (auto-simulated nozzle lift)")
-                            log.info("▶️ Auto-pumping STARTED at ${flowRateMlPerSecond}ml/s")
+                            if (manualNozzleControl) {
+                                // GUI mode: stay AUTHORIZED, wait for GUI button to lift nozzle
+                                nozzleLifted = false
+                                state = DispenserState.AUTHORIZED
+                                resetVolume()
+                                pumpingActive.set(false)
+                                log.info("✅ UNBLOCK addr=$addrInt from $previousState")
+                                log.info("🔄 STATE: $previousState → AUTHORIZED (venter på GUI-knapp)")
+                            } else {
+                                // Auto-simulate nozzle lift after UNBLOCK
+                                nozzleLifted = true
+                                state = DispenserState.PUMPING
+                                startedAtMs = System.currentTimeMillis()
+                                resetVolume()
+                                pumpingActive.set(true)
+                                log.info("✅ UNBLOCK addr=$addrInt from $previousState")
+                                log.info("🔄 STATE: $previousState → PUMPING (auto-simulated nozzle lift)")
+                                log.info("▶️ Auto-pumping STARTED at ${flowRateMlPerSecond}ml/s")
+                            }
                             log.info("📊 After UNBLOCK: state=$state, volume=${getVolumeMl()}ml, pumpingActive=${pumpingActive.get()}")
                         }
                         DispenserState.PUMPING -> {
@@ -416,16 +427,22 @@ class PlsState(
                         DispenserState.PAYMENT_PENDING -> {
                             // Reset and start new transaction - payment is webapp's concern
                             log.info("🔄 PAYMENT_PENDING → clearing for new transaction")
-                            nozzleLifted = true
-                            state = DispenserState.PUMPING
-                            startedAtMs = System.currentTimeMillis()
-                            resetVolume()
+                            if (manualNozzleControl) {
+                                nozzleLifted = false
+                                state = DispenserState.AUTHORIZED
+                            } else {
+                                nozzleLifted = true
+                                state = DispenserState.PUMPING
+                                startedAtMs = System.currentTimeMillis()
+                                resetVolume()
+                                pumpingActive.set(true)
+                            }
                             frozenTransaction = null
-                            pumpingActive.set(true)
-                            log.info("✅ UNBLOCK addr=$addrInt (payment pending cleared by hardware)")
-                            log.info("🔄 STATE: $previousState → PUMPING (auto-simulated nozzle lift)")
-                            log.info("▶️ Auto-pumping STARTED at ${flowRateMlPerSecond}ml/s")
-                            log.info("📊 After UNBLOCK: state=$state, volume=${getVolumeMl()}ml, pumpingActive=${pumpingActive.get()}")
+                            if (!manualNozzleControl) {
+                                log.info("▶️ Auto-pumping STARTED at ${flowRateMlPerSecond}ml/s")
+                            }
+                            log.info("✅ UNBLOCK addr=$addrInt (payment pending cleared)")
+                            log.info("🔄 STATE: $previousState → $state")
                         }
                     }
                 } catch (e: Exception) {

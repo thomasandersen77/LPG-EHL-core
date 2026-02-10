@@ -19,7 +19,8 @@ data class CliArgs(
     // Fault injection for testing
     val disconnectAfterSeconds: Double? = null,  // Simulate disconnect after N seconds
     val badChecksumRate: Double = 0.0,           // Probability of corrupted checksum (0.0-1.0)
-    val powerfaultAfterSeconds: Double? = null   // Simulate power fault after N seconds
+    val powerfaultAfterSeconds: Double? = null,  // Simulate power fault after N seconds
+    val gui: Boolean = false                     // Show JavaFX GUI with red start/stop button
 ) {
     companion object {
         fun parse(args: Array<String>): CliArgs {
@@ -38,6 +39,7 @@ data class CliArgs(
             var disconnectAfterSeconds: Double? = null
             var badChecksumRate = 0.0
             var powerfaultAfterSeconds: Double? = null
+            var gui = false
 
             val iterator = args.iterator()
             while (iterator.hasNext()) {
@@ -66,6 +68,7 @@ data class CliArgs(
                     arg.startsWith("--disconnectAfterSeconds=") -> disconnectAfterSeconds = arg.substringAfter("--disconnectAfterSeconds=").toDoubleOrNull()
                     arg.startsWith("--badChecksumRate=") -> badChecksumRate = arg.substringAfter("--badChecksumRate=").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.0
                     arg.startsWith("--powerfaultAfterSeconds=") -> powerfaultAfterSeconds = arg.substringAfter("--powerfaultAfterSeconds=").toDoubleOrNull()
+                    arg == "--gui" || arg == "-g" -> gui = true
                     arg == "--help" || arg == "-h" -> {
                         printHelp()
                         kotlin.system.exitProcess(0)
@@ -79,7 +82,7 @@ data class CliArgs(
                 kotlin.system.exitProcess(1)
             }
 
-            return CliArgs(port, baud, parity, mode, chunk, latencyMs, logHex, dispenserAddress, priceCents, initiallyBlocked, heartbeatIntervalMs, legacyAddressEnabled, disconnectAfterSeconds, badChecksumRate, powerfaultAfterSeconds)
+            return CliArgs(port, baud, parity, mode, chunk, latencyMs, logHex, dispenserAddress, priceCents, initiallyBlocked, heartbeatIntervalMs, legacyAddressEnabled, disconnectAfterSeconds, badChecksumRate, powerfaultAfterSeconds, gui)
         }
 
         private fun printHelp() {
@@ -117,6 +120,7 @@ data class CliArgs(
                 |  --badChecksumRate=<rate>       Probability of bad checksum (0.0-1.0, default: 0.0)
                 |  --powerfaultAfterSeconds=<sec> Simulate power fault after N seconds
                 |
+                |  --gui, -g              Show JavaFX GUI with red start/stop button (deadman switch sim)
                 |  --help, -h             Show this help message
                 |
                 |Examples:
