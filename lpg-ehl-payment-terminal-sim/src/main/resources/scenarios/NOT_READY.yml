@@ -1,0 +1,16 @@
+version: 1
+name: NOT_READY
+result:
+  success: false
+  responseCode: ""
+  localModeResult: 2
+  rejectionSource: ""
+  rejectionReason: ""
+terminalState:
+  requiresReady: false
+  busy: false
+  notReady: true
+  timeout: false
+flow: []
+receipt:
+  template: none

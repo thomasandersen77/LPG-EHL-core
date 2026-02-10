@@ -1,0 +1,33 @@
+version: 1
+name: WRONG_PIN
+result:
+  success: false
+  responseCode: "Z1"
+  localModeResult: 2
+  rejectionSource: "3"
+  rejectionReason: "3:2:Z1"
+terminalState:
+  requiresReady: true
+  busy: false
+  notReady: false
+  timeout: false
+flow:
+  - event: DisplayText
+    text: "VENTER PÅ KORTET"
+    displayTextId: 1011
+    delayMs: 500
+  - event: DisplayText
+    text: "SETT INN KORTET"
+    displayTextId: 1003
+    delayMs: 500
+  - event: DisplayText
+    text: "Kode + OK"
+    displayTextId: 1
+    delayMs: 1000
+  - event: DisplayText
+    text: "TA UT KORTET"
+    displayTextId: 1001
+receipt:
+  template: purchase
+  approved: false
+  responseCode: "Z1"

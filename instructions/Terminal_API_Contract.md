@@ -4,7 +4,7 @@
 
 This document describes the REST API contract for the Payment Terminal Mono Server. All endpoints use JSON for request and response payloads.
 
-**Base URL:** `http://127.0.0.1:8080` (configurable)
+**Base URL:** `http://127.0.0.1:18080` (configurable via server.json, production uses 18080)
 
 ## Endpoints
 
@@ -30,11 +30,11 @@ Returns terminal status and readiness.
 **Response:**
 ```json
 {
-  "vendorDllLoadable": true,
-  "terminalOpen": false,
-  "terminalReady": false,
-  "lastError": null,
-  "terminalIdentity": {
+  "VendorDllLoadable": true,
+  "TerminalOpen": false,
+  "TerminalReady": false,
+  "LastError": null,
+  "TerminalIdentity": {
     "TerminalID": "12345678",
     "MerchantId": "12345678901234"
   }
@@ -50,8 +50,9 @@ Opens the terminal connection and waits for TerminalReady.
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "Terminal opened"
+  "Success": true,
+  "Message": "Terminal opened",
+  "Error": null
 }
 ```
 
@@ -62,8 +63,9 @@ Closes the terminal connection.
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "Terminal closed"
+  "Success": true,
+  "Message": "Terminal closed",
+  "Error": null
 }
 ```
 
@@ -76,46 +78,46 @@ Initiates a purchase transaction.
 **Request:**
 ```json
 {
-  "amountMinor": 10000,
-  "currency": "NOK",
-  "operatorId": "4321",
-  "optionalData": "",
-  "preAvstemming": {
-    "enabled": false,
-    "password": "0000",
-    "timeoutSeconds": 300
+  "AmountMinor": 10000,
+  "Currency": "NOK",
+  "OperatorId": "0000",
+  "OptionalData": "LPG Autogas",
+  "PreAvstemming": {
+    "Enabled": false,
+    "Password": "0000",
+    "TimeoutSeconds": 300
   },
-  "clientRequestId": "optional-client-id"
+  "ClientRequestId": "optional-client-id"
 }
 ```
 
 **Response:**
 ```json
 {
-  "success": true,
-  "operationId": "abc123...",
-  "startedAt": "2026-02-09T12:00:00Z",
-  "completedAt": "2026-02-09T12:00:05Z",
-  "durationMs": 5000,
-  "callResult": 1,
-  "methodRejectCode": 0,
-  "methodRejectInfo": null,
-  "resultEventName": "OnLocalMode",
-  "localModeResult": 0,
-  "responseCode": "00",
-  "rejectionSource": "0",
-  "rejectionReason": null,
-  "localModeFields": {
+  "Success": true,
+  "OperationId": "abc123...",
+  "StartedAt": "2026-02-09T12:00:00Z",
+  "CompletedAt": "2026-02-09T12:00:05Z",
+  "DurationMs": 5000,
+  "CallResult": 1,
+  "MethodRejectCode": 0,
+  "MethodRejectInfo": null,
+  "ResultEventName": "OnLocalMode",
+  "LocalModeResult": 0,
+  "ResponseCode": "00",
+  "RejectionSource": "0",
+  "RejectionReason": null,
+  "LocalModeFields": {
     "TerminalID": "12345678",
     "MerchantId": "12345678901234"
   },
-  "printTextRaw": "...",
-  "printTextSanitized": "...",
-  "lastDisplayText": "Insert card",
-  "error": null,
-  "errorCode": null,
-  "dbRowId": 1,
-  "receiptFileId": "2026-02-09/abc123..."
+  "PrintTextRaw": "...",
+  "PrintTextSanitized": "...",
+  "LastDisplayText": "Insert card",
+  "Error": null,
+  "ErrorCode": null,
+  "DbRowId": 1,
+  "ReceiptFileId": "2026-02-09/abc123..."
 }
 ```
 
@@ -134,12 +136,12 @@ Initiates a cashback transaction (purchase + cashback).
 **Request:**
 ```json
 {
-  "purchaseMinor": 10000,
-  "cashbackMinor": 5000,
-  "currency": "NOK",
-  "operatorId": "4321",
-  "optionalData": "",
-  "clientRequestId": "optional-client-id"
+  "PurchaseMinor": 10000,
+  "CashbackMinor": 5000,
+  "Currency": "NOK",
+  "OperatorId": "4321",
+  "OptionalData": "",
+  "ClientRequestId": "optional-client-id"
 }
 ```
 
@@ -154,7 +156,7 @@ Runs avstemming (end-of-day reconciliation).
 **Request:**
 ```json
 {
-  "password": "0000"
+  "Password": "0000"
 }
 ```
 
@@ -215,8 +217,8 @@ Runs an arbitrary admin code.
 **Request:**
 ```json
 {
-  "code": 12592,
-  "password": "0000"
+  "AdminCode": "3130",
+  "Password": "0000"
 }
 ```
 
@@ -242,11 +244,12 @@ Cursor formats supported:
 ```json
 [
   {
-    "eventId": "...",
-    "operationId": "...",
-    "timestamp": "2026-02-09T12:00:00Z",
-    "eventType": "OperationStarted",
-    "payload": { ... }
+    "Cursor": 1,
+    "EventId": "...",
+    "OperationId": "...",
+    "Timestamp": "2026-02-09T12:00:00Z",
+    "EventType": "OperationStarted",
+    "Payload": { ... }
   }
 ]
 ```
@@ -258,13 +261,26 @@ Cursor formats supported:
 | `terminal_busy` | 409 | Terminal is busy with another operation |
 | `terminal_not_ready` | 503 | Terminal is not ready |
 | `operation_timeout` | 408 | Operation timed out |
+| `operation_rejected` | 422 | Operation rejected by terminal |
 | `vendor_call_failure` | 500 | Vendor DLL call failed |
 | `invalid_request` | 400 | Invalid request format |
 | `diagnostics_disabled` | 403 | Diagnostics are disabled |
 
+## Error Response Format
+
+All error responses follow this structure:
+```json
+{
+  "Error": "Human-readable error message",
+  "ErrorCode": "machine_readable_code",
+  "OperationId": "op-uuid",
+  "Details": "Additional error details"
+}
+```
+
 ## Idempotency
 
-Operations support idempotency via the `clientRequestId` field. If a `clientRequestId` is provided and an operation with that ID already exists, the server returns the existing result instead of executing a new operation.
+Operations support idempotency via the `ClientRequestId` field. If a `ClientRequestId` is provided and an operation with that ID already exists, the server returns the existing result instead of executing a new operation.
 
 ## Timeouts
 

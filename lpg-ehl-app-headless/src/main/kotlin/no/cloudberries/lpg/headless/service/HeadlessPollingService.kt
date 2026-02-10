@@ -8,6 +8,7 @@ import no.cloudberries.lpg.service.pump.AuthorizationStatus
 import no.cloudberries.lpg.service.pump.DispenserService
 import no.cloudberries.lpg.service.pump.PumpAuthorizationService
 import no.cloudberries.lpg.service.pump.PumpStateService
+import no.cloudberries.lpg.logging.MdcActor
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
@@ -70,17 +71,18 @@ class HeadlessPollingService(
      */
     @Scheduled(fixedDelayString = "\${lpg.polling.interval-ms:2000}", initialDelay = 5000)
     fun pollDispenserStatus() {
-        if (!isRunning) {
-            logger.info("🚀 Starting dispenser polling loop...")
-            isRunning = true
-        }
-        
-        val count = pollCount.incrementAndGet()
-        
-        // Sjekk for PENDING autorisasjoner først
-        processPendingAuthorizations()
-        
-        try {
+        MdcActor.runWithActor(MdcActor.Actor.SYSTEM) {
+            if (!isRunning) {
+                logger.info("🚀 Starting dispenser polling loop...")
+                isRunning = true
+            }
+            
+            val count = pollCount.incrementAndGet()
+            
+            // Sjekk for PENDING autorisasjoner først (CUSTOMER context)
+            processPendingAuthorizations()
+            
+            try {
             // 1. Poll STATE
             val statePacket = EhlPacket(
                 address = dispenserAddress,
@@ -136,6 +138,7 @@ class HeadlessPollingService(
                 logger.warn("⚠️ Polling timeout (poll #$count, $timeoutCount consecutive): ${e.message}")
             }
         }
+        }
     }
     
     /**
@@ -144,8 +147,10 @@ class HeadlessPollingService(
      */
     @Scheduled(fixedRate = 30000, initialDelay = 10000)
     fun heartbeat() {
-        val time = LocalDateTime.now().format(timeFormatter)
-        logger.debug("💓 [$time] Headless app is alive - Poll count: ${pollCount.get()}")
+        MdcActor.runWithActor(MdcActor.Actor.SYSTEM) {
+            val time = LocalDateTime.now().format(timeFormatter)
+            logger.debug("💓 [$time] Headless app is alive - Poll count: ${pollCount.get()}")
+        }
     }
     
     /**
@@ -167,6 +172,8 @@ class HeadlessPollingService(
                     continue
                 }
                 
+                // CUSTOMER context: kunde har sveipet kort, prosesserer autorisasjon
+                MdcActor.runWithActor(MdcActor.Actor.CUSTOMER) {
                 logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                 logger.info("💳 PENDING autorisasjon funnet: ${auth.authorizationId}")
                 logger.info("   Dispenser: ${auth.dispenserAddress}")
@@ -199,6 +206,7 @@ class HeadlessPollingService(
                 }
                 
                 logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                }
             }
         } catch (e: Exception) {
             // Ikke logg feil for hver poll - bare periodisk

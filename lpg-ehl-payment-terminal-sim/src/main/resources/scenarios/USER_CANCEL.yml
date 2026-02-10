@@ -1,0 +1,23 @@
+version: 1
+name: USER_CANCEL
+result:
+  success: false
+  responseCode: ""
+  localModeResult: 2
+  rejectionSource: "0"
+  rejectionReason: "2:1"
+terminalState:
+  requiresReady: true
+  busy: false
+  notReady: false
+  timeout: false
+flow:
+  - event: DisplayText
+    text: "VENTER PÅ KORTET"
+    displayTextId: 1011
+    delayMs: 500
+  - event: DisplayText
+    text: "AVBRUTT"
+    displayTextId: 0
+receipt:
+  template: none

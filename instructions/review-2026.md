@@ -283,7 +283,7 @@ ehl:
   debug:
     api-token: ${DEBUG_API_TOKEN:}  # Tom = disabled
 ```
-
+'
 **3. Localhost-only binding:**
 ```yaml
 server:
