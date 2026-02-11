@@ -1,7 +1,7 @@
 # Terminal- og pumpe-integrasjon
 
 **Dato:** 2026-02-10  
-**Status:** Delvis implementert
+**Status:** Implementert
 
 ## Implementert
 
@@ -36,23 +36,26 @@ java -jar pls-sim.jar --port=/tmp/ttyV0 --mode=ehl --address=1 --gui
 - Viser liter og beløp i sanntid
 - Med `--gui`: UNBLOCK setter AUTHORIZED; knappen styrer dyse (start/stopp)
 
-### 3. Service-modul (planlagt)
-
-For full integrasjon trengs:
+### 3. Service-modul (implementert)
 
 1. **SimulatedTerminalClient** – HTTP-klient mot terminal-simulator:
    - `reserve(amountMinor)` → `POST /v1/payments/reservation`
    - `capture(operationId, amountMinor)` → `POST /v1/payments/completion`
    - `reversal(operationId)` → `POST /v1/admin/reversal`
 
-2. **TerminalEventPoller** – Poller `/v1/events` eller kobler til SSE:
+2. **TerminalEventPoller** – Poller `/v1/events` hvert sekund:
    - Ved `OperationCompleted` med type `reservation` og `success=true`:
-     - Kall `PumpStateService.unblock()` for å frigjøre pumpen
+     - Kall `PumpPaymentOrchestrator.unblockPumpAfterReservation()` → UNBLOCK via PumpStateService
 
-3. **Pump-stopp-deteksjon** – Når pumpe går fra PUMPING til IDLE:
-   - Hent volum og beløp
-   - Kall `TerminalClient.capture(operationId, amountMinor)`
-   - Kall settle for å fullføre transaksjonen
+3. **TerminalPumpCompletionListener** – Lytter på `PumpStoppedEvent`:
+   - Når pumpe stopper med volum > 0 og det finnes session i TerminalPumpSession:
+     - Kall `TerminalClient.capture(operationId, amountMinor)`
+     - Kall `PumpStateService.settle(pumpId, "CARD")`
+     - Fjern session fra TerminalPumpSession
+
+4. **Pump-stopp-deteksjon** – To steder:
+   - **Webapp "Stopp fylling":** `block()` sender BLOCK til PLS, henter volum, publiserer PumpStoppedEvent
+   - **PLS GUI "STOPP":** `pollVolume()` oppdager STATE=0x00 (IDLE) → `handleHardwareStop()` → PumpStoppedEvent
 
 ## Brukerflyt
 
@@ -67,6 +70,16 @@ For full integrasjon trengs:
 9. **Terminal:** Vises "GODKJENT" med riktig beløp
 
 ## Kjøring
+
+### Alt-i-ett: start-all-simulators.sh
+```bash
+./scripts/start-all-simulators.sh
+# Eller med build: ./scripts/start-all-simulators.sh --build
+```
+Starter: Socat, Payment Terminal GUI (18080), PLS Simulator (vserial0), Webapp (vserial1, 8080).  
+Stop med Ctrl+C.
+
+### Manuell kjøring
 
 ### Terminal-simulator med GUI
 ```bash
@@ -87,12 +100,13 @@ java -jar lpg-ehl-serialport-sim/target/pls-sim.jar \
   --port=/tmp/ttyV0 --mode=ehl --address=1 --gui
 ```
 
-### Webapp (field mode mot PLS)
+### Webapp (field mode mot PLS + terminal-sim)
 ```bash
 java -jar lpg-ehl-webapp.jar \
-  --spring.profiles.active=field \
-  --ehl.serial.port=/tmp/ttyV1
+  --spring.profiles.active=field,terminal-sim \
+  --ehl.serial.port=/tmp/vserial1
 ```
+(Profilen `terminal-sim` aktiverer payment.terminal.enabled og base-url mot localhost:18080)
 
 ## Konfigurasjon
 

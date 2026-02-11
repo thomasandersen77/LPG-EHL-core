@@ -111,7 +111,7 @@ run_maven "WebApp package" package -pl lpg-ehl-webapp -am $PKG_ARGS
 run_maven "Headless package" package -pl lpg-ehl-app-headless -am $PKG_ARGS
 run_maven "PLS Sim package" package -pl lpg-ehl-serialport-sim -am $PKG_ARGS
 run_maven "Payment Terminal Sim package" package -pl lpg-ehl-payment-terminal-sim -am $PKG_ARGS
-# run_maven "Payment Terminal GUI package" package -pl lpg-ehl-payment-terminal-gui -am $PKG_ARGS  # Module not yet created
+run_maven "Payment Terminal GUI package" package -pl lpg-ehl-payment-terminal-gui -am $PKG_ARGS
 
 echo -e "${GREEN}✓${NC}"
 
@@ -130,7 +130,10 @@ if [ -z "$PLS_SIM_JAR" ]; then
     PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
-PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim.jar" | head -1)
+PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim-exec.jar" | head -1)
+if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
+    PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim.jar" | head -1)
+fi
 if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
     PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "lpg-ehl-payment-terminal-sim-*.jar" -not -name "*-plain.jar" | head -1)
 fi
@@ -339,37 +342,29 @@ echo -e "    field       ${GRAY}# Ekte serialport (produksjon)${NC}"
 echo -e "    debug-api   ${GRAY}# Aktiver debug-endepunkter${NC}"
 echo ""
 echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
-echo -e "${BOLD}  4. PAYMENT TERMINAL SIMULATOR (HTTP REST API)${NC}"
+echo -e "${BOLD}  4. PAYMENT TERMINAL SIMULATOR (anbefalt: GUI)${NC}"
 echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
 echo ""
-echo -e "  ${CYAN}Start simulator (default port 18080):${NC}"
-echo -e "    java -jar release/payment-terminal-sim.jar"
-echo ""
-echo -e "  ${CYAN}Start simulator with custom port:${NC}"
-echo -e "    java -jar release/payment-terminal-sim.jar --server.port=8080"
-echo ""
-echo -e "  ${CYAN}Start simulator with specific scenario:${NC}"
-echo -e "    java -jar release/payment-terminal-sim.jar \\"
-echo -e "      --payment-terminal-sim.default-scenario=WRONG_PIN"
-echo ""
-echo -e "  ${CYAN}Available scenarios:${NC}"
-echo -e "    APPROVED, DECLINED, WRONG_PIN, USER_CANCEL, TIMEOUT"
-echo ""
-echo -e "  ${CYAN}Verify simulator:${NC}"
-echo -e "    curl http://localhost:18080/health"
-echo ""
-echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
-echo -e "${BOLD}  5. PAYMENT TERMINAL GUI (Visual Simulator)${NC}"
-echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
-echo ""
-echo -e "  ${CYAN}Start GUI (standalone, connects to HTTP simulator):${NC}"
+echo -e "  ${CYAN}Start med GUI (anbefalt):${NC}"
 echo -e "    java -jar release/payment-terminal-gui.jar"
 echo ""
-echo -e "  ${CYAN}Start GUI with custom simulator URL:${NC}"
-echo -e "    java -jar release/payment-terminal-gui.jar \\"
-echo -e "      --terminal.simulator.url=http://localhost:8080"
+echo -e "  ${CYAN}Start GUI med custom port:${NC}"
+echo -e "    java -jar release/payment-terminal-gui.jar --server.port=8080"
 echo ""
-echo -e "  ${GRAY}Note: Start payment-terminal-sim.jar first, then GUI${NC}"
+echo -e "  ${CYAN}Start GUI med spesifikt scenario:${NC}"
+echo -e "    java -jar release/payment-terminal-gui.jar \\"
+echo -e "      --payment-terminal-sim.default-scenario=WRONG_PIN"
+echo ""
+echo -e "  ${CYAN}Start uten GUI (kun HTTP API):${NC}"
+echo -e "    java -jar release/payment-terminal-gui.jar --terminal.gui.enabled=false"
+echo -e "    ${GRAY}# eller bruk headless-varianten:${NC}"
+echo -e "    java -jar release/payment-terminal-sim.jar"
+echo ""
+echo -e "  ${CYAN}Tilgjengelige scenarier:${NC}"
+echo -e "    APPROVED, DECLINED, WRONG_PIN, USER_CANCEL, TIMEOUT, BUSY, NOT_READY"
+echo ""
+echo -e "  ${CYAN}Verifiser simulator:${NC}"
+echo -e "    curl http://localhost:18080/health"
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""

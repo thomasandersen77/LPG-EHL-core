@@ -76,11 +76,52 @@ if [[ ! -f "$WEBAPP_JAR" ]]; then
     exit 1
 fi
 
-# Check serial port exists
+# Check serial port exists - if not, start socat for virtual serial port
+SOCAT_PID=""
 if [[ ! -e "$SERIAL_PORT" ]]; then
-    echo -e "${RED}ERROR: Serial port not found: $SERIAL_PORT${NC}"
-    echo "Start simulator first: ./scripts/start-socat-sim.sh"
-    exit 1
+    # If using default /tmp/vserial1, auto-start socat
+    if [[ "$SERIAL_PORT" == "/tmp/vserial1" ]]; then
+        echo -e "${YELLOW}Serial port not found, starting socat for virtual serial...${NC}"
+        
+        # Check socat is installed
+        if ! command -v socat &> /dev/null; then
+            echo -e "${RED}ERROR: socat not installed. Run: brew install socat${NC}"
+            exit 1
+        fi
+        
+        # Cleanup any old PTYs
+        rm -f /tmp/vserial0 /tmp/vserial1
+        
+        # Start socat
+        socat -d -d \
+            pty,rawer,echo=0,link=/tmp/vserial0 \
+            pty,rawer,echo=0,link=/tmp/vserial1 \
+            2>/dev/null &
+        SOCAT_PID=$!
+        sleep 1
+        
+        if [[ ! -e /tmp/vserial1 ]]; then
+            echo -e "${RED}ERROR: Could not create virtual serial ports${NC}"
+            exit 1
+        fi
+        
+        echo -e "${GREEN}✓ Virtual serial ports created${NC}"
+        echo -e "  ${GRAY}Note: /tmp/vserial0 available for simulator${NC}"
+        echo ""
+        
+        # Cleanup socat on exit
+        cleanup_socat() {
+            if [ -n "$SOCAT_PID" ] && kill -0 "$SOCAT_PID" 2>/dev/null; then
+                kill "$SOCAT_PID" 2>/dev/null || true
+            fi
+            rm -f /tmp/vserial0 /tmp/vserial1 2>/dev/null || true
+        }
+        trap cleanup_socat EXIT SIGINT SIGTERM
+    else
+        echo -e "${RED}ERROR: Serial port not found: $SERIAL_PORT${NC}"
+        echo "Start simulator first: ./scripts/start-socat-sim.sh"
+        exit 1
+    fi
 fi
 
 echo -e "  ${GREEN}Serial Port:${NC}  $SERIAL_PORT"

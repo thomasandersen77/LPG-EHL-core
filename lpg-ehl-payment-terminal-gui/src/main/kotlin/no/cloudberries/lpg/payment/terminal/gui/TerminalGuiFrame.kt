@@ -204,7 +204,7 @@ class TerminalGuiFrame(
                     appendLog("▶ $type startet" + if (amountStr.isNotBlank()) " ($amountStr)" else "")
                 }
                 "OperationCompleted" -> {
-                    val success = payload["success"] as? Boolean ?: false
+                    val success = (payload["Success"] as? Boolean) ?: (payload["success"] as? Boolean) ?: false
                     val text = if (success) "GODKJENT" else "AVVIST"
                     displayPanel.updateDisplay(text, success = success)
                     appendLog(if (success) "✅ Operasjon godkjent" else "❌ Operasjon avvist")

@@ -1,9 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const EMULATOR_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || 
+  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080');
+const WS_BASE_URL = EMULATOR_BASE_URL.replace(/^http/, 'ws');
 
 interface LiveStatus {
   state: string;
@@ -16,21 +19,79 @@ interface LiveStatus {
 
 export function FuelingPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [hasFinished, setHasFinished] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  // Poll dispenser status every second
+  // Poll dispenser status (fallback if WS not connected)
   const { data: status } = useQuery<LiveStatus>({
     queryKey: ['dispenser-live-status'],
     queryFn: async () => {
       const response = await axios.get(`${API_URL}/dispensers/status`);
       return response.data;
     },
-    refetchInterval: 1000, // Poll every 1 second
+    refetchInterval: wsConnected ? false : 1000, // Only poll if WS not connected
   });
 
-  // When state changes to FINISHED, wait 10 seconds then go home
+  // WebSocket connection for real-time updates
   useEffect(() => {
-    if (status?.state === 'FINISHED' && !hasFinished) {
+    const ws = new WebSocket(`${WS_BASE_URL}/ws/logs`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setWsConnected(true);
+      ws.send(JSON.stringify({
+        action: 'subscribe',
+        channels: ['service']
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Handle pump_update for real-time display
+        if (data.type === 'pump_update') {
+          queryClient.setQueryData(['dispenser-live-status'], (old: LiveStatus | undefined) => ({
+            ...old,
+            state: data.state === 'PUMPING' ? 'DISPENSING' : data.state,
+            volumeLiters: data.volumeLitres,
+            amountKr: data.amountKr,
+            pricePerLiter: data.pricePerLitreKr,
+            isActive: data.state === 'PUMPING',
+            message: getMessageForState(data.state)
+          } as LiveStatus));
+        }
+      } catch (e) {
+        console.error('Error parsing WebSocket message:', e);
+      }
+    };
+
+    ws.onclose = () => setWsConnected(false);
+    ws.onerror = () => setWsConnected(false);
+
+    return () => {
+      ws.close();
+    };
+  }, [queryClient]);
+
+  // Helper function to get message for state
+  function getMessageForState(state: string): string {
+    switch (state) {
+      case 'PUMPING': return 'Fyller...';
+      case 'FINISHED': 
+      case 'PAYMENT_PENDING': return 'Fylling fullført';
+      case 'IDLE': return 'Venter...';
+      case 'READY_TO_PUMP': return 'Klar til fylling';
+      default: return state;
+    }
+  }
+
+  // When state changes to FINISHED or PAYMENT_PENDING, wait 10 seconds then go home
+  useEffect(() => {
+    const isFinished = status?.state === 'FINISHED' || status?.state === 'PAYMENT_PENDING';
+    if (isFinished && !hasFinished) {
       setHasFinished(true);
       const timer = setTimeout(() => {
         navigate('/');
@@ -52,7 +113,7 @@ export function FuelingPage() {
         <div className="text-center mb-8">
           <div className={`inline-block px-8 py-4 rounded-2xl text-2xl font-bold ${
             state === 'DISPENSING' ? 'bg-green-500 text-white animate-pulse' :
-            state === 'FINISHED' ? 'bg-blue-500 text-white' :
+            (state === 'FINISHED' || state === 'PAYMENT_PENDING') ? 'bg-blue-500 text-white' :
             'bg-gray-300 text-gray-700'
           }`}>
             {message}
@@ -87,7 +148,7 @@ export function FuelingPage() {
         </div>
 
         {/* Finished State */}
-        {state === 'FINISHED' && (
+        {(state === 'FINISHED' || state === 'PAYMENT_PENDING') && (
           <div className="mt-8 text-center space-y-4">
             <div className="text-3xl">✅</div>
             <div className="text-2xl font-bold text-slate-900">Takk for handelen!</div>
@@ -106,9 +167,11 @@ export function FuelingPage() {
           <details className="mt-8 bg-slate-100 rounded-xl p-4">
             <summary className="cursor-pointer text-sm text-slate-600 font-mono">
               🔍 Debug Info
+              <span className={`ml-2 inline-block w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="ml-1 text-xs">{wsConnected ? 'WS' : 'Polling'}</span>
             </summary>
             <pre className="mt-4 text-xs overflow-auto">
-              {JSON.stringify(status, null, 2)}
+              {JSON.stringify({ ...status, wsConnected }, null, 2)}
             </pre>
           </details>
         )}

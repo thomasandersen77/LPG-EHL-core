@@ -83,8 +83,8 @@ class PaymentController(
                 eventType = "OperationStarted",
                 operationId = operationId,
                 payload = mapOf(
-                    "type" to "purchase",
-                    "amountMinor" to request.amountMinor
+                    "OperationType" to "purchase",
+                    "AmountMinor" to request.amountMinor
                 )
             )
 
@@ -129,7 +129,11 @@ class PaymentController(
             eventStore.publishEvent(
                 eventType = "OperationCompleted",
                 operationId = operationId,
-                payload = mapOf("success" to response.Success)
+                payload = mapOf(
+                    "Success" to response.Success,
+                    "OperationType" to "purchase",
+                    "AmountMinor" to request.amountMinor
+                )
             )
 
             // Cache for idempotency
@@ -178,8 +182,6 @@ class PaymentController(
                 eventType = "OperationStarted",
                 operationId = operationId,
                 payload = mapOf(
-                    "type" to "reservation",
-                    "amountMinor" to request.amountMinor,
                     "OperationType" to "reservation",
                     "AmountMinor" to request.amountMinor
                 )
@@ -208,7 +210,7 @@ class PaymentController(
                 eventType = "OperationCompleted",
                 operationId = operationId,
                 payload = mapOf(
-                    "success" to response.Success,
+                    "Success" to response.Success,
                     "OperationType" to "reservation",
                     "AmountMinor" to request.amountMinor,
                     "ResponseCode" to (response.ResponseCode ?: ""),
@@ -310,7 +312,7 @@ class PaymentController(
                 eventType = "OperationCompleted",
                 operationId = operationId,
                 payload = mapOf(
-                    "success" to true,
+                    "Success" to true,
                     "OperationType" to "completion",
                     "AmountMinor" to request.amountMinor
                 )
@@ -354,7 +356,7 @@ class PaymentController(
         stateManager.beginOperation(operationId)
         try {
             eventStore.publishEvent("OperationStarted", operationId,
-                mapOf("type" to "refund", "amountMinor" to request.amountMinor))
+                mapOf("OperationType" to "refund", "AmountMinor" to request.amountMinor))
 
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection))
 
@@ -369,7 +371,7 @@ class PaymentController(
                 defaultReceiptTemplate = "refund"
             )
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("success" to response.Success))
+            eventStore.publishEvent("OperationCompleted", operationId, mapOf("Success" to response.Success))
 
             request.clientRequestId?.let { clientId ->
                 operationCache[clientId] = response
@@ -411,7 +413,7 @@ class PaymentController(
         stateManager.beginOperation(operationId)
         try {
             eventStore.publishEvent("OperationStarted", operationId,
-                mapOf("type" to "cashback", "purchaseMinor" to request.purchaseMinor, "cashbackMinor" to request.cashbackMinor))
+                mapOf("OperationType" to "cashback", "PurchaseMinor" to request.purchaseMinor, "CashbackMinor" to request.cashbackMinor))
 
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection))
 
@@ -427,7 +429,7 @@ class PaymentController(
                 defaultReceiptTemplate = "purchase"
             )
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("success" to response.Success))
+            eventStore.publishEvent("OperationCompleted", operationId, mapOf("Success" to response.Success))
 
             request.clientRequestId?.let { clientId ->
                 operationCache[clientId] = response

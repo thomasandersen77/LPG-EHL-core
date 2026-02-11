@@ -12,31 +12,34 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>lpg-ehl-payment-terminal-sim</artifactId>
+    <artifactId>lpg-ehl-payment-terminal-gui</artifactId>
     <packaging>jar</packaging>
 
-    <name>LPG-EHL Payment Terminal Simulator</name>
-    <description>Payment Terminal HTTP REST API simulator for testing without physical hardware</description>
+    <name>LPG-EHL Payment Terminal GUI</name>
+    <description>Visual Payment Terminal Simulator with JavaFX GUI</description>
+
+    <properties>
+        <openjfx.version>21.0.2</openjfx.version>
+    </properties>
 
     <dependencies>
-        <!-- Spring Boot Web + Undertow (more efficient than Tomcat) -->
+        <!-- Embeds the HTTP simulator -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.springframework.boot</groupId>
-                    <artifactId>spring-boot-starter-tomcat</artifactId>
-                </exclusion>
-            </exclusions>
+            <groupId>no.cloudberries.lpg</groupId>
+            <artifactId>lpg-ehl-payment-terminal-sim</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- JavaFX -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${openjfx.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-undertow</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webflux</artifactId>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${openjfx.version}</version>
         </dependency>
 
         <!-- Kotlin -->
@@ -49,34 +52,10 @@
             <artifactId>kotlin-reflect</artifactId>
         </dependency>
 
-        <!-- Kotlin Coroutines -->
-        <dependency>
-            <groupId>org.jetbrains.kotlinx</groupId>
-            <artifactId>kotlinx-coroutines-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.jetbrains.kotlinx</groupId>
-            <artifactId>kotlinx-coroutines-reactor</artifactId>
-        </dependency>
-
-        <!-- Jackson for JSON -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.module</groupId>
-            <artifactId>jackson-module-kotlin</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.dataformat</groupId>
-            <artifactId>jackson-dataformat-yaml</artifactId>
-        </dependency>
-
         <!-- Logging -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
         </dependency>
 
         <!-- Testing -->
@@ -85,27 +64,12 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-test-junit5</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.projectreactor</groupId>
-            <artifactId>reactor-test</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
         <sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
         <testSourceDirectory>${project.basedir}/src/test/kotlin</testSourceDirectory>
-        <finalName>payment-terminal-sim</finalName>
+        <finalName>payment-terminal-gui</finalName>
 
         <plugins>
             <!-- Kotlin Plugin -->
@@ -136,15 +100,10 @@
                         <goals>
                             <goal>repackage</goal>
                         </goals>
-                        <configuration>
-                            <!-- Produce payment-terminal-sim-exec.jar (executable)
-                                 and keep payment-terminal-sim.jar (library, for GUI dependency) -->
-                            <classifier>exec</classifier>
-                        </configuration>
                     </execution>
                 </executions>
                 <configuration>
-                    <mainClass>no.cloudberries.lpg.payment.terminal.sim.PaymentTerminalSimApplicationKt</mainClass>
+                    <mainClass>no.cloudberries.lpg.payment.terminal.gui.PaymentTerminalGuiApplicationKt</mainClass>
                 </configuration>
             </plugin>
 

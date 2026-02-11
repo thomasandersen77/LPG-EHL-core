@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedDeque
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -25,6 +26,9 @@ class EventStore(
 
     // Event buffer (circular, limited size)
     private val events = ConcurrentLinkedDeque<EventEnvelope>()
+
+    // Listeners for real-time GUI updates
+    private val listeners = CopyOnWriteArrayList<EventStoreListener>()
 
     /**
      * Publish an event.
@@ -52,6 +56,29 @@ class EventStore(
         }
 
         log.debug("Event published: type={}, cursor={}, operationId={}", eventType, cursor, operationId)
+
+        // Notify listeners
+        listeners.forEach { listener ->
+            try {
+                listener.onEvent(event)
+            } catch (ex: Exception) {
+                log.warn("Event listener error: {}", ex.message)
+            }
+        }
+    }
+
+    /**
+     * Add a listener for real-time event notifications.
+     */
+    fun addListener(listener: EventStoreListener) {
+        listeners.add(listener)
+    }
+
+    /**
+     * Remove a listener.
+     */
+    fun removeListener(listener: EventStoreListener) {
+        listeners.remove(listener)
     }
 
     /**
