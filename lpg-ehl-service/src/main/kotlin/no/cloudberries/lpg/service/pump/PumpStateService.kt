@@ -7,6 +7,7 @@ import no.cloudberries.lpg.emulator.IEhlDispenserEmulator
 import no.cloudberries.lpg.protocol.*
 import no.cloudberries.lpg.service.event.*
 import no.cloudberries.lpg.service.price.PriceService
+import org.springframework.context.ApplicationEventPublisher
 import no.cloudberries.lpg.service.transaction.Transaction
 import no.cloudberries.lpg.service.transaction.TransactionService
 import org.slf4j.LoggerFactory
@@ -31,6 +32,7 @@ import kotlin.math.roundToInt
 @Service
 class PumpStateService(
     private val eventPublisher: EventPublisher,
+    private val applicationEventPublisher: ApplicationEventPublisher,
     private val transactionService: TransactionService,
     private val ehlCommunicator: EhlCommunicator,
     private val dispenserEmulator: IEhlDispenserEmulator?,  // Null i FIELD MODE
@@ -464,6 +466,7 @@ class PumpStateService(
             state.hasPendingTransaction = true
             state.state = "PAYMENT_PENDING"
             serviceLog(LogLevel.INFO, "🛑 Pumping stoppet: ${state.volumeLitres} L = ${state.amountKr} kr - venter betaling")
+            applicationEventPublisher.publishEvent(PumpStoppedEvent(this, address, state.volumeLitres, state.amountKr))
         } else {
             serviceLog(LogLevel.INFO, "🛑 Pumping stoppet: Ingen volum levert for pumpe #$address")
         }
@@ -873,7 +876,21 @@ class PumpStateService(
                     state.amountKr = state.volumeLitres * state.pricePerLitreKr
                     state.volumeLitres = (state.volumeLitres * 100).roundToInt() / 100.0
                     state.amountKr = (state.amountKr * 100).roundToInt() / 100.0
-                    
+
+                    // Detect hardware stop (e.g. PLS GUI Stop button) - STATE 0x00 = IDLE
+                    try {
+                        val statePacket = EhlPacket(state.address, EhlCommand.STATE, ByteArray(0))
+                        val stateResponse = runBlocking { ehlCommunicator.sendAndReceive(statePacket, 500) }
+                        if (stateResponse.data.isNotEmpty()) {
+                            val stateByte = stateResponse.data[0].toInt() and 0xFF
+                            if (stateByte == 0x00 && state.volumeLitres > 0) {
+                                logger.info("🛑 Hardware stop detected (PLS GUI?) - pump {} stopped with {} L", state.address, state.volumeLitres)
+                                handleHardwareStop(state)
+                                return@forEach
+                            }
+                        }
+                    } catch (_: Exception) { /* ignore */ }
+
                     // Log every 0.5L milestone
                     val lastMilestone = lastLoggedMilestone[state.address] ?: 0.0
                     val currentMilestone = (state.volumeLitres / 0.5).toInt() * 0.5
@@ -915,6 +932,31 @@ class PumpStateService(
         }
     }
     
+    /**
+     * Handle pump stopped by hardware (e.g. PLS GUI Stop button) without BLOCK command.
+     */
+    private fun handleHardwareStop(state: PumpState) {
+        state.state = "PAYMENT_PENDING"
+        state.nozzleLifted = false
+        state.pumpingStartTime = null
+        state.hasPendingTransaction = true
+
+        state.authorizationId?.let { authId ->
+            try {
+                authorizationService?.markStopped(authId, state.volumeLitres, state.amountKr)
+            } catch (_: Exception) {}
+        }
+
+        state.pendingTransactionId?.let { txId ->
+            try {
+                transactionService.updateTransactionVolume(txId, state.volumeLitres, state.amountKr, "PENDING")
+            } catch (_: Exception) {}
+        }
+
+        applicationEventPublisher.publishEvent(PumpStoppedEvent(this, state.address, state.volumeLitres, state.amountKr))
+        broadcastStatus(state)
+    }
+
     private fun broadcastStatus(state: PumpState) {
         val pumpEvent = PumpStatusEvent(
             address = state.address,

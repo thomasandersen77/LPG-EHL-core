@@ -48,7 +48,10 @@ class WebAppPollingService(
         }
 
         try {
-            // Kaller pollVolume() som broadcaster WebSocket-events
+            // Poll for state transitions (READY_TO_PUMP → PUMPING)
+            pumpStateService.pollStateForReadyPumps()
+            
+            // Poll for volume updates (PUMPING state)
             pumpStateService.pollVolume()
         } catch (e: Exception) {
             // Ignorer feil - pollVolume() håndterer exceptions internt

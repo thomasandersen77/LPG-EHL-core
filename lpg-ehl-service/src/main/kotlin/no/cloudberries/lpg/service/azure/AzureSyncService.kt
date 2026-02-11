@@ -3,6 +3,7 @@ package no.cloudberries.lpg.service.azure
 import com.azure.core.util.BinaryData
 import com.azure.storage.queue.QueueClient
 import com.fasterxml.jackson.databind.ObjectMapper
+import no.cloudberries.lpg.logging.MdcActor
 import no.cloudberries.lpg.service.dto.SyncStatusResponse
 import no.cloudberries.lpg.service.azure.AzureSyncQueue
 import no.cloudberries.lpg.service.azure.SyncStatus
@@ -34,6 +35,7 @@ class AzureSyncService(
     @Scheduled(fixedDelayString = "\${azure.sync.interval-seconds}000")
     @Transactional
     fun syncPendingItems() {
+        MdcActor.runWithActor(MdcActor.Actor.SYSTEM) {
         logger.debug("Starting Azure sync job...")
         
         try {
@@ -65,6 +67,7 @@ class AzureSyncService(
             
         } catch (e: Exception) {
             logger.error("Azure sync job failed: ${e.message}", e)
+        }
         }
     }
 

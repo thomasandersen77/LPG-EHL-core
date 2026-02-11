@@ -1,0 +1,26 @@
+server:
+  port: 18080
+
+spring:
+  application:
+    name: payment-terminal-gui
+  main:
+    # Allow bean definition overriding (GUI reuses sim beans)
+    allow-bean-definition-overriding: true
+
+payment-terminal-sim:
+  default-scenario: APPROVED
+  scenarios-enabled: true
+  operation-delay-ms: 2000
+  enable-random-jitter: true
+  terminal-id: "12345678"
+  merchant-id: "12345678901234"
+  allow-scenario-header: true
+  event-buffer-size: 1000
+
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg.payment.terminal: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

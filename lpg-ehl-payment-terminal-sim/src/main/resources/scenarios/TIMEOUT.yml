@@ -1,0 +1,16 @@
+version: 1
+name: TIMEOUT
+result:
+  success: false
+  responseCode: ""
+  localModeResult: 2
+  rejectionSource: ""
+  rejectionReason: ""
+terminalState:
+  requiresReady: true
+  busy: false
+  notReady: false
+  timeout: true
+flow: []
+receipt:
+  template: none

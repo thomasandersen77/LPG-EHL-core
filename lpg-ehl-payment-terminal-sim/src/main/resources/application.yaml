@@ -1,0 +1,39 @@
+server:
+  port: 18080
+
+spring:
+  application:
+    name: payment-terminal-simulator
+
+payment-terminal-sim:
+  # Default scenario for operations
+  default-scenario: APPROVED
+
+  # Enable YAML scenario files (classpath/resources or external path)
+  scenarios-enabled: true
+
+  # Optional external scenarios directory (overrides classpath when file exists)
+  # scenarios-path: /path/to/scenarios
+
+  # Simulated operation delay (milliseconds)
+  operation-delay-ms: 2000
+
+  # Add random jitter to delays (0 to operation-delay-ms)
+  enable-random-jitter: true
+
+  # Terminal identification
+  terminal-id: "12345678"
+  merchant-id: "12345678901234"
+
+  # Enable scenario override via X-Terminal-Scenario header
+  allow-scenario-header: true
+
+  # Event store size (for SSE)
+  event-buffer-size: 1000
+
+logging:
+  level:
+    root: INFO
+    no.cloudberries.lpg.payment.terminal.sim: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

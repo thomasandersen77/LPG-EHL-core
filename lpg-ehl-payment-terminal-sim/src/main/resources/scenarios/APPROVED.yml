@@ -1,0 +1,30 @@
+version: 1
+name: APPROVED
+result:
+  success: true
+  responseCode: "00"
+  localModeResult: 0
+  rejectionSource: "0"
+  rejectionReason: ""
+terminalState:
+  requiresReady: true
+  busy: false
+  notReady: false
+  timeout: false
+flow:
+  - event: DisplayText
+    text: "VENTER PÅ KORTET"
+    displayTextId: 1011
+    delayMs: 500
+  - event: DisplayText
+    text: "SETT INN KORTET"
+    displayTextId: 1003
+    delayMs: 500
+  - event: DisplayText
+    text: "Kode + OK"
+    displayTextId: 1
+    delayMs: 1000
+receipt:
+  template: purchase
+  approved: true
+  responseCode: "00"

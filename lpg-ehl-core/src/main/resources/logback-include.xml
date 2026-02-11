@@ -26,8 +26,8 @@
          PROPERTIES
          ═══════════════════════════════════════════════════════════════════════ -->
     <property name="LOG_DIR" value="${LOG_DIR:-./logs}"/>
-    <property name="LOG_PATTERN" value="%d{HH:mm:ss.SSS} %-5level %logger{25} - %msg%n"/>
-    <property name="FILE_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
+    <property name="LOG_PATTERN" value="%d{HH:mm:ss.SSS} %-5level [%X{actor:--}] %logger{25} - %msg%n"/>
+    <property name="FILE_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{actor:--}] %-5level %logger{36} - %msg%n"/>
     <property name="PROTOCOL_PATTERN" value="%d{HH:mm:ss.SSS} %msg%n"/>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
@@ -35,7 +35,7 @@
          ═══════════════════════════════════════════════════════════════════════ -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) %cyan(%logger{20}) - %msg%n</pattern>
+            <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) [%X{actor:--}] %cyan(%logger{20}) - %msg%n</pattern>
         </encoder>
     </appender>
 

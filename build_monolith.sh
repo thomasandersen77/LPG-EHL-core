@@ -2,9 +2,11 @@
 # build_monolith.sh - Build LPG-EHL Applications
 #
 # Output: 
-#   release/lpg-ehl-webapp.jar    - Web UI + REST API
-#   release/lpg-ehl-headless.jar  - Background Service (+ debug-api profil)
-#   release/pls-sim.jar           - PLS Simulator (for socat testing)
+#   release/lpg-ehl-webapp.jar           - Web UI + REST API
+#   release/lpg-ehl-headless.jar         - Background Service (+ debug-api profil)
+#   release/pls-sim.jar                  - PLS Simulator (for socat testing)
+#   release/payment-terminal-sim.jar     - Payment Terminal HTTP Simulator
+#   release/payment-terminal-gui.jar     - Payment Terminal Visual Simulator GUI
 #
 # Usage:
 #   ./build_monolith.sh              # Build all
@@ -108,6 +110,8 @@ PKG_ARGS="-DskipTests -q"
 run_maven "WebApp package" package -pl lpg-ehl-webapp -am $PKG_ARGS
 run_maven "Headless package" package -pl lpg-ehl-app-headless -am $PKG_ARGS
 run_maven "PLS Sim package" package -pl lpg-ehl-serialport-sim -am $PKG_ARGS
+run_maven "Payment Terminal Sim package" package -pl lpg-ehl-payment-terminal-sim -am $PKG_ARGS
+run_maven "Payment Terminal GUI package" package -pl lpg-ehl-payment-terminal-gui -am $PKG_ARGS
 
 echo -e "${GREEN}✓${NC}"
 
@@ -124,6 +128,19 @@ PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "pls-sim.ja
 if [ -z "$PLS_SIM_JAR" ]; then
     # Fallback if naming changes in the future
     PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
+fi
+
+PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim-exec.jar" | head -1)
+if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
+    PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim.jar" | head -1)
+fi
+if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
+    PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "lpg-ehl-payment-terminal-sim-*.jar" -not -name "*-plain.jar" | head -1)
+fi
+
+PAYMENT_TERMINAL_GUI_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-gui/target" -name "payment-terminal-gui.jar" | head -1)
+if [ -z "$PAYMENT_TERMINAL_GUI_JAR" ]; then
+    PAYMENT_TERMINAL_GUI_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-gui/target" -name "lpg-ehl-payment-terminal-gui-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
 # Require main artifacts
@@ -144,10 +161,26 @@ if [ -z "$PLS_SIM_JAR" ] || [ ! -f "$PLS_SIM_JAR" ]; then
     PLS_SIM_AVAILABLE=false
 fi
 
+PAYMENT_TERMINAL_SIM_AVAILABLE=true
+if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ] || [ ! -f "$PAYMENT_TERMINAL_SIM_JAR" ]; then
+    PAYMENT_TERMINAL_SIM_AVAILABLE=false
+fi
+
+PAYMENT_TERMINAL_GUI_AVAILABLE=true
+if [ -z "$PAYMENT_TERMINAL_GUI_JAR" ] || [ ! -f "$PAYMENT_TERMINAL_GUI_JAR" ]; then
+    PAYMENT_TERMINAL_GUI_AVAILABLE=false
+fi
+
 cp "$WEBAPP_JAR" "$RELEASE_DIR/lpg-ehl-webapp.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-webapp.jar"
 cp "$HEADLESS_JAR" "$RELEASE_DIR/lpg-ehl-headless.jar" && chmod +x "$RELEASE_DIR/lpg-ehl-headless.jar"
 if [ "$PLS_SIM_AVAILABLE" = true ]; then
     cp "$PLS_SIM_JAR" "$RELEASE_DIR/pls-sim.jar" && chmod +x "$RELEASE_DIR/pls-sim.jar"
+fi
+if [ "$PAYMENT_TERMINAL_SIM_AVAILABLE" = true ]; then
+    cp "$PAYMENT_TERMINAL_SIM_JAR" "$RELEASE_DIR/payment-terminal-sim.jar" && chmod +x "$RELEASE_DIR/payment-terminal-sim.jar"
+fi
+if [ "$PAYMENT_TERMINAL_GUI_AVAILABLE" = true ]; then
+    cp "$PAYMENT_TERMINAL_GUI_JAR" "$RELEASE_DIR/payment-terminal-gui.jar" && chmod +x "$RELEASE_DIR/payment-terminal-gui.jar"
 fi
 
 echo -e "${GREEN}✓${NC}"
@@ -165,6 +198,16 @@ if [ "$PLS_SIM_AVAILABLE" = true ]; then
 else
     PLS_SIM_SIZE="(not built)"
 fi
+if [ "$PAYMENT_TERMINAL_SIM_AVAILABLE" = true ]; then
+    PAYMENT_TERMINAL_SIM_SIZE=$(du -h "$RELEASE_DIR/payment-terminal-sim.jar" | cut -f1)
+else
+    PAYMENT_TERMINAL_SIM_SIZE="(not built)"
+fi
+if [ "$PAYMENT_TERMINAL_GUI_AVAILABLE" = true ]; then
+    PAYMENT_TERMINAL_GUI_SIZE=$(du -h "$RELEASE_DIR/payment-terminal-gui.jar" | cut -f1)
+else
+    PAYMENT_TERMINAL_GUI_SIZE="(not built)"
+fi
 
 # Clean up build log on success
 rm -f "$BUILD_LOG"
@@ -176,12 +219,22 @@ echo -e "${BLUE}═════════════════════�
 echo -e "${BOLD}  📦 ARTIFACTS${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${YELLOW}release/lpg-ehl-webapp.jar${NC}    ${GRAY}($WEBAPP_SIZE)${NC}"
-echo -e "  ${GREEN}release/lpg-ehl-headless.jar${NC}  ${GRAY}($HEADLESS_SIZE)${NC}"
+echo -e "  ${YELLOW}release/lpg-ehl-webapp.jar${NC}           ${GRAY}($WEBAPP_SIZE)${NC}"
+echo -e "  ${GREEN}release/lpg-ehl-headless.jar${NC}         ${GRAY}($HEADLESS_SIZE)${NC}"
 if [ "$PLS_SIM_AVAILABLE" = true ]; then
-    echo -e "  ${CYAN}release/pls-sim.jar${NC}           ${GRAY}($PLS_SIM_SIZE)${NC}"
+    echo -e "  ${CYAN}release/pls-sim.jar${NC}                  ${GRAY}($PLS_SIM_SIZE)${NC}"
 else
-    echo -e "  ${CYAN}release/pls-sim.jar${NC}           ${GRAY}$PLS_SIM_SIZE${NC}"
+    echo -e "  ${CYAN}release/pls-sim.jar${NC}                  ${GRAY}$PLS_SIM_SIZE${NC}"
+fi
+if [ "$PAYMENT_TERMINAL_SIM_AVAILABLE" = true ]; then
+    echo -e "  ${CYAN}release/payment-terminal-sim.jar${NC}     ${GRAY}($PAYMENT_TERMINAL_SIM_SIZE)${NC}"
+else
+    echo -e "  ${CYAN}release/payment-terminal-sim.jar${NC}     ${GRAY}$PAYMENT_TERMINAL_SIM_SIZE${NC}"
+fi
+if [ "$PAYMENT_TERMINAL_GUI_AVAILABLE" = true ]; then
+    echo -e "  ${CYAN}release/payment-terminal-gui.jar${NC}     ${GRAY}($PAYMENT_TERMINAL_GUI_SIZE)${NC}"
+else
+    echo -e "  ${CYAN}release/payment-terminal-gui.jar${NC}     ${GRAY}$PAYMENT_TERMINAL_GUI_SIZE${NC}"
 fi
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
@@ -287,6 +340,31 @@ echo -e "  ${BOLD}Profiler:${NC}"
 echo -e "    lab         ${GRAY}# In-memory emulator (utvikling)${NC}"
 echo -e "    field       ${GRAY}# Ekte serialport (produksjon)${NC}"
 echo -e "    debug-api   ${GRAY}# Aktiver debug-endepunkter${NC}"
+echo ""
+echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
+echo -e "${BOLD}  4. PAYMENT TERMINAL SIMULATOR (anbefalt: GUI)${NC}"
+echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
+echo ""
+echo -e "  ${CYAN}Start med GUI (anbefalt):${NC}"
+echo -e "    java -jar release/payment-terminal-gui.jar"
+echo ""
+echo -e "  ${CYAN}Start GUI med custom port:${NC}"
+echo -e "    java -jar release/payment-terminal-gui.jar --server.port=8080"
+echo ""
+echo -e "  ${CYAN}Start GUI med spesifikt scenario:${NC}"
+echo -e "    java -jar release/payment-terminal-gui.jar \\"
+echo -e "      --payment-terminal-sim.default-scenario=WRONG_PIN"
+echo ""
+echo -e "  ${CYAN}Start uten GUI (kun HTTP API):${NC}"
+echo -e "    java -jar release/payment-terminal-gui.jar --terminal.gui.enabled=false"
+echo -e "    ${GRAY}# eller bruk headless-varianten:${NC}"
+echo -e "    java -jar release/payment-terminal-sim.jar"
+echo ""
+echo -e "  ${CYAN}Tilgjengelige scenarier:${NC}"
+echo -e "    APPROVED, DECLINED, WRONG_PIN, USER_CANCEL, TIMEOUT, BUSY, NOT_READY"
+echo ""
+echo -e "  ${CYAN}Verifiser simulator:${NC}"
+echo -e "    curl http://localhost:18080/health"
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""

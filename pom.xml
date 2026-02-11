@@ -21,6 +21,8 @@
         <module>lpg-ehl-webapp</module>
         <module>lpg-transport</module>
         <module>lpg-ehl-serialport-sim</module>
+        <module>lpg-ehl-payment-terminal-sim</module>
+        <module>lpg-ehl-payment-terminal-gui</module>
         <module>lpg-ehl-service</module>
         <module>lpg-ehl-app-headless</module>
     </modules>

@@ -143,7 +143,7 @@ BaxiExperiments/
 
 ## 4. Komplett API-kontrakt
 
-**Base URL:** `http://127.0.0.1:8080` (konfigurerbar)
+**Base URL:** `http://127.0.0.1:18080` (konfigurerbar via server.json, produksjon bruker 18080)
 
 ### Endpoint-oversikt
 
@@ -170,9 +170,10 @@ BaxiExperiments/
 ### JSON casing (viktig!)
 
 - **`/health`** returnerer **lowercase** keys: `status`, `timestamp`, `configLoaded`
+- **Diagnostics endpoints** (`/v1/diag/*`) returnerer **lowercase** keys: `success`, `callResult`
 - **Alle andre endpoints** returnerer **PascalCase**: `Success`, `OperationId`, `AmountMinor`
 
-Forklaring: `/health` bygger JSON manuelt. Resten serialiseres med Json.NET uten camelCase-resolver.
+Forklaring: `/health` og diagnostics bygger JSON manuelt. Resten serialiseres med Json.NET uten camelCase-resolver.
 
 **Anbefaling for Kotlin-klient:** Bruk `ignoreUnknownKeys = true` og enten separate DTO-klasser eller case-insensitive parsing.
 
@@ -183,6 +184,7 @@ Forklaring: `/health` bygger JSON manuelt. Resten serialiseres med Json.NET uten
 | 409 | `terminal_busy` | Annen operasjon kjoerer |
 | 503 | `terminal_not_ready` | Terminal ikke aapnet/klar |
 | 408 | `operation_timeout` | Timeout - ingen completion event |
+| 422 | `operation_rejected` | Terminal avviste operasjonen |
 | 500 | `vendor_call_failure` | Vendor DLL call feilet |
 | 400 | `invalid_request` | Ugyldig request |
 | 403 | `diagnostics_disabled` | Diagnostikk deaktivert |
@@ -588,7 +590,7 @@ data class OperationResponse(
 ### PaymentTerminalClient.kt
 
 ```kotlin
-class PaymentTerminalClient(private val baseUrl: String = "http://127.0.0.1:8080") : AutoCloseable {
+class PaymentTerminalClient(private val baseUrl: String = "http://127.0.0.1:18080") : AutoCloseable {
 
     private val httpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
@@ -639,6 +641,7 @@ class PaymentTerminalClient(private val baseUrl: String = "http://127.0.0.1:8080
             HttpStatusCode.Conflict -> throw TerminalBusyException(response.body<ErrorResponse>())
             HttpStatusCode.ServiceUnavailable -> throw TerminalNotReadyException(response.body<ErrorResponse>())
             HttpStatusCode.RequestTimeout -> throw OperationTimeoutException(response.body<ErrorResponse>())
+            HttpStatusCode.UnprocessableEntity -> throw OperationRejectedException(response.body<ErrorResponse>())
             HttpStatusCode.InternalServerError -> throw VendorCallFailureException(response.body<ErrorResponse>())
             else -> throw TerminalException("HTTP ${response.status.value}", "unknown_error", response.bodyAsText())
         }
@@ -654,6 +657,7 @@ open class TerminalException(message: String, val errorCode: String, val details
 class TerminalBusyException(e: ErrorResponse) : TerminalException(e.Error, e.ErrorCode, e.Details)
 class TerminalNotReadyException(e: ErrorResponse) : TerminalException(e.Error, e.ErrorCode, e.Details)
 class OperationTimeoutException(e: ErrorResponse) : TerminalException(e.Error, e.ErrorCode, e.Details)
+class OperationRejectedException(e: ErrorResponse) : TerminalException(e.Error, e.ErrorCode, e.Details)
 class VendorCallFailureException(e: ErrorResponse) : TerminalException(e.Error, e.ErrorCode, e.Details)
 ```
 
@@ -661,7 +665,7 @@ class VendorCallFailureException(e: ErrorResponse) : TerminalException(e.Error, 
 
 ```kotlin
 fun main(args: Array<String>) {
-    val port = args.firstOrNull()?.toIntOrNull() ?: 8080
+    val port = args.firstOrNull()?.toIntOrNull() ?: 18080
     val wireMock = WireMockSetup(port)
     Runtime.getRuntime().addShutdownHook(Thread { wireMock.stop() })
     wireMock.start()
@@ -711,6 +715,7 @@ Klient sender `X-Terminal-Scenario: WRONG_PIN` header. Mock velger respons baser
 | BUSY | 409 | - | - | - | - |
 | NOT_READY | 503 | - | - | - | - |
 | TIMEOUT | 408 | - | - | - | - |
+| REJECTED | 422 | false | varies | varies | varies |
 
 ---
 
@@ -725,7 +730,8 @@ Klient sender `X-Terminal-Scenario: WRONG_PIN` header. Mock velger respons baser
 5. `POST /v1/payments/purchase` - not ready (503)
 6. `POST /v1/payments/purchase` - timeout (408)
 7. `POST /v1/payments/purchase` - wrong PIN (200, `Success=false`, `ResponseCode=Z1`)
-8. `POST /v1/admin/reversal` - happy path + busy
+8. `POST /v1/payments/purchase` - rejected (422)
+9. `POST /v1/admin/reversal` - happy path + busy
 
 ### Integrasjonstest-eksempel
 
@@ -792,13 +798,13 @@ Legg i `src/test/resources/payment-terminal/`:
 ### Simulator (Kotlin WireMock)
 
 ```bash
-./gradlew run --args="8080"
+./gradlew run --args="18080"
 ```
 
 ### Standalone WireMock
 
 ```bash
-java -jar wiremock-standalone-3.3.1.jar --port 8080 --root-dir ./resources/wiremock
+java -jar wiremock-standalone-3.3.1.jar --port 18080 --root-dir ./resources/wiremock
 ```
 
 ### Docker
@@ -808,8 +814,8 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY build/libs/payment-terminal-simulator-1.0.0.jar app.jar
 COPY resources/wiremock /app/wiremock
-EXPOSE 8080
-CMD ["java", "-jar", "app.jar", "8080"]
+EXPOSE 18080
+CMD ["java", "-jar", "app.jar", "18080"]
 ```
 
 ### Produksjonsserver (MonoServer)
@@ -873,7 +879,7 @@ Implementer en Kotlin-basert payment terminal simulator:
    - GET /v1/terminal/status (PascalCase)
    - POST /v1/terminal/open, /v1/terminal/close
    - POST /v1/payments/purchase (approved response)
-6. Lag TerminalSimulatorApp.kt main som starter WireMock paa port 8080
+6. Lag TerminalSimulatorApp.kt main som starter WireMock paa port 18080
 7. Skriv integrasjonstester:
    - Full purchase flow (happy path)
    - Terminal busy (409)

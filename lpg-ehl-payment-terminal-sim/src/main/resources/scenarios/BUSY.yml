@@ -1,0 +1,16 @@
+version: 1
+name: BUSY
+result:
+  success: false
+  responseCode: ""
+  localModeResult: 2
+  rejectionSource: ""
+  rejectionReason: ""
+terminalState:
+  requiresReady: true
+  busy: true
+  notReady: false
+  timeout: false
+flow: []
+receipt:
+  template: none
