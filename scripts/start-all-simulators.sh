@@ -1,13 +1,12 @@
 #!/bin/bash
 #═══════════════════════════════════════════════════════════════════════
-# START ALL SIMULATORS – Socat + Terminal + PLS + Webapp
+# START ALL SIMULATORS – Socat + Terminal + PLS
 #═══════════════════════════════════════════════════════════════════════
 #
-# Starter hele stacken for terminal/pumpe-integrasjon:
+# Starter simulatorene for terminal/pumpe-integrasjon:
 #   1. Socat       – virtuell seriell kobling (vserial0 <-> vserial1)
 #   2. Terminal    – Payment Terminal Simulator med GUI (port 18080)
 #   3. PLS         – Pumpe-simulator med GUI (vserial0)
-#   4. Webapp      – LPG-EHL Webapp (vserial1, field+terminal-sim)
 #
 # Port-fordeling:
 #   - /tmp/vserial0  → PLS Simulator (pumpestyring)
@@ -29,13 +28,11 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RELEASE="$PROJECT_ROOT/release"
 PAYMENT_TERMINAL_GUI_JAR="$RELEASE/payment-terminal-gui.jar"
 PLS_SIM_JAR="$RELEASE/pls-sim.jar"
-WEBAPP_JAR="$RELEASE/lpg-ehl-webapp.jar"
 
 # PIDs
 SOCAT_PID=""
 TERMINAL_PID=""
 PLS_PID=""
-WEBAPP_PID=""
 
 # Colors
 GREEN='\033[0;32m'
@@ -56,12 +53,6 @@ done
 cleanup() {
     echo ""
     echo -e "${CYAN}🛑 Stopping all services...${NC}"
-
-    # Webapp
-    if [ -n "${WEBAPP_PID:-}" ] && kill -0 "$WEBAPP_PID" 2>/dev/null; then
-        kill "$WEBAPP_PID" 2>/dev/null || true
-        echo -e "  ✓ Webapp stopped"
-    fi
 
     # PLS Simulator
     if [ -n "${PLS_PID:-}" ] && kill -0 "$PLS_PID" 2>/dev/null; then
@@ -101,7 +92,6 @@ build_if_needed() {
     local missing=""
     [ ! -f "$PAYMENT_TERMINAL_GUI_JAR" ] && missing="$missing payment-terminal-gui"
     [ ! -f "$PLS_SIM_JAR" ] && missing="$missing pls-sim"
-    [ ! -f "$WEBAPP_JAR" ] && missing="$missing webapp"
 
     if [ -n "$missing" ] || [ "$DO_BUILD" = true ]; then
         echo -e "${YELLOW}Bygger manglende JARs...${NC}"
@@ -113,7 +103,7 @@ build_if_needed() {
 build_if_needed
 
 # Verify JARs exist
-for j in "$PAYMENT_TERMINAL_GUI_JAR" "$PLS_SIM_JAR" "$WEBAPP_JAR"; do
+for j in "$PAYMENT_TERMINAL_GUI_JAR" "$PLS_SIM_JAR"; do
     if [ ! -f "$j" ]; then
         echo -e "${RED}Manglende JAR: $j${NC}"
         echo -e "Kjør: ./build_monolith.sh"
@@ -129,7 +119,7 @@ echo ""
 
 # 1. Socat
 rm -f /tmp/vserial0 /tmp/vserial1
-echo -e "${CYAN}[1/4] Starting socat...${NC}"
+echo -e "${CYAN}[1/3] Starting socat...${NC}"
 echo -e "      ${BOLD}/tmp/vserial0${NC}  ${GRAY}← PLS Simulator${NC}"
 echo -e "      ${BOLD}/tmp/vserial1${NC}  ${GRAY}← Webapp${NC}"
 
@@ -159,7 +149,7 @@ echo -e "${GREEN}      ✓ Socat running (PID: $SOCAT_PID)${NC}"
 echo ""
 
 # 2. Payment Terminal Simulator
-echo -e "${CYAN}[2/4] Starting Payment Terminal Simulator (GUI)...${NC}"
+echo -e "${CYAN}[2/3] Starting Payment Terminal Simulator (GUI)...${NC}"
 echo -e "      Port: ${BOLD}18080${NC}"
 
 java -jar "$PAYMENT_TERMINAL_GUI_JAR" &
@@ -170,7 +160,7 @@ echo -e "      ${GRAY}→ http://localhost:18080${NC}"
 echo ""
 
 # 3. PLS Simulator
-echo -e "${CYAN}[3/4] Starting PLS Simulator (pumpestyring)...${NC}"
+echo -e "${CYAN}[3/3] Starting PLS Simulator (pumpestyring)...${NC}"
 echo -e "      Port: ${BOLD}/tmp/vserial0${NC}  (adresse 1, GUI)";
 
 java -Xms64m -Xmx64m -XX:+UseSerialGC \
@@ -190,27 +180,6 @@ fi
 echo -e "${GREEN}      ✓ PLS Simulator running (PID: $PLS_PID)${NC}"
 echo ""
 
-# 4. Webapp
-echo -e "${CYAN}[4/4] Starting Webapp...${NC}"
-echo -e "      Port: ${BOLD}8080${NC}"
-echo -e "      Serial: ${BOLD}/tmp/vserial1${NC}"
-echo -e "      Profiler: ${BOLD}field,terminal-sim${NC}"
-
-java -jar "$WEBAPP_JAR" \
-    --spring.profiles.active=field,terminal-sim \
-    --ehl.serial.port=/tmp/vserial1 \
-    &
-WEBAPP_PID=$!
-sleep 4
-
-if ! kill -0 "$WEBAPP_PID" 2>/dev/null; then
-    echo -e "${RED}Webapp startet ikke${NC}"
-    exit 1
-fi
-echo -e "${GREEN}      ✓ Webapp running (PID: $WEBAPP_PID)${NC}"
-echo -e "      ${GRAY}→ http://localhost:8080${NC}"
-echo ""
-
 # Ready
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  ✅ Klart for testing${NC}"
@@ -220,7 +189,7 @@ echo -e "  ${BOLD}Flyt:${NC}"
 echo -e "  1. Åpne terminal i Payment Terminal Simulator"
 echo -e "  2. Trykk «Trekke kort» (scenario APPROVED)"
 echo -e "  3. PLS får UNBLOCK → trykk START i PLS GUI"
-echo -e "  4. Fylling teller i webapp og PLS"
+echo -e "  4. Start webapp separat for å fullføre testen"
 echo ""
 echo -e "  ${GRAY}Stop alt: Ctrl+C${NC}"
 echo ""

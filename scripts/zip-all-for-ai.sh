@@ -58,7 +58,7 @@ safe_zip lpg-ehl-core-for-ai.zip lpg-ehl-core/src \
     lpg-ehl-core/pom.xml \
     lpg-ehl-core/README.md \
     lpg-ehl-core/*.md \
-    -x "*/target/*" "*/.idea/*"
+    -x "*/target/*" "*/target-eclipse/*" "*/build/*" "*/.idea/*" "*/generated/*" "*/generated-sources/*"
 
 # API module (REST API contracts, DTOs, OpenAPI)
 echo "📦 lpg-ehl-api (REST API contracts, DTOs, OpenAPI)..."
@@ -66,7 +66,7 @@ safe_zip lpg-ehl-api-for-ai.zip lpg-ehl-api/src \
     lpg-ehl-api/pom.xml \
     lpg-ehl-api/README.md \
     lpg-ehl-api/*.md \
-    -x "*/target/*" "*/.idea/*"
+    -x "*/target/*" "*/target-eclipse/*" "*/build/*" "*/.idea/*" "*/generated/*" "*/generated-sources/*"
 
 # Service module (business logic, repositories, domain services)
 echo "📦 lpg-ehl-service (business logic, JPA, services)..."
@@ -74,7 +74,7 @@ safe_zip lpg-ehl-service-for-ai.zip lpg-ehl-service/src \
     lpg-ehl-service/pom.xml \
     lpg-ehl-service/README.md \
     lpg-ehl-service/*.md \
-    -x "*/target/*" "*/.idea/*"
+    -x "*/target/*" "*/target-eclipse/*" "*/build/*" "*/.idea/*" "*/generated/*" "*/generated-sources/*"
 
 # Transport module (serial port abstraction)
 echo "📦 lpg-transport (serial port transport layer)..."
@@ -82,7 +82,7 @@ safe_zip lpg-transport-for-ai.zip lpg-transport/src \
     lpg-transport/pom.xml \
     lpg-transport/README.md \
     lpg-transport/*.md \
-    -x "*/target/*" "*/.idea/*"
+    -x "*/target/*" "*/target-eclipse/*" "*/build/*" "*/.idea/*" "*/generated/*" "*/generated-sources/*"
 
 # Emulator module (virtual dispenser)
 echo "📦 lpg-ehl-emulator (virtual dispenser for testing)..."
@@ -90,7 +90,7 @@ safe_zip lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src \
     lpg-ehl-emulator/pom.xml \
     lpg-ehl-emulator/README.md \
     lpg-ehl-emulator/*.md \
-    -x "*/target/*" "*/.idea/*" "*/node_modules/*"
+    -x "*/target/*" "*/target-eclipse/*" "*/build/*" "*/.idea/*" "*/node_modules/*" "*/generated/*" "*/generated-sources/*"
 
 # Webapp module (Spring Boot REST API + React frontend)
 echo "📦 lpg-ehl-webapp (REST API + React frontend)..."
@@ -99,7 +99,7 @@ safe_zip lpg-ehl-webapp-for-ai.zip lpg-ehl-webapp/src \
     lpg-ehl-webapp/README.md \
     lpg-ehl-webapp/*.md \
     lpg-ehl-webapp/.env.local.example \
-    -x "*/target/*" "*/.idea/*" "*/node_modules/*" "*/static/*"
+    -x "*/target/*" "*/target-eclipse/*" "*/build/*" "*/.idea/*" "*/node_modules/*" "*/static/*" "*/generated/*" "*/generated-sources/*"
 
 # Headless app module (production deployment without web UI)
 echo "📦 lpg-ehl-app-headless (headless production app)..."
@@ -107,7 +107,7 @@ safe_zip lpg-ehl-app-headless-for-ai.zip lpg-ehl-app-headless/src \
     lpg-ehl-app-headless/pom.xml \
     lpg-ehl-app-headless/README.md \
     lpg-ehl-app-headless/*.md \
-    -x "*/target/*" "*/.idea/*"
+    -x "*/target/*" "*/target-eclipse/*" "*/build/*" "*/.idea/*" "*/generated/*" "*/generated-sources/*"
 
 # CLI module (Spring Shell)
 echo "📦 lpg-ehl-cli (command line interface)..."
@@ -115,7 +115,7 @@ safe_zip lpg-ehl-cli-for-ai.zip lpg-ehl-cli/src \
     lpg-ehl-cli/pom.xml \
     lpg-ehl-cli/README.md \
     lpg-ehl-cli/*.md \
-    -x "*/target/*" "*/.idea/*"
+    -x "*/target/*" "*/target-eclipse/*" "*/build/*" "*/.idea/*" "*/generated/*" "*/generated-sources/*"
 
 # Serial port simulator module
 echo "📦 lpg-ehl-serialport-sim (serial port simulator)..."
@@ -123,7 +123,25 @@ safe_zip lpg-ehl-serialport-sim-for-ai.zip lpg-ehl-serialport-sim/src \
     lpg-ehl-serialport-sim/pom.xml \
     lpg-ehl-serialport-sim/README.md \
     lpg-ehl-serialport-sim/*.md \
-    -x "*/target/*" "*/.idea/*"
+    -x "*/target/*" "*/target-eclipse/*" "*/build/*" "*/.idea/*" "*/generated/*" "*/generated-sources/*"
+
+# React frontend (lpg-web)
+echo "📦 lpg-web (React frontend source code)..."
+safe_zip lpg-web-for-ai.zip lpg-web/src \
+    lpg-web/public \
+    lpg-web/package.json \
+    lpg-web/package-lock.json \
+    lpg-web/tsconfig*.json \
+    lpg-web/vite.config.ts \
+    lpg-web/tailwind.config.js \
+    lpg-web/postcss.config.js \
+    lpg-web/eslint.config.js \
+    lpg-web/index.html \
+    lpg-web/.env.example \
+    lpg-web/openapi.yaml \
+    lpg-web/README.md \
+    lpg-web/*.md \
+    -x "*/node_modules/*" "*/dist/*" "*/build/*" "*/.vite/*" "*/coverage/*"
 
 # Parent POM
 echo "📦 Parent POM..."
@@ -176,6 +194,7 @@ echo "   • lpg-ehl-app-headless-for-ai.zip - Headless production deployment"
 echo "   • lpg-ehl-cli-for-ai.zip          - Command Line Interface (Spring Shell)"
 echo "   • lpg-ehl-serialport-sim-for-ai.zip - Serial port simulator"
 echo "   • lpg-ehl-parent-for-ai.zip       - Parent POM with dependencies"
+echo "   • lpg-web-for-ai.zip              - React frontend source code"
 echo ""
 echo "   DOCUMENTATION & LEGACY:"
 echo "   • docs-for-ai.zip                 - All documentation"
