@@ -24,8 +24,8 @@ buildNumber.properties
 *.rar
 hs_err_pid*
 
-.pycache/**
-__pycache__/**
+__pycache__/
+.pycache/
 
 # Legacy VB6 executables
 *.exe

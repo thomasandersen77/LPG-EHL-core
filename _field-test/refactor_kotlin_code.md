@@ -427,3 +427,573 @@ With that addressed, your current direction is strongly consistent with the Pyth
 - The **main Kotlin pump-control path is now conceptually aligned** with the proven Python approach that opened the dispenser.
 - Your proposed critique/refactoring directions are **substantially correct and pragmatic**.
 - To reach practical field parity confidence, prioritize **serial parity/config unification** and then simulator dirty-mode enhancements.
+
+---
+
+### 8) Payment terminal API capture (WireMock)
+
+# Payment Terminal API — WireMock Capture Report
+
+**Date:** 2026-02-12  
+**Server:** `http://127.0.0.1:8080`  
+**OpenAPI spec:** `openapi-payment-terminal.yaml` (v1.0.0)  
+**Capture method:** Direct curl requests against live server, responses used to generate WireMock stubs.
+
+## Summary
+
+| # | Endpoint | Method | HTTP Status | Stub File |
+|---|----------|--------|-------------|-----------|
+| 1 | `/health` | GET | 200 | `01-health-get-200.json` |
+| 2 | `/v1/terminal/status` | GET | 200 | `02-terminal-status-get-200.json` |
+| 3 | `/v1/terminal/open` | POST | 503 | `03-terminal-open-post.json` |
+| 4 | `/v1/terminal/close` | POST | 200 | `04-terminal-close-post-200.json` |
+| 5 | `/v1/payments/purchase` | POST | 503 | `05-purchase-post-503.json` |
+| 6 | `/v1/payments/refund` | POST | 503 | `06-refund-post-503.json` |
+| 7 | `/v1/payments/cashback` | POST | 503 | `07-cashback-post-503.json` |
+| 8 | `/v1/admin/avstemming` | POST | 503 | `08-admin-avstemming-post-503.json` |
+| 9 | `/v1/admin/cancel` | POST | 503 | `09-admin-cancel-post-503.json` |
+| 10 | `/v1/admin/reversal` | POST | 503 | `10-admin-reversal-post-503.json` |
+| 11 | `/v1/admin/z-report` | POST | 503 | `11-admin-z-report-post-503.json` |
+| 12 | `/v1/admin/last-receipt` | POST | 503 | `12-admin-last-receipt-post-503.json` |
+| 13 | `/v1/admin/software` | POST | 503 | `13-admin-software-post-503.json` |
+| 14 | `/v1/admin/dataset` | POST | 503 | `14-admin-dataset-post-503.json` |
+| 15 | `/v1/admin/code` | POST | 503 | `15-admin-code-post-503.json` |
+| 16 | `/v1/events` | GET | 200 | `16-events-get-200.json` |
+| 17 | `/v1/events/stream` | GET | 200* | `17-events-stream-get-200.json` |
+| 18 | `/v1/diag/schema` | GET | 403 | `18-diag-schema-get-403.json` |
+| 19 | `/v1/diag/sendjson` | POST | 403 | `19-diag-sendjson-post-403.json` |
+| 20 | `/v1/diag/sendtld` | POST | 403 | `20-diag-sendtld-post-403.json` |
+| 21 | `/v1/diag/confirm` | POST | 403 | `21-diag-confirm-post-403.json` |
+
+**Happy-path stubs (simulated):**
+- `02-terminal-status-get-200-ready.json` — terminal open & ready
+- `03-terminal-open-post-200-happy.json` — successful terminal open
+- `05-purchase-post-200-happy.json` — approved purchase
+- `06-refund-post-200-happy.json` — approved refund
+- `08-admin-avstemming-post-200-happy.json` — successful avstemming
+
+---
+
+## Detailed Endpoint Report
+
+### 1. Health Check
+
+**Endpoint:** `GET /health`  
+**Tag:** Health  
+**Description:** Server health and readiness check. Returns lowercase keys (exception to PascalCase convention).
+
+**curl:**
+```bash
+curl -s http://127.0.0.1:8080/health
+```
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-02-12T17:57:10.0474590Z",
+  "configLoaded": true
+}
+```
+
+**Notes:** Always returns 200 as long as the server process is running. Lowercase response keys.
+
+---
+
+### 2. Terminal Status
+
+**Endpoint:** `GET /v1/terminal/status`  
+**Tag:** Terminal  
+**Description:** Check terminal readiness. Must verify `terminalOpen=true` and `terminalReady=true` before financial operations.
+
+**curl:**
+```bash
+curl -s http://127.0.0.1:8080/v1/terminal/status
+```
+
+**Response (200):**
+```json
+{
+  "vendorDllLoadable": true,
+  "terminalOpen": false,
+  "terminalReady": false,
+  "connectionState": "None",
+  "lastError": null,
+  "terminalIdentity": {
+    "terminalID": "12345678"
+  }
+}
+```
+
+**Notes:**
+- `vendorDllLoadable=true` means the Baxi DLL is available.
+- `terminalOpen=false` and `terminalReady=false` — the terminal was not connected (missing Connect@Cloud credentials).
+- Extra fields not in OpenAPI: `connectionState`, `terminalIdentity`.
+
+---
+
+### 3. Terminal Open
+
+**Endpoint:** `POST /v1/terminal/open`  
+**Tag:** Terminal  
+**Description:** Initialize the terminal connection. Required before any financial operation.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/terminal/open \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**Response (503 — captured):**
+```json
+{
+  "success": false,
+  "message": null,
+  "error": "Connect@Cloud login failed (baseUrl='https://connectcloud-test.aws.nets.eu'): username and password are required"
+}
+```
+
+**Notes:**
+- Requires `CONNECTCLOUD_USERNAME` and `CONNECTCLOUD_PASSWORD` environment variables.
+- Server requires `Content-Length` header (send empty `{}` body).
+- Returns `SimpleResponse` schema.
+
+---
+
+### 4. Terminal Close
+
+**Endpoint:** `POST /v1/terminal/close`  
+**Tag:** Terminal  
+**Description:** Close the terminal connection.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/terminal/close \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**Response (200 — captured):**
+```json
+{
+  "success": true,
+  "message": "Terminal closed",
+  "error": null
+}
+```
+
+**Notes:** Succeeds even when terminal was not open.
+
+---
+
+### 5. Purchase
+
+**Endpoint:** `POST /v1/payments/purchase`  
+**Tag:** Payments  
+**Description:** Perform a card purchase. Core financial operation.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/payments/purchase \
+  -H "Content-Type: application/json" \
+  -d '{
+    "AmountMinor": 100,
+    "OperatorId": "0000",
+    "Currency": "NOK",
+    "OptionalData": "WireMock Test",
+    "ClientRequestId": "wiremock-capture-001"
+  }'
+```
+
+**Response (503 — captured, terminal not ready):**
+```json
+{
+  "success": false,
+  "operationId": null,
+  "startedAt": "0001-01-01T00:00:00",
+  "callResult": 0,
+  "error": "Connect@Cloud login failed ...: username and password are required",
+  "errorCode": "terminal_not_ready"
+}
+```
+
+**Notes:**
+- `AmountMinor` is in øre (100 = NOK 1,00).
+- `ClientRequestId` enables idempotent retries. Recommended format: `fuelingSession:<id>`.
+- When terminal is not ready, the server returns the full `OperationResponse` schema with all null fields.
+- The `terminal_not_ready` check happens before request body validation.
+
+---
+
+### 6. Refund
+
+**Endpoint:** `POST /v1/payments/refund`  
+**Tag:** Payments  
+**Description:** Refund/return operation.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/payments/refund \
+  -H "Content-Type: application/json" \
+  -d '{
+    "AmountMinor": 50,
+    "OperatorId": "0000",
+    "OptionalData": "WireMock Refund Test",
+    "ClientRequestId": "wiremock-capture-002"
+  }'
+```
+
+**Response (503):** Same `terminal_not_ready` response as purchase.
+
+**Notes:** Despite VB6 calling this "cashback" in its code, this is the actual refund endpoint.
+
+---
+
+### 7. Cashback (Purchase + Cashback)
+
+**Endpoint:** `POST /v1/payments/cashback`  
+**Tag:** Payments  
+**Description:** Combined purchase + cashback operation.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/payments/cashback \
+  -H "Content-Type: application/json" \
+  -d '{
+    "PurchaseMinor": 200,
+    "CashbackMinor": 100,
+    "Currency": "NOK",
+    "OperatorId": "4321",
+    "ClientRequestId": "wiremock-capture-003"
+  }'
+```
+
+**Response (503):** Same `terminal_not_ready` response.
+
+**Notes:**
+- Uses `PurchaseMinor` and `CashbackMinor` (not `AmountMinor`).
+- Default `OperatorId` is `"4321"` (different from purchase/refund which use `"0000"`).
+
+---
+
+### 8. Avstemming (Reconciliation)
+
+**Endpoint:** `POST /v1/admin/avstemming`  
+**Tag:** Administration  
+**Description:** End-of-day reconciliation. Admin code `0x3130`.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/admin/avstemming \
+  -H "Content-Type: application/json" \
+  -d '{"Password": "0000"}'
+```
+
+**Response (503):** `terminal_not_ready` — same pattern as all financial/admin operations.
+
+**Notes:** `Password` defaults to `"0000"`.
+
+---
+
+### 9. Cancel Current Operation
+
+**Endpoint:** `POST /v1/admin/cancel`  
+**Tag:** Administration  
+**Description:** Cancel the current in-flight terminal operation. Admin code `0x3132`.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/admin/cancel \
+  -H "Content-Type: application/json" \
+  -d '{"Password": "0000"}'
+```
+
+**Response (503):** `terminal_not_ready`.
+
+---
+
+### 10. Reversal
+
+**Endpoint:** `POST /v1/admin/reversal`  
+**Tag:** Administration  
+**Description:** Reverse the last successful transaction. **Not reversible.** Admin code `0x3134`.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/admin/reversal \
+  -H "Content-Type: application/json" \
+  -d '{"Password": "0000"}'
+```
+
+**Response (503):** `terminal_not_ready`.
+
+**Notes:** Use when payment succeeded but dispenser communication failed.
+
+---
+
+### 11. Z-Report
+
+**Endpoint:** `POST /v1/admin/z-report`  
+**Tag:** Administration  
+**Description:** End-of-day Z-report generation. Admin code `0x3137`.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/admin/z-report \
+  -H "Content-Type: application/json" \
+  -d '{"Password": "0000"}'
+```
+
+**Response (503):** `terminal_not_ready`.
+
+**Notes:** VB6 client appends additional data (technical refunds since last Z) — must be handled client-side.
+
+---
+
+### 12. Last Receipt
+
+**Endpoint:** `POST /v1/admin/last-receipt`  
+**Tag:** Administration  
+**Description:** Print/retrieve the last financial receipt. Admin code `0x313C`.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/admin/last-receipt \
+  -H "Content-Type: application/json" \
+  -d '{"Password": "0000"}'
+```
+
+**Response (503):** `terminal_not_ready`.
+
+---
+
+### 13. Software Download
+
+**Endpoint:** `POST /v1/admin/software`  
+**Tag:** Administration  
+**Description:** Download software update to terminal. Long-running operation. Admin code `0x313E`.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/admin/software \
+  -H "Content-Type: application/json" \
+  -d '{"Password": "0000"}'
+```
+
+**Response (503):** `terminal_not_ready`.
+
+---
+
+### 14. Dataset Download
+
+**Endpoint:** `POST /v1/admin/dataset`  
+**Tag:** Administration  
+**Description:** Download dataset to terminal. Admin code `0x313F`.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/admin/dataset \
+  -H "Content-Type: application/json" \
+  -d '{"Password": "0000"}'
+```
+
+**Response (503):** `terminal_not_ready`.
+
+---
+
+### 15. Generic Admin Code
+
+**Endpoint:** `POST /v1/admin/code`  
+**Tag:** Administration  
+**Description:** Execute a generic admin code not covered by specific endpoints.
+
+**curl (X-report, code 12598 / 0x3136):**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/admin/code \
+  -H "Content-Type: application/json" \
+  -d '{"Code": 12598, "Password": "0000"}'
+```
+
+**Response (503):** `terminal_not_ready`.
+
+**Common codes:**
+- `12593` (0x3131) — Empty printer buffer
+- `12598` (0x3136) — X-report
+- `12603` (0x313B) — Unknown/other
+
+---
+
+### 16. Events Polling
+
+**Endpoint:** `GET /v1/events?since=0`  
+**Tag:** Events  
+**Description:** Poll for events since a given cursor. Alternative to SSE.
+
+**curl:**
+```bash
+curl -s "http://127.0.0.1:8080/v1/events?since=0"
+```
+
+**Response (200 — captured):**
+```json
+[]
+```
+
+**Notes:** Empty array when no events have occurred. Use `since=<last-cursor>` for incremental polling.
+
+---
+
+### 17. Events SSE Stream
+
+**Endpoint:** `GET /v1/events/stream?since=0`  
+**Tag:** Events  
+**Description:** Subscribe to real-time events via Server-Sent Events. Long-lived connection.
+
+**curl:**
+```bash
+curl -s -N "http://127.0.0.1:8080/v1/events/stream?since=0"
+```
+
+**Notes:** SSE stream — not captured as regular request/response. Simulated stub provides a heartbeat event. Use `-N` (no-buffer) with curl for SSE.
+
+---
+
+### 18. Diagnostics — Schema
+
+**Endpoint:** `GET /v1/diag/schema`  
+**Tag:** Diagnostics  
+**Description:** Retrieve terminal schema information.
+
+**curl:**
+```bash
+curl -s http://127.0.0.1:8080/v1/diag/schema
+```
+
+**Response (403 — captured):**
+```json
+{
+  "error": "Diagnostics are disabled",
+  "errorCode": "diagnostics_disabled",
+  "operationId": null,
+  "details": null
+}
+```
+
+**Notes:** Diagnostics are disabled by default. Enable with `"enableDiagnostics": true` in `server.json`.
+
+---
+
+### 19. Diagnostics — Send JSON
+
+**Endpoint:** `POST /v1/diag/sendjson`  
+**Tag:** Diagnostics  
+**Description:** Send raw JSON command to terminal for debugging.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/diag/sendjson \
+  -H "Content-Type: application/json" \
+  -d '{"json": "{\"test\":true}"}'
+```
+
+**Response (403):** `diagnostics_disabled` — same as schema.
+
+---
+
+### 20. Diagnostics — Send TLD
+
+**Endpoint:** `POST /v1/diag/sendtld`  
+**Tag:** Diagnostics  
+**Description:** Send raw TLD (Tag-Length-Data) to terminal.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/diag/sendtld \
+  -H "Content-Type: application/json" \
+  -d '{"tldType": "test", "tldData": "dGVzdA=="}'
+```
+
+**Response (403):** `diagnostics_disabled`.
+
+**Notes:** `tldData` is base64-encoded.
+
+---
+
+### 21. Diagnostics — Confirm
+
+**Endpoint:** `POST /v1/diag/confirm`  
+**Tag:** Diagnostics  
+**Description:** Confirm or deny a pending diagnostic operation.
+
+**curl:**
+```bash
+curl -s -X POST http://127.0.0.1:8080/v1/diag/confirm \
+  -H "Content-Type: application/json" \
+  -d '{"id": 1, "allow": true}'
+```
+
+**Response (403):** `diagnostics_disabled`.
+
+---
+
+## Observations from Capture
+
+1. **Terminal not ready** — All financial and admin operations return 503 with `errorCode: "terminal_not_ready"` because `CONNECTCLOUD_USERNAME` and `CONNECTCLOUD_PASSWORD` are not set.
+
+2. **Response casing** — The actual server uses **camelCase** (e.g. `vendorDllLoadable`, `terminalOpen`, `errorCode`), not PascalCase as documented in the OpenAPI spec. The OpenAPI spec notes this discrepancy: `/health` uses lowercase, but actual observation shows *all* endpoints use camelCase.
+
+3. **Extra fields** — The server returns fields not in the OpenAPI spec:
+   - `connectionState` on terminal status
+   - `terminalIdentity` with `terminalID` on terminal status
+   - `methodRejectCode`, `methodRejectInfo`, `resultEventName`, `localModeResultData`, `entryMode`, `entryModeCode` on operation responses
+
+4. **Content-Length required** — POST endpoints that have no defined request body (terminal open/close) require a non-empty body (`{}`) or the server returns 411 Length Required.
+
+5. **Diagnostics disabled** — All `/v1/diag/*` endpoints return 403 with `diagnostics_disabled`. The `server.json` has `"enableDiagnostics": true`, but the server startup log shows diagnostics are still disabled (possibly overridden at runtime).
+
+6. **Terminal close always succeeds** — Even when the terminal was never opened, close returns `success: true`.
+
+---
+
+## Running WireMock with These Stubs
+
+### Standalone mode (happy path)
+
+```bash
+# Download WireMock if needed
+curl -L -o wiremock-standalone-3.3.1.jar \
+  https://repo1.maven.org/maven2/org/wiremock/wiremock-standalone/3.3.1/wiremock-standalone-3.3.1.jar
+
+# Run WireMock standalone with captured stubs
+java -jar wiremock-standalone-3.3.1.jar \
+  --port 9090 \
+  --root-dir=./wiremock
+```
+
+### Proxy/recording mode (capture new responses)
+
+```bash
+java -jar wiremock-standalone-3.3.1.jar \
+  --port 9090 \
+  --proxy-all="http://localhost:8080" \
+  --record-mappings \
+  --root-dir=./wiremock \
+  --verbose
+```
+
+### Switching between captured and happy-path stubs
+
+The stubs use WireMock priorities:
+- **Priority 1 (default):** Captured real responses (503 errors, 403 diagnostics)
+- **Priority 2:** Happy-path simulated responses
+
+To use happy-path stubs, either:
+1. Remove the captured 503 stubs, or
+2. Use WireMock scenarios to switch between states
+
+### Verify stubs are loaded
+
+```bash
+curl http://localhost:9090/__admin/mappings | python3 -m json.tool
+```
