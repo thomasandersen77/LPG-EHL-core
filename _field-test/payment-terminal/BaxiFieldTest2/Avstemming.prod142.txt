@@ -1,0 +1,20 @@
+PARAMETRE ENDRET
+HOST IP ADRESSE = 91.102
+.24.142
+
+Bax: 42696609-1229329
+08/02/2026 11:53
+Valuta: NOK
+Sesjon.: 005
+
+Avstemming
+
+------------------------
+Innsamlet              0
+Total=              0,00
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

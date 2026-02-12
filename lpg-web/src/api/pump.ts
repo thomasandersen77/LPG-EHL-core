@@ -1,8 +1,7 @@
 import axios from 'axios';
 
-// API configuration - same as backend
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080');
+// Use relative URLs that work with the backend proxy
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

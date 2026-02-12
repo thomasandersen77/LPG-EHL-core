@@ -1,0 +1,19 @@
+{
+  "bindAddress": "127.0.0.1",
+  "bindPort": 18080,
+  "databasePath": "./data/payment_terminal.db",
+  "receiptStoragePath": "./receipts",
+  "receiptRetentionDays": 0,
+  "receiptRetentionMaxOperations": 0,
+  "financialOperationTimeoutSeconds": 180,
+  "adminOperationTimeoutSeconds": 300,
+  "enableDiagnostics": false,
+  "busyRetry": {
+    "enabled": false,
+    "maxRetrySeconds": 20,
+    "retryDelayMs": 1000
+  },
+  "baxiAssemblyPath": "./baxi_dotnet.dll",
+  "vendorInfoExtended": "ECR;;;;"
+}
+

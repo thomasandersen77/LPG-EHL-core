@@ -10,4 +10,4 @@
 payment:
   terminal:
     enabled: true
-    base-url: http://localhost:18080
+    base-url: ${PAYMENT_TERMINAL_BASE_URL:http://localhost:18080}

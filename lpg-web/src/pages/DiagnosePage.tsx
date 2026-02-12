@@ -149,7 +149,7 @@ export function DiagnosePage() {
             </p>
           </Link>
           <a
-            href="http://localhost:8080/swagger-ui.html"
+            href="/swagger-ui.html"
             target="_blank"
             rel="noopener noreferrer"
             className="group p-6 bg-gradient-to-br from-indigo-900/40 to-indigo-800/20 border border-indigo-700/30 rounded-xl hover:border-indigo-500/50 transition-all"

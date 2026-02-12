@@ -6,8 +6,7 @@ import { confirmPayment } from '../api/emulator';
 
 // API configuration
 // Both webapp frontend and API run on port 8080
-const EMULATOR_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || 
-  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080');
+const EMULATOR_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || '';
 const WS_BASE_URL = EMULATOR_BASE_URL.replace(/^http/, 'ws');
 
 // Types

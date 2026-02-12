@@ -1,20 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import axios from 'axios';
-
-type TerminalAction = {
-  label: string;
-  method: 'get' | 'post';
-  path: string;
-  body?: Record<string, unknown>;
-  params?: Record<string, unknown>;
-};
-
-const DEFAULT_TERMINAL_BASE = import.meta.env.VITE_PAYMENT_TERMINAL_URL || 'http://localhost:18080';
+import { terminalDiagApi, type TerminalAction } from '../api/terminalDiag';
 
 export function PaymentTerminalDiagnosticsPage() {
-  const [terminalBaseUrl, setTerminalBaseUrl] = useState<string>(DEFAULT_TERMINAL_BASE);
   const [lastAction, setLastAction] = useState<string>('');
   const [lastResponse, setLastResponse] = useState<unknown>(null);
   const [lastError, setLastError] = useState<string>('');
@@ -56,13 +45,12 @@ export function PaymentTerminalDiagnosticsPage() {
 
   const actionMutation = useMutation({
     mutationFn: async (action: TerminalAction) => {
-      const res = await axios({
-        method: action.method,
-        url: `${terminalBaseUrl}${action.path}`,
-        data: action.body,
-        params: action.params
-      });
-      return res.data;
+      const params = action.params
+        ? Object.fromEntries(
+            Object.entries(action.params).map(([k, v]) => [k, String(v ?? '')])
+          ) as Record<string, string>
+        : undefined;
+      return terminalDiagApi.execute({ ...action, params });
     },
     onSuccess: (data, action) => {
       setLastAction(action.label);
@@ -133,21 +121,10 @@ export function PaymentTerminalDiagnosticsPage() {
         </div>
 
         <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-          <h2 className="text-xl font-bold mb-4">🔗 Terminal Base URL</h2>
-          <div className="flex flex-col md:flex-row gap-3">
-            <input
-              value={terminalBaseUrl}
-              onChange={(event) => setTerminalBaseUrl(event.target.value)}
-              className="flex-1 bg-gray-700 rounded-lg px-3 py-2 text-white"
-              placeholder="http://localhost:18080"
-            />
-            <button
-              onClick={() => setTerminalBaseUrl(DEFAULT_TERMINAL_BASE)}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg font-semibold"
-            >
-              Reset
-            </button>
-          </div>
+          <h2 className="text-xl font-bold mb-4">🔗 Backend proxy</h2>
+          <p className="text-gray-400 text-sm">
+            API-kall går via backend (payment.terminal.base-url). Ingen direkte kobling fra nettleser.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -468,7 +445,7 @@ export function PaymentTerminalDiagnosticsPage() {
                 </button>
               </div>
               <button
-                onClick={() => window.open(`${terminalBaseUrl}/v1/events/stream?since=${encodeURIComponent(eventsSince)}`, '_blank')}
+                onClick={() => window.open(terminalDiagApi.getEventsStreamUrl(eventsSince), '_blank')}
                 className="mt-3 w-full py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg font-bold transition"
               >
                 Open SSE Stream

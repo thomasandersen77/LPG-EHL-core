@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
+import java.io.InputStream
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -80,6 +81,39 @@ class PaymentTerminalDiagnosticsService(
                 .put("allow", allow)
                 .toString()
         )
+    }
+
+    /**
+     * Generic proxy – forwards any request to the terminal.
+     * Used for Purchase, Refund, Cashback, Admin, Events etc.
+     */
+    fun proxy(method: String, path: String, body: String? = null, params: Map<String, String>? = null): JsonNode {
+        val normalizedPath = if (path.startsWith("/")) path else "/$path"
+        val pathWithParams = if (!params.isNullOrEmpty()) {
+            val query = params.entries.joinToString("&") { (k, v) -> "${k}=${java.net.URLEncoder.encode(v, Charsets.UTF_8)}" }
+            "$normalizedPath?$query"
+        } else normalizedPath
+        log.info("Payment terminal proxy: {} {}", method, pathWithParams)
+        return when (method.uppercase()) {
+            "GET" -> getJson(pathWithParams)
+            "POST" -> postJson(pathWithParams, body)
+            else -> {
+                log.warn("Unsupported proxy method: {}", method)
+                objectMapper.createObjectNode().put("error", "Unsupported method: $method")
+            }
+        }
+    }
+
+    fun streamEvents(since: String): InputStream {
+        val pathWithParams = "/v1/events/stream?since=${java.net.URLEncoder.encode(since, Charsets.UTF_8)}"
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create("$baseUrl$pathWithParams"))
+            .timeout(Duration.ofMinutes(5))
+            .header("Accept", "text/event-stream")
+            .GET()
+            .build()
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
+        return response.body()
     }
 
     private fun getJson(path: String): JsonNode {

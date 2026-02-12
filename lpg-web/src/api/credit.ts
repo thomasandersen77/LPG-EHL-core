@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { TransactionDto } from './transactions';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 export interface CreditAccountDto {
   id: string;

@@ -1,0 +1,19 @@
+Bax: 42696609-1229329
+08/02/2026 20:08
+Valuta: NOK
+Sesjon.: 012
+Z-rapport: 001
+
+Z-Total
+
+Siste Z-Total
+15/12/2025 10:29
+
+BankAxept              2
+Beløp=             13,00
+
+------------------------
+Antall                 2
+Total=             13,00
+
+

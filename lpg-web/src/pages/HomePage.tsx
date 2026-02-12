@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAppMode } from '../contexts/AppModeContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 type CardProps = {
   title: string;
@@ -183,7 +183,7 @@ export function HomePage() {
             </Link>
 
             <a
-              href="http://localhost:8080/swagger-ui.html"
+              href="/swagger-ui.html"
               target="_blank"
               rel="noopener noreferrer"
               className="p-6 bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 rounded-xl transition text-center group"

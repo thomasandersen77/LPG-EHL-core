@@ -1,0 +1,19 @@
+﻿Bax: 42696609-1229329
+09/02/2026 15:04
+Valuta: NOK
+Sesjon.: 017
+
+Avstemming
+
+BankAxept             10
+Beløp=            113,00
+
+------------------------
+Innsamlet             10
+Total=            113,00
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+

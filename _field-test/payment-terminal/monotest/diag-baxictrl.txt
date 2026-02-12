@@ -1,0 +1,96 @@
+BaxiCtrl properties:
+- AlwaysUseTotalAmountInExtendedLM: System.Int32
+- AutoGetCustomerInfo: System.Int32
+- BaudRate: System.Int32
+- BaxiPropertiesManuallySet: System.Boolean
+- BeaconServiceUUID: System.String
+- BLESerialPort: System.String
+- BluetoothTunnel: System.Int32
+- ClientID: System.String
+- ComPort: System.Int32
+- ConnectionManuallyClosed: System.Boolean
+- CurrencyCode: System.String
+- CutterSupport: System.Int32
+- DelegateCommunication: System.Int32
+- DeviceString: System.String
+- DisplayWidth: System.Int32
+- DoCloseConnection: System.Boolean
+- EnableStoreBox: System.Int32
+- HostIpAddress: System.String
+- HostPort: System.Int32
+- IndicateEotTransaction: System.Int32
+- LedEnabled: System.Int32
+- LinkControlTimeout: System.Int32
+- LogAutoDeleteDays: System.Int32
+- LogFilePath: System.String
+- LogFilePrefix: System.String
+- MerchantId: System.String
+- MerchantUrl: System.String
+- MethodRejectCode: System.Int32
+- MethodRejectInfo: System.String
+- MobileInfra: System.Int32
+- MsgRouterIpAddress: System.String
+- MsgRouterOn: System.Int32
+- MsgRouterPort: System.Int32
+- MultiCurrencyPath: System.String
+- MultiInstanceConfigFile: System.String
+- PathForBaxiIni: System.String
+- PaymentUrl: System.String
+- PayTableInfo: BBS.BAXI.PayAtTableOptionalData
+- PinByPass: System.Int32
+- PowerCycleCheck: System.Int32
+- PreventLoyaltyFromPurchase: System.Int32
+- PrinterWidth: System.Int32
+- SerialDriver: System.String
+- SocketListener: System.Int32
+- SocketListenerAddress: System.String
+- SocketListenerPort: System.Int32
+- SplitAcquiring: System.Int32
+- StoreBoxAPIHost: System.String
+- StoreBoxAuthToken: System.String
+- TerminalDeviceData_TLD: System.Byte[]
+- TerminalID: System.String
+- TerminalReady: System.Int32
+- TerminalSwVersion: System.String
+- TermType: System.String
+- TidSupervision: System.Int32
+- Token: System.String
+- TraceLevel: System.Int32
+- Use2KBuffer: System.Int32
+- UseDisplayTextID: System.Int32
+- UseExtendedLocalMode: System.Int32
+- UseMultiCurrency: System.Int32
+- UseMultiInstance: System.Int32
+- UseSplitDisplayText: System.Int32
+- VendorInfoExtended: System.String
+- Version: System.String
+
+BaxiCtrl methods:
+- Boolean ActivateCompanion(String address)
+- Int32 Administration(AdministrationArgs args)
+- Int32 BiBAdministration(BiBAdministrationArgs args)
+- Int32 BiBTransaction(BiBTransactionArgs args)
+- Void cleanUpJsonMessagesToSendList()
+- Int32 Close()
+- Void CoreReceiveMessageFromTerminal(Byte[] buffer, Int32 len)
+- ObjRef CreateObjRef(Type requestedType)
+- Void Dispose()
+- Boolean Equals(Object obj)
+- String GetFirstPairedCompanionAddress()
+- Int32 GetHashCode()
+- Object GetLifetimeService()
+- Boolean GetTLDTag(Byte[] wantedTldTag, Byte[] tldBuffer, Byte[]& wantedTldTagValue)
+- Type GetType()
+- Object InitializeLifetimeService()
+- Int32 InitPayAtTable(String title, String[] features)
+- Boolean IsOpen()
+- Int32 Open()
+- Void Release()
+- Int32 SendJson(SendJsonArgs jsonArgs)
+- Int32 sendPendingPrintJsonMsg()
+- Int32 SendTLD(SendTldArgs args)
+- String ToString()
+- Int32 TransferAmount(TransferAmountArgs args)
+- Int32 TransferCardData(TransferCardDataArgs args)
+- Void UploadReceiptToStoreBox(StoreBoxReceipt storeboxReceipt)
+- Boolean WarmUp()

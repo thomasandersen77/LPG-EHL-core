@@ -40,14 +40,14 @@
     </logger>
 
     <!-- Protokoll med WebSocket for live-visning -->
-    <logger name="no.cloudberries.lpg.protocol" level="INFO" additivity="false">
+    <logger name="no.cloudberries.lpg.protocol" level="DEBUG" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="WEBSOCKET"/>
         <appender-ref ref="ASYNC_PROTOCOL"/>
         <appender-ref ref="ASYNC_APPLICATION"/>
     </logger>
 
-    <logger name="no.cloudberries.lpg.communication" level="INFO" additivity="false">
+    <logger name="no.cloudberries.lpg.communication" level="DEBUG" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="WEBSOCKET"/>
         <appender-ref ref="ASYNC_PROTOCOL"/>
