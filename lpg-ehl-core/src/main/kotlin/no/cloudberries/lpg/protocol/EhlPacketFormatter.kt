@@ -52,14 +52,22 @@ object EhlPacketFormatter {
     private fun formatStateData(data: ByteArray): String {
         if (data.isEmpty()) return "Query"
         
-        val stateCode = data[0].toInt() and 0xFF
-        
-        // Use VB6-compatible bit-flag interpretation
-        // Bits: 0x02=OPEN_FOR_DELIVERY, 0x04=START_BUTTON, 0x08=AUTOMODE, 0x80=ERROR
-        val hasError = (stateCode and 0x80) != 0
-        val automode = (stateCode and 0x08) != 0
-        val startButton = (stateCode and 0x04) != 0
-        val openForDelivery = (stateCode and 0x02) != 0
+        val statusByte = data[0]
+        val stateCode = statusByte.toInt() and 0xFF
+
+        // VB6/SSOT bit mapping (see StatusBitMasks):
+        // - 0x02 = OPEN_FOR_DELIVERY
+        // - 0x04 = START_BUTTON_PRESSED
+        // - 0x08 = AUTOMODE (used by legacy VB6 for transaction/payment state)
+        // - 0x80 = ERROR_FLAG
+        val hasError = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.ERROR_FLAG)
+        val automode = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.AUTOMODE)
+        val startButton = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.START_BUTTON_PRESSED)
+        val openForDelivery = StatusBitMasks.isBitSet(statusByte, StatusBitMasks.OPEN_FOR_DELIVERY)
+
+        val bits = stateCode
+            .toString(radix = 2)
+            .padStart(8, '0')
         
         val stateName = when {
             hasError -> "ERROR (Dispenser error)"
@@ -67,10 +75,19 @@ object EhlPacketFormatter {
             startButton && openForDelivery -> "PUMPING (Fuel flowing)"  // 0x06
             startButton && !openForDelivery -> "AUTHORIZED (Ready for nozzle)"  // 0x04
             !startButton && !openForDelivery && !automode -> "IDLE (Ready for new transaction)"  // 0x00
-            openForDelivery && !startButton -> "NOZZLE_LIFTED (Waiting for authorization)"  // 0x02 only
+            openForDelivery && !startButton -> "OPEN_FOR_DELIVERY (Awaiting start)"  // 0x02 (may be observed directly after UNBLOCK)
             else -> "UNKNOWN (bits: 0x%02X)".format(stateCode)
         }
-        return "State=0x%02X ($stateName)".format(stateCode)
+
+        return "State=0x%02X bits=%s open_for_delivery=%s startbutton=%s automode=%s error=%s (%s)".format(
+            stateCode,
+            bits,
+            openForDelivery,
+            startButton,
+            automode,
+            hasError,
+            stateName
+        )
     }
     
     private fun formatVolumeData(data: ByteArray): String {

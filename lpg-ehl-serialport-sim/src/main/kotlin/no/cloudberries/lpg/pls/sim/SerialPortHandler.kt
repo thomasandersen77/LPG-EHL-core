@@ -18,13 +18,15 @@ class SerialPortHandler(
     private val chunked: Boolean,
     private val latencyMs: Int,
     private val logHex: Boolean,
-    plsState: PlsState? = null
+    plsState: PlsState? = null,
+    private val fieldConfig: FieldConfig = FieldConfig()
 ) {
     private val log = LoggerFactory.getLogger(SerialPortHandler::class.java)
     
     private var serialPort: SerialPort? = null
     private val running = AtomicBoolean(false)
     private var readerThread: Thread? = null
+    private var unsolicitedThread: Thread? = null
     
     private val state = plsState ?: PlsState()
     private val frameExtractor = FrameExtractor(mode, logHex)
@@ -102,6 +104,7 @@ class SerialPortHandler(
         running.set(true)
         readerThread = Thread({ readLoop() }, "pls-sim-reader")
         readerThread?.start()
+        startUnsolicitedVolumeThread()
     }
 
     /**
@@ -111,6 +114,7 @@ class SerialPortHandler(
         log.info("Stopping serial port handler...")
         running.set(false)
         readerThread?.join(1000)
+        unsolicitedThread?.join(1000)
         serialPort?.closePort()
         serialPort = null
         log.info("Serial port closed")
@@ -194,23 +198,72 @@ class SerialPortHandler(
                 return
             }
             
-            val (responseCmd, responseData, responseAddr) = when (result) {
-                is EhlCommandResult.OkAck -> Triple(EhlFrameCodec.CMD_OK, byteArrayOf(0x30), result.addr)  // VB6: OK with data[0]=0x30
-                is EhlCommandResult.LinetestResponse -> Triple(EhlFrameCodec.CMD_LINETEST, byteArrayOf(0x55.toByte(), 0xAA.toByte()), result.addr)  // VB6: LINETEST echoes command with 0x55 0xAA pattern
-                is EhlCommandResult.StateResponse -> Triple(EhlFrameCodec.CMD_STATE, result.data, result.addr)
-                is EhlCommandResult.VolumeResponse -> Triple(EhlFrameCodec.CMD_VOLUME, result.data, result.addr)
-                is EhlCommandResult.PriceResponse -> Triple(EhlFrameCodec.CMD_PRICE, result.data, result.addr)
-                is EhlCommandResult.ErrorQueryResponse -> Triple(EhlFrameCodec.CMD_ERROR_DATA, result.data, result.addr)
-                is EhlCommandResult.TankbitResponse -> Triple(EhlFrameCodec.CMD_TANKBIT, result.data, result.addr)
+            val responseAddr = ehlFrame.addr
+            val baseResponse = encodeResult(result)
+
+            val responses = mutableListOf(ResponseFrame(
+                cmd = baseResponse.cmd,
+                data = baseResponse.data,
+                bytes = baseResponse.bytes
+            ))
+            val knobs = mutableListOf<String>()
+
+            if (fieldConfig.profile == SimProfile.FIELD && ehlFrame.cmd == EhlFrameCodec.CMD_UNBLOCK && fieldConfig.noAckOnUnblock) {
+                val stateBytes = state.buildStateData()
+                responses.clear()
+                responses.add(ResponseFrame(EhlFrameCodec.CMD_STATE, stateBytes, EhlFrameCodec.encode(responseAddr, EhlFrameCodec.CMD_STATE, stateBytes)))
+                knobs.add("noAckOnUnblock->STATE")
             }
-            val response = EhlFrameCodec.encode(responseAddr, responseCmd, responseData)
+            if (fieldConfig.profile == SimProfile.FIELD && ehlFrame.cmd == EhlFrameCodec.CMD_BLOCK && fieldConfig.noAckOnBlock) {
+                val stateBytes = state.buildStateData()
+                responses.clear()
+                responses.add(ResponseFrame(EhlFrameCodec.CMD_STATE, stateBytes, EhlFrameCodec.encode(responseAddr, EhlFrameCodec.CMD_STATE, stateBytes)))
+                knobs.add("noAckOnBlock->STATE")
+            }
 
-            // INFO-level TX logging for observability
-            val respCmdName = cmdToName(responseCmd)
-            log.info("➡️  TX EHL: addr={} cmd={} (0x{}) dataLen={} hex={}",
-                addrInt, respCmdName, responseCmd.toHex(), responseData.size, response.toHexString())
+            if (fieldConfig.profile == SimProfile.FIELD) {
+                val interleaveChance = if (state.isPaymentPendingLike()) 0.6 else 0.15
+                if (Random.nextDouble() < interleaveChance) {
+                    val volumeBytes = state.buildVolumeData()
+                    responses.add(0, ResponseFrame(EhlFrameCodec.CMD_VOLUME, volumeBytes, EhlFrameCodec.encode(responseAddr, EhlFrameCodec.CMD_VOLUME, volumeBytes)))
+                    knobs.add("interleavedVolume")
+                }
+            }
 
-            sendResponse(response)
+            if (fieldConfig.profile == SimProfile.FIELD && ehlFrame.cmd == EhlFrameCodec.CMD_STATE && Random.nextDouble() < 0.4) {
+                val jitterMs = Random.nextLong(20, 81)
+                knobs.add("stateJitter=${jitterMs}ms")
+                Thread.sleep(jitterMs)
+            }
+
+            if (fieldConfig.profile == SimProfile.FIELD && Random.nextDouble() < fieldConfig.dropResponseProbability) {
+                log.info("⚙️  FIELD dropResponse: cmd={} addr={}", cmdName, addrInt)
+                return
+            }
+
+            if (fieldConfig.profile == SimProfile.FIELD && responses.size > 1 && Random.nextDouble() < fieldConfig.concatFramesProbability) {
+                knobs.add("concatFrames")
+                if (knobs.isNotEmpty()) {
+                    log.info("⚙️  FIELD knobs: {}", knobs.joinToString(", "))
+                }
+                val concatenated = concatResponses(responses)
+                responses.forEach { resp ->
+                    val respCmdName = cmdToName(resp.cmd)
+                    log.info("➡️  TX EHL: addr={} cmd={} (0x{}) dataLen={} hex={}",
+                        addrInt, respCmdName, resp.cmd.toHex(), resp.data.size, resp.bytes.toHexString())
+                }
+                sendResponse(concatenated, knobs)
+            } else {
+                if (knobs.isNotEmpty()) {
+                    log.info("⚙️  FIELD knobs: {}", knobs.joinToString(", "))
+                }
+                responses.forEach { resp ->
+                    val respCmdName = cmdToName(resp.cmd)
+                    log.info("➡️  TX EHL: addr={} cmd={} (0x{}) dataLen={} hex={}",
+                        addrInt, respCmdName, resp.cmd.toHex(), resp.data.size, resp.bytes.toHexString())
+                    sendResponse(resp.bytes, knobs)
+                }
+            }
 
         } else {
             // ASCII protocol (LINE or STX_ETX)
@@ -277,7 +330,7 @@ class SerialPortHandler(
      * Send response, optionally in chunks for realism.
      * For EHL mode, may corrupt checksum if fault injection is enabled.
      */
-    private fun sendResponse(response: ByteArray) {
+    private fun sendResponse(response: ByteArray, knobs: List<String> = emptyList()) {
         val port = serialPort ?: return
         
         // Apply checksum corruption for EHL frames if fault injection enabled
@@ -296,10 +349,20 @@ class SerialPortHandler(
             log.debug("TX: {} bytes: {}", finalResponse.size, finalResponse.toHexString())
         }
 
-        if (chunked && finalResponse.size > 1) {
-            writeChunked(port, finalResponse)
+        val useChunked = shouldChunkResponses()
+        val useInterCharDelay = fieldConfig.profile == SimProfile.FIELD && fieldConfig.interCharacterDelayMs.max > 0
+
+        if (useChunked && finalResponse.size > 1) {
+            writeChunked(port, finalResponse, useInterCharDelay)
+            if (knobs.isNotEmpty()) {
+                log.debug("TX knobs: {}", knobs.joinToString(", "))
+            }
         } else {
-            port.writeBytes(finalResponse, finalResponse.size)
+            if (useInterCharDelay) {
+                writeWithInterCharacterDelay(port, finalResponse)
+            } else {
+                port.writeBytes(finalResponse, finalResponse.size)
+            }
             if (mode != FrameMode.EHL) {
                 log.debug("TX: '{}'", String(finalResponse, Charsets.US_ASCII).trim())
             } else {
@@ -311,7 +374,7 @@ class SerialPortHandler(
     /**
      * Write response in random 2-5 chunks with 5-30ms delays.
      */
-    private fun writeChunked(port: SerialPort, response: ByteArray) {
+    private fun writeChunked(port: SerialPort, response: ByteArray, useInterCharDelay: Boolean) {
         val numChunks = Random.nextInt(2, 6).coerceAtMost(response.size)
         val chunkSize = response.size / numChunks
         
@@ -327,7 +390,11 @@ class SerialPortHandler(
             }
             
             val chunk = response.copyOfRange(offset, offset + thisChunk)
-            port.writeBytes(chunk, chunk.size)
+            if (useInterCharDelay) {
+                writeWithInterCharacterDelay(port, chunk)
+            } else {
+                port.writeBytes(chunk, chunk.size)
+            }
             
             if (logHex) {
                 log.debug("TX chunk {}: {}", chunkNum + 1, chunk.toHexString())
@@ -347,4 +414,104 @@ class SerialPortHandler(
             log.debug("TX (chunked {}x): EHL frame {} bytes", chunkNum, response.size)
         }
     }
+
+    private fun writeWithInterCharacterDelay(port: SerialPort, response: ByteArray) {
+        for (i in response.indices) {
+            port.writeBytes(byteArrayOf(response[i]), 1)
+            if (i < response.size - 1) {
+                Thread.sleep(fieldConfig.interCharacterDelayMs.nextMs())
+            }
+        }
+    }
+
+    private fun shouldChunkResponses(): Boolean {
+        if (fieldConfig.profile == SimProfile.FIELD) {
+            return when (fieldConfig.readChunkingMode) {
+                ReadChunkingMode.RANDOM -> Random.nextBoolean()
+                ReadChunkingMode.OFF -> false
+            }
+        }
+        return chunked
+    }
+
+    private fun startUnsolicitedVolumeThread() {
+        if (fieldConfig.profile != SimProfile.FIELD || mode != FrameMode.EHL) {
+            return
+        }
+        unsolicitedThread = Thread({
+            try {
+                while (running.get()) {
+                    if (state.isPaymentPendingLike()) {
+                        Thread.sleep(fieldConfig.unsolicitedVolumeIntervalMs.nextMs())
+                        if (!running.get()) {
+                            break
+                        }
+                        val addr = state.getPrimaryAddressByte()
+                        val volumeBytes = state.buildVolumeData()
+                        val frame = EhlFrameCodec.encode(addr, EhlFrameCodec.CMD_VOLUME, volumeBytes)
+                        log.info("⚙️  FIELD unsolicited VOLUME")
+                        sendResponse(frame, listOf("unsolicitedVolume"))
+                    } else {
+                        Thread.sleep(200)
+                    }
+                }
+            } catch (_: InterruptedException) {
+                // ignore
+            }
+        }, "pls-sim-unsolicited")
+        unsolicitedThread?.isDaemon = true
+        unsolicitedThread?.start()
+    }
+
+    private fun encodeResult(result: EhlCommandResult): ResponseFrame {
+        return when (result) {
+            is EhlCommandResult.OkAck -> {
+                val data = byteArrayOf(0x30)
+                val bytes = EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_OK, data)
+                ResponseFrame(EhlFrameCodec.CMD_OK, data, bytes)
+            }
+            is EhlCommandResult.LinetestResponse -> {
+                val data = byteArrayOf(0x55.toByte(), 0xAA.toByte())
+                val bytes = EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_LINETEST, data)
+                ResponseFrame(EhlFrameCodec.CMD_LINETEST, data, bytes)
+            }
+            is EhlCommandResult.StateResponse -> {
+                val bytes = EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_STATE, result.data)
+                ResponseFrame(EhlFrameCodec.CMD_STATE, result.data, bytes)
+            }
+            is EhlCommandResult.VolumeResponse -> {
+                val bytes = EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_VOLUME, result.data)
+                ResponseFrame(EhlFrameCodec.CMD_VOLUME, result.data, bytes)
+            }
+            is EhlCommandResult.PriceResponse -> {
+                val bytes = EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_PRICE, result.data)
+                ResponseFrame(EhlFrameCodec.CMD_PRICE, result.data, bytes)
+            }
+            is EhlCommandResult.ErrorQueryResponse -> {
+                val bytes = EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_ERROR_DATA, result.data)
+                ResponseFrame(EhlFrameCodec.CMD_ERROR_DATA, result.data, bytes)
+            }
+            is EhlCommandResult.TankbitResponse -> {
+                val bytes = EhlFrameCodec.encode(result.addr, EhlFrameCodec.CMD_TANKBIT, result.data)
+                ResponseFrame(EhlFrameCodec.CMD_TANKBIT, result.data, bytes)
+            }
+        }
+    }
+
+    private fun concatResponses(frames: List<ResponseFrame>): ByteArray {
+        val total = frames.sumOf { it.bytes.size }
+        val out = ByteArray(total)
+        var offset = 0
+        frames.forEach { frame ->
+            frame.bytes.copyInto(out, offset)
+            offset += frame.bytes.size
+        }
+        return out
+    }
+
+    private data class ResponseFrame(
+        val cmd: Byte,
+        val data: ByteArray,
+        val bytes: ByteArray
+    )
 }

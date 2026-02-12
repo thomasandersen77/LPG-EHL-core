@@ -71,38 +71,49 @@ java -jar pls-sim.jar --port=/tmp/ttyV0 --mode=ehl --address=1 --gui
 
 ## Kjøring
 
-### Alt-i-ett: start-all-simulators.sh
+### Alt-i-ett: sim-all.sh
 ```bash
-./scripts/start-all-simulators.sh
-# Eller med build: ./scripts/start-all-simulators.sh --build
+# Headless (default): terminal-sim + PLS uten GUI
+./scripts/sim-all.sh
+
+# GUI for begge simulatorene (terminal GUI + PLS JavaFX dødmannsknapp)
+./scripts/sim-all.sh --gui
+
+# Bygg artifacts først (hvis release/ mangler)
+./scripts/sim-all.sh --build
 ```
-Starter: Socat, Payment Terminal GUI (18080), PLS Simulator (vserial0), Webapp (vserial1, 8080).  
+Starter: Socat, Payment Terminal (headless eller GUI), PLS Simulator (med eller uten GUI).  
+Webapp startes separat (typisk i IntelliJ) og må bruke `/tmp/vserial1`.  
 Stop med Ctrl+C.
 
 ### Manuell kjøring
 
-### Terminal-simulator med GUI
+### Terminal-simulator (headless eller GUI)
 ```bash
-cd lpg-ehl-payment-terminal-gui
-mvn spring-boot:run
+# Headless API-sim (default)
+./scripts/sim-terminal.sh
+
+# GUI
+./scripts/sim-terminal.sh --gui
 ```
-Åpnes på http://localhost:18080
+Åpnes på http://localhost:18080 (default).
 
-### PLS-simulator med socat og GUI
+### PLS-simulator med socat (med eller uten GUI)
 ```bash
-# Terminal 1: Socat + PLS med GUI
-./start-socat-sim.sh
-# (Oppdater script for å legge til --gui)
+# Headless (default): auto-start etter UNBLOCK
+./scripts/sim-pls.sh
 
-# Eller manuelt:
-socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 pty,raw,echo=0,link=/tmp/ttyV1 &
-java -jar lpg-ehl-serialport-sim/target/pls-sim.jar \
-  --port=/tmp/ttyV0 --mode=ehl --address=1 --gui
+# GUI (dødmannsknapp): UNBLOCK -> AUTHORIZED, og START/STOPP styrer dyse
+./scripts/sim-pls.sh --gui
 ```
 
 ### Webapp (field mode mot PLS + terminal-sim)
+Webapp startes typisk i IntelliJ. Viktigst er at field-modus bruker socat-porten:
+- `--ehl.serial.port=/tmp/vserial1`
+
+Hvis du vil starte fra JAR:
 ```bash
-java -jar lpg-ehl-webapp.jar \
+java -jar release/lpg-ehl-webapp.jar \
   --spring.profiles.active=field,terminal-sim \
   --ehl.serial.port=/tmp/vserial1
 ```

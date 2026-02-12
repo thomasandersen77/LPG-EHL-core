@@ -53,7 +53,7 @@ class PumpController(
     fun unblockPump(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
         logger.info("🔓 FRI PUMPE: Unblock request for address $address")
         
-        val result = pumpStateService.unblock(address)
+        val result = pumpStateService.unblock(address, withAuthorization = true)
         
         return result.fold(
             onSuccess = { status ->
@@ -72,6 +72,38 @@ class PumpController(
                 ResponseEntity.status(409).body(mapOf(
                     "success" to false,
                     "error" to "UNBLOCK_FAILED",
+                    "message" to (error.message ?: "Kunne ikke frigjøre pumpen")
+                ))
+            }
+        )
+    }
+
+    /**
+     * Station manager release - unblock without card authorization.
+     */
+    @PostMapping("/pump/{address}/release")
+    fun releasePump(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
+        logger.info("🔓 FRI PUMPE (MANAGER): Release request for address $address")
+
+        val result = pumpStateService.unblock(address, withAuthorization = false)
+
+        return result.fold(
+            onSuccess = { status ->
+                logger.info("✅ Pump released: state=${status.state}")
+                ResponseEntity.ok(mapOf(
+                    "success" to true,
+                    "message" to "Pumpe frigitt - ingen kort kreves",
+                    "state" to status.state,
+                    "volumeLitres" to status.volumeLitres,
+                    "amountKr" to status.amountKr,
+                    "pricePerLitreKr" to status.pricePerLitreKr
+                ))
+            },
+            onFailure = { error ->
+                logger.warn("❌ Release failed: ${error.message}")
+                ResponseEntity.status(409).body(mapOf(
+                    "success" to false,
+                    "error" to "RELEASE_FAILED",
                     "message" to (error.message ?: "Kunne ikke frigjøre pumpen")
                 ))
             }

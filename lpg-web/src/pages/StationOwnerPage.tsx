@@ -17,7 +17,6 @@ export function StationOwnerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [maxAmount, setMaxAmount] = useState(2000);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -48,9 +47,9 @@ export function StationOwnerPage() {
     return () => clearInterval(interval);
   }, [pumpStatus?.state]);
 
-  // 60-second countdown for AUTHORIZED_WAITING and READY_TO_PUMP
+  // 60-second countdown for READY_TO_PUMP
   useEffect(() => {
-    if (pumpStatus?.state === 'AUTHORIZED_WAITING' || pumpStatus?.state === 'READY_TO_PUMP') {
+    if (pumpStatus?.state === 'READY_TO_PUMP') {
       setCountdown(60);
       const interval = setInterval(() => {
         setCountdown(prev => {
@@ -67,30 +66,14 @@ export function StationOwnerPage() {
     }
   }, [pumpStatus?.state]);
 
-  // Step 1: Card swipe (authorize)
-  const handleCardSwipe = async () => {
+  // Step 1: Release dispenser (FRI DISPENSER)
+  const handleReleaseDispenser = async () => {
     if (loading) return;
     setLoading(true);
     setError(null);
 
     try {
-      await pumpApi.cardSwipe(1, maxAmount);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Ukjent feil';
-      setError('Kunne ikke registrere kort: ' + message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Step 2: Unblock (FRI DISPENSER)
-  const handleUnblock = async () => {
-    if (loading) return;
-    setLoading(true);
-    setError(null);
-
-    try {
-      await pumpApi.unblock(1);
+      await pumpApi.releaseDispenser(1);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Ukjent feil';
       setError('Kunne ikke frigjøre pumpe: ' + message);
@@ -170,8 +153,7 @@ export function StationOwnerPage() {
 
   // Determine status based on pump state
   const state = pumpStatus?.state || 'OFFLINE';
-  const isIdle = state === 'IDLE' && !pumpStatus?.hasPendingTransaction;
-  const isAuthorizedWaiting = state === 'AUTHORIZED_WAITING';
+  const canRelease = (state === 'IDLE' || state === 'AUTHORIZED_WAITING') && !pumpStatus?.hasPendingTransaction;
   const isReadyToPump = state === 'READY_TO_PUMP';
   const isPumping = state === 'PUMPING';
   const isPaymentPending = state === 'PAYMENT_PENDING' && pumpStatus?.hasPendingTransaction;
@@ -356,17 +338,6 @@ export function StationOwnerPage() {
             </div>
 
             <div className="option-group">
-              <label>Maks beløp</label>
-              <input
-                type="number"
-                value={maxAmount}
-                onChange={(e) => setMaxAmount(Number(e.target.value))}
-                className="option-input"
-                disabled={!isIdle}
-              />
-            </div>
-
-            <div className="option-group">
               <label>Produkt</label>
               <select className="option-select">
                 <option>LPG Propan</option>
@@ -395,23 +366,12 @@ export function StationOwnerPage() {
 
           {/* Control Buttons - State-based */}
           <div className="control-buttons">
-            {/* IDLE: Show card swipe button */}
-            {isIdle && (
+            {/* IDLE/VENTER: Release dispenser */}
+            {canRelease && (
               <button
                 className="control-btn start-btn"
-                onClick={handleCardSwipe}
+                onClick={handleReleaseDispenser}
                 disabled={loading}
-              >
-                {loading ? '⏳...' : '💳 REGISTRER KORT'}
-              </button>
-            )}
-
-            {/* AUTHORIZED_WAITING: Card registered, show FRI DISPENSER */}
-            {isAuthorizedWaiting && (
-              <button
-                className="control-btn start-btn"
-                onClick={handleUnblock}
-                disabled={loading || countdown === 0}
               >
                 {loading ? '⏳...' : '🔓 FRI DISPENSER'}
               </button>
@@ -447,14 +407,14 @@ export function StationOwnerPage() {
                   onClick={() => handleConfirmPayment('CARD')}
                   disabled={loading}
                 >
-                  {loading ? '⏳...' : '💳 BETAL MED KORT'}
+                  {loading ? '⏳...' : '💳 BETAL'}
                 </button>
                 <button
                   className="control-btn credit-btn"
                   onClick={() => handleConfirmPayment('CREDIT')}
                   disabled={loading}
                 >
-                  {loading ? '⏳...' : '🏪 BETAL MED KREDITT'}
+                  {loading ? '⏳...' : '🏪 KREDITT'}
                 </button>
               </>
             )}
@@ -472,15 +432,9 @@ export function StationOwnerPage() {
           )}
 
           {/* Status Messages */}
-          {isAuthorizedWaiting && (
-            <div className="info-status">
-              💳 Kort registrert - trykk FRI DISPENSER for å starte
-            </div>
-          )}
-
           {isReadyToPump && (
             <div className="info-status">
-              ✅ Pumpe frigjort - trykk START FYLLING
+              ✅ Pumpe frigjort - kunden kan starte fylling
             </div>
           )}
 

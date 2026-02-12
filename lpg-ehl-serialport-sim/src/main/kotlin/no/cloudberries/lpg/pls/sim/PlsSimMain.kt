@@ -44,6 +44,12 @@ fun main(args: Array<String>) {
     log.info("")
     log.info("  Logging:")
     log.info("    Heartbeat: {} ms", cliArgs.heartbeatIntervalMs)
+    log.info("")
+    log.info("  Profile:")
+    log.info("    Profile:   {}", cliArgs.profile)
+    if (cliArgs.profile == SimProfile.FIELD) {
+        log.info("    Field cfg: {}", cliArgs.field)
+    }
     
     // Log fault injection config if present
     if (cliArgs.disconnectAfterSeconds != null || cliArgs.badChecksumRate > 0.0 || cliArgs.powerfaultAfterSeconds != null) {
@@ -76,7 +82,8 @@ fun main(args: Array<String>) {
         powerfaultAfterSeconds = cliArgs.powerfaultAfterSeconds,
         onDisconnect = { handler?.forceDisconnect() },
         onPowerfault = { handler?.forceDisconnect() },
-        manualNozzleControl = cliArgs.gui
+        manualNozzleControl = cliArgs.gui,
+        fieldConfig = cliArgs.field
     )
 
     handler = SerialPortHandler(
@@ -87,7 +94,8 @@ fun main(args: Array<String>) {
         chunked = cliArgs.chunk,
         latencyMs = cliArgs.latencyMs,
         logHex = cliArgs.logHex,
-        plsState = plsState
+        plsState = plsState,
+        fieldConfig = cliArgs.field
     )
 
     // Shutdown hook for clean exit

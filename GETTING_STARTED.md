@@ -85,17 +85,17 @@ Dette er **raskeste** måten å komme i gang på:
 
 For å teste med **simulator** (mer realistisk):
 
-### Steg 1: Bygg prosjektet
+### Steg 1: Bygg det du trenger
 
 ```bash
-# Fra prosjekt-root
-mvn clean package -DskipTests
+# Simulatorer (PLS + betalingsterminal)
+./scripts/build-simulators.sh
+
+# (Valgfritt) Webapp som JAR
+./scripts/build-webapp.sh
 ```
 
-Dette lager:
-- `release/lpg-ehl-webapp.jar`
-- `release/lpg-ehl-headless.jar`
-- `release/pls-sim.jar`
+Dette lager artifacts i `release/` (bl.a. `pls-sim.jar`, `payment-terminal-*.jar`, `lpg-ehl-webapp.jar`).
 
 ### Steg 2: Start Database (valgfritt)
 
@@ -103,16 +103,15 @@ Dette lager:
 docker-compose -f docker-compose-local.yaml up -d
 ```
 
-### Steg 3: Start Simulator
+### Steg 3: Start PLS-simulator (SOCAT)
 
 ```bash
-./scripts/start-socat-sim.sh
+./scripts/sim-pls.sh
 ```
 
 **Avansert bruk:**
 ```bash
-# Endre konfigurasjon
-./scripts/start-socat-sim.sh \
+./scripts/sim-pls.sh \
   --address=2 \
   --price=2100 \
   --baud=19200 \
@@ -122,28 +121,24 @@ docker-compose -f docker-compose-local.yaml up -d
 
 Dette starter:
 - ✅ SOCAT (virtual serial port pair)
-- ✅ PLS Simulator på `/tmp/vserial0`
-- ✅ Tilgjengelig port: `/tmp/vserial1` (for webapp/headless)
+- ✅ PLS Simulator (koblet til PTY0)
+- ✅ Tilgjengelig port: `/tmp/vserial1` (for webapp/IntelliJ/Python)
 
-### Steg 4: Start Webapp (i ny terminal)
+### Steg 4: Start Webapp (FIELD) og koble til `/tmp/vserial1`
 
-#### Opsjon A: Enkel start (anbefalt)
+**Anbefalt:** start webapp i IntelliJ.
+
+Run args (FIELD + SOCAT):
+- `--spring.profiles.active=field`
+- `--ehl.serial.port=/tmp/vserial1`
+- (valgfritt) `--ehl.serial.parity-auto-detect=true`
+
+Hvis du vil starte fra JAR:
 ```bash
-./scripts/start-webapp-field.sh --auto-detect
-```
-
-#### Opsjon B: Manuell parity
-```bash
-./scripts/start-webapp-field.sh --parity=NONE
-```
-
-#### Opsjon C: Komplett konfigurasjon
-```bash
-./scripts/start-webapp-field.sh \
-  --port=/tmp/vserial1 \
-  --auto-detect \
-  --baud=9600 \
-  --web-port=8080
+java -jar release/lpg-ehl-webapp.jar \
+  --spring.profiles.active=field \
+  --ehl.serial.port=/tmp/vserial1 \
+  --ehl.serial.parity-auto-detect=true
 ```
 
 ### Steg 5: Test systemet

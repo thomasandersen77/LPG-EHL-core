@@ -12,5 +12,17 @@ data class SimulatorConfig(
     val allowScenarioHeader: Boolean = true,
     val eventBufferSize: Int = 1000,
     val scenariosEnabled: Boolean = true,
-    val scenariosPath: String? = null
+    val scenariosPath: String? = null,
+    val profile: String = "lab",
+    val field: FieldModeConfig = FieldModeConfig()
 )
+
+data class FieldModeConfig(
+    val operationDelayMinMs: Long = 2000,
+    val operationDelayMaxMs: Long = 10000,
+    val notReadyProbability: Double = 0.05,
+    val rejectionProbability: Double = 0.1,
+    val rejectionWrongPinProbability: Double = 0.5
+) {
+    fun isEnabled(profile: String): Boolean = profile.equals("field", ignoreCase = true)
+}

@@ -63,6 +63,15 @@ export const pumpApi = {
   },
 
   /**
+   * Release dispenser (station manager flow)
+   * Sends UNBLOCK command to physical dispenser without card authorization
+   */
+  releaseDispenser: async (address: number = 1): Promise<any> => {
+    const response = await api.post(`/api/v1/emulator/pump/${address}/release`);
+    return response.data;
+  },
+
+  /**
    * Start pumping simulation (for GUI testing)
    */
   startPumping: async (address: number = 1): Promise<any> => {

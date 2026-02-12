@@ -20,7 +20,9 @@ data class CliArgs(
     val disconnectAfterSeconds: Double? = null,  // Simulate disconnect after N seconds
     val badChecksumRate: Double = 0.0,           // Probability of corrupted checksum (0.0-1.0)
     val powerfaultAfterSeconds: Double? = null,  // Simulate power fault after N seconds
-    val gui: Boolean = false                     // Show JavaFX GUI with red start/stop button
+    val gui: Boolean = false,                    // Show JavaFX GUI with red start/stop button
+    val profile: SimProfile = SimProfile.LAB,
+    val field: FieldConfig = FieldConfig()
 ) {
     companion object {
         fun parse(args: Array<String>): CliArgs {
@@ -40,6 +42,8 @@ data class CliArgs(
             var badChecksumRate = 0.0
             var powerfaultAfterSeconds: Double? = null
             var gui = false
+            var profile = SimProfile.LAB
+            var field = FieldConfig()
 
             val iterator = args.iterator()
             while (iterator.hasNext()) {
@@ -69,6 +73,31 @@ data class CliArgs(
                     arg.startsWith("--badChecksumRate=") -> badChecksumRate = arg.substringAfter("--badChecksumRate=").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.0
                     arg.startsWith("--powerfaultAfterSeconds=") -> powerfaultAfterSeconds = arg.substringAfter("--powerfaultAfterSeconds=").toDoubleOrNull()
                     arg == "--gui" || arg == "-g" -> gui = true
+                    arg.startsWith("--profile=") -> profile = parseProfile(arg.substringAfter("--profile="))
+                    arg.startsWith("--field.noAckOnUnblock=") -> {
+                        field = field.copy(noAckOnUnblock = arg.substringAfter("=").lowercase() == "true")
+                    }
+                    arg.startsWith("--field.noAckOnBlock=") -> {
+                        field = field.copy(noAckOnBlock = arg.substringAfter("=").lowercase() == "true")
+                    }
+                    arg.startsWith("--field.mechanicalOpenDelayMs=") -> {
+                        field = field.copy(mechanicalOpenDelayMs = parseRange(arg.substringAfter("="), field.mechanicalOpenDelayMs))
+                    }
+                    arg.startsWith("--field.unsolicitedVolumeIntervalMs=") -> {
+                        field = field.copy(unsolicitedVolumeIntervalMs = parseRange(arg.substringAfter("="), field.unsolicitedVolumeIntervalMs))
+                    }
+                    arg.startsWith("--field.concatFramesProbability=") -> {
+                        field = field.copy(concatFramesProbability = parseProbability(arg.substringAfter("="), field.concatFramesProbability))
+                    }
+                    arg.startsWith("--field.dropResponseProbability=") -> {
+                        field = field.copy(dropResponseProbability = parseProbability(arg.substringAfter("="), field.dropResponseProbability))
+                    }
+                    arg.startsWith("--field.interCharacterDelayMs=") -> {
+                        field = field.copy(interCharacterDelayMs = parseRange(arg.substringAfter("="), field.interCharacterDelayMs))
+                    }
+                    arg.startsWith("--field.readChunkingMode=") -> {
+                        field = field.copy(readChunkingMode = parseReadChunkingMode(arg.substringAfter("=")))
+                    }
                     arg == "--help" || arg == "-h" -> {
                         printHelp()
                         kotlin.system.exitProcess(0)
@@ -82,7 +111,27 @@ data class CliArgs(
                 kotlin.system.exitProcess(1)
             }
 
-            return CliArgs(port, baud, parity, mode, chunk, latencyMs, logHex, dispenserAddress, priceCents, initiallyBlocked, heartbeatIntervalMs, legacyAddressEnabled, disconnectAfterSeconds, badChecksumRate, powerfaultAfterSeconds, gui)
+            val appliedField = field.copy(profile = profile)
+            return CliArgs(
+                port = port,
+                baud = baud,
+                parity = parity,
+                mode = mode,
+                chunk = chunk,
+                latencyMs = latencyMs,
+                logHex = logHex,
+                dispenserAddress = dispenserAddress,
+                priceCents = priceCents,
+                initiallyBlocked = initiallyBlocked,
+                heartbeatIntervalMs = heartbeatIntervalMs,
+                legacyAddressEnabled = legacyAddressEnabled,
+                disconnectAfterSeconds = disconnectAfterSeconds,
+                badChecksumRate = badChecksumRate,
+                powerfaultAfterSeconds = powerfaultAfterSeconds,
+                gui = gui,
+                profile = profile,
+                field = appliedField
+            )
         }
 
         private fun printHelp() {
@@ -115,6 +164,19 @@ data class CliArgs(
                 |Logging Options:
                 |  --heartbeatIntervalMs=<ms>  Heartbeat log interval in ms (default: 60000)
                 |
+                |Profile Options:
+                |  --profile=<lab|field>       Simulator profile (default: lab)
+                |
+                |Field Mode Options:
+                |  --field.noAckOnUnblock=<bool>        No OK on UNBLOCK (default: true)
+                |  --field.noAckOnBlock=<bool>          No OK on BLOCK (default: true)
+                |  --field.mechanicalOpenDelayMs=MIN-MAX  Delay before open_for_delivery (default: 800-1500)
+                |  --field.unsolicitedVolumeIntervalMs=MIN-MAX  VOLUME noise interval (default: 400-800)
+                |  --field.concatFramesProbability=<p>  Concatenate frames probability (default: 0.5)
+                |  --field.dropResponseProbability=<p>  Drop response probability (default: 0.1)
+                |  --field.interCharacterDelayMs=MIN-MAX  Delay per byte (default: 1-2)
+                |  --field.readChunkingMode=<off|random>  Chunking mode (default: random)
+                |
                 |Fault Injection (for testing error handling):
                 |  --disconnectAfterSeconds=<sec>  Disconnect serial port after N seconds
                 |  --badChecksumRate=<rate>       Probability of bad checksum (0.0-1.0, default: 0.0)
@@ -133,6 +195,36 @@ data class CliArgs(
                 |  # Disable legacy address (only respond to addr 1):
                 |  java -jar pls-sim.jar --port=/tmp/ttyV0 --mode=ehl --address=1 --legacy-address=false
             """.trimMargin())
+        }
+
+        private fun parseProfile(value: String): SimProfile {
+            return when (value.lowercase()) {
+                "field" -> SimProfile.FIELD
+                else -> SimProfile.LAB
+            }
+        }
+
+        private fun parseReadChunkingMode(value: String): ReadChunkingMode {
+            return when (value.lowercase()) {
+                "random" -> ReadChunkingMode.RANDOM
+                else -> ReadChunkingMode.OFF
+            }
+        }
+
+        private fun parseRange(value: String, fallback: IntRangeConfig): IntRangeConfig {
+            val raw = value.trim()
+            if (raw.contains("-")) {
+                val parts = raw.split("-", limit = 2)
+                val min = parts[0].toIntOrNull() ?: fallback.min
+                val max = parts[1].toIntOrNull() ?: fallback.max
+                return if (min <= max) IntRangeConfig(min, max) else IntRangeConfig(max, min)
+            }
+            val single = raw.toIntOrNull()
+            return if (single != null) IntRangeConfig(single, single) else fallback
+        }
+
+        private fun parseProbability(value: String, fallback: Double): Double {
+            return value.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: fallback
         }
     }
 }

@@ -5,6 +5,7 @@ import jakarta.annotation.PreDestroy
 import no.cloudberries.lpg.transport.SerialTransport
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Manages serial port connections for RS-485 communication with LPG dispensers.
@@ -13,18 +14,24 @@ import java.io.IOException
  * Implements SerialTransport interface for production use with real serial ports.
  * Implements HardwareWatchdogCapable interface for watchdog functionality.
  */
-open class  SerialPortManager(private val config: SerialPortConfig) : SerialTransport, HardwareWatchdogCapable {
+open class  SerialPortManager(private val config: SerialPortConfig) : SerialTransport, HardwareWatchdogCapable, CommandAttemptTracker {
     private val logger = LoggerFactory.getLogger(SerialPortManager::class.java)
     private var serialPort: SerialPort? = null
     private val lock = Any()
     
-    // PART 4: HARDWARE WATCHDOG - Self-healing connection monitoring
+    // PART 4: HARDWARE WATCHDOG - Self-healing connection monitoring (attempt-based)
     @Volatile
     private var lastDataReceivedTime: Long = System.currentTimeMillis()
-    private val watchdogTimeoutMs: Long = 60_000  // 60 seconds without data = dead connection
     private val reconnectDelayMs: Long = 5_000     // 5 seconds wait before reconnect
     @Volatile
     private var watchdogEnabled: Boolean = false
+    private val attemptFailureThreshold = 3
+    private val attemptWindowMs: Long = 60_000
+    @Volatile
+    private var lastAttemptAtMs: Long = 0L
+    @Volatile
+    private var lastSuccessfulCommandAtMs: Long = 0L
+    private val consecutiveFailureCount = AtomicInteger(0)
 
     /**
      * Check if the serial port is currently open and connected.
@@ -289,8 +296,8 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
 
     /**
      * PART 4: HARDWARE WATCHDOG - Enable connection monitoring.
-     * Starts a background watchdog that checks if data is being received.
-     * If no data is received for `watchdogTimeoutMs`, triggers auto-reconnect.
+     * Starts watchdog tracking for attempt-based health checks.
+     * Watchdog uses recent command attempts + consecutive failures to decide reconnect.
      */
     override fun enableWatchdog() {
         synchronized(lock) {
@@ -301,7 +308,13 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
             
             watchdogEnabled = true
             lastDataReceivedTime = System.currentTimeMillis()
-            logger.info("Hardware watchdog enabled for ${config.portName} (timeout: ${watchdogTimeoutMs}ms)")
+            lastAttemptAtMs = 0L
+            lastSuccessfulCommandAtMs = 0L
+            consecutiveFailureCount.set(0)
+            logger.info(
+                "Hardware watchdog enabled for ${config.portName} " +
+                "(attempt window: ${attemptWindowMs}ms, failure threshold: $attemptFailureThreshold)"
+            )
         }
     }
     
@@ -316,28 +329,37 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
     }
     
     /**
-     * Check if the connection is alive (has received data recently).
-     * This should be called periodically by the application.
+     * Check if the connection is alive (attempt-based).
+     * Returns false only when recent attempts have repeatedly failed.
      * 
-     * @return true if connection is healthy, false if watchdog timeout exceeded
+     * @return true if connection is healthy, false if failure threshold exceeded
      */
     override fun checkWatchdog(): Boolean {
         synchronized(lock) {
             if (!watchdogEnabled || !isConnected) {
                 return true  // Watchdog disabled or not connected - no check needed
             }
-            
-            val timeSinceLastData = System.currentTimeMillis() - lastDataReceivedTime
-            
-            if (timeSinceLastData > watchdogTimeoutMs) {
+
+            val lastAttemptAt = lastAttemptAtMs
+            if (lastAttemptAt == 0L) {
+                return true  // No attempts recorded - silence is OK
+            }
+
+            val timeSinceLastAttempt = System.currentTimeMillis() - lastAttemptAt
+            if (timeSinceLastAttempt > attemptWindowMs) {
+                resetFailures()
+                return true  // No recent attempts - silence is OK
+            }
+
+            val failures = consecutiveFailureCount.get()
+            if (failures >= attemptFailureThreshold) {
                 logger.error(
-                    "⚠️ WATCHDOG TIMEOUT: No data received from ${config.portName} " +
-                    "for ${timeSinceLastData}ms (threshold: ${watchdogTimeoutMs}ms). " +
-                    "Connection may be dead (USB unplugged/driver hang)."
+                    "⚠️ WATCHDOG FAILURE: $failures consecutive failures on ${config.portName} " +
+                    "within last ${timeSinceLastAttempt}ms (threshold: $attemptFailureThreshold)."
                 )
                 return false
             }
-            
+
             return true
         }
     }
@@ -371,6 +393,9 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
             if (success) {
                 logger.info("✅ Reconnect successful to ${config.portName}")
                 lastDataReceivedTime = System.currentTimeMillis()  // Reset watchdog timer
+                resetFailures()
+                lastAttemptAtMs = 0L
+                lastSuccessfulCommandAtMs = 0L
             } else {
                 logger.error("❌ Reconnect failed to ${config.portName}")
             }
@@ -384,11 +409,40 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
     }
     
     /**
-     * Get time since last data was received (for monitoring).
+     * Get time since last data was received (telemetry only).
      */
     override fun getTimeSinceLastData(): Long {
         return System.currentTimeMillis() - lastDataReceivedTime
     }
+
+    override fun recordAttempt() {
+        lastAttemptAtMs = System.currentTimeMillis()
+    }
+
+    override fun recordSuccess() {
+        val now = System.currentTimeMillis()
+        lastAttemptAtMs = now
+        lastSuccessfulCommandAtMs = now
+        consecutiveFailureCount.set(0)
+    }
+
+    override fun recordFailure() {
+        lastAttemptAtMs = System.currentTimeMillis()
+        consecutiveFailureCount.incrementAndGet()
+    }
+
+    override fun resetFailures() {
+        consecutiveFailureCount.set(0)
+    }
+
+    override val lastAttemptAt: Long
+        get() = lastAttemptAtMs
+
+    override val lastSuccessfulCommandAt: Long
+        get() = lastSuccessfulCommandAtMs
+
+    override val consecutiveFailures: Int
+        get() = consecutiveFailureCount.get()
 
     companion object {
         private val logger = LoggerFactory.getLogger(SerialPortManager::class.java)

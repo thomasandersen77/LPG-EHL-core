@@ -473,7 +473,8 @@ data class ErrorResult(
 #### Monitoring Strategy
 
 - **Health checks every 30 seconds** (after 1-minute startup delay)
-- **60-second data timeout**: If no data received for 60s, connection is considered dead
+- **Attempt-based failure threshold**: Reconnect after repeated failed command attempts
+- **Silence is OK**: No reconnect on inactivity unless recent attempts failed
 - **Exponential backoff**: 3 retry attempts with 5-minute cooldown
 - **Automatic reconnection**: Calls `reconnect()` on `HardwareWatchdogCapable` implementation
 
@@ -513,7 +514,7 @@ data class WatchdogStatistics(
     val consecutiveFailures: Int,
     val reconnectAttempts: Int,
     val lastSuccessfulCheckTime: Long,
-    val timeSinceLastData: Long
+    val timeSinceLastData: Long  // telemetry only
 )
 ```
 

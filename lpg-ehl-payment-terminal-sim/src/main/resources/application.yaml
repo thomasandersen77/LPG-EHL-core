@@ -31,6 +31,17 @@ payment-terminal-sim:
   # Event store size (for SSE)
   event-buffer-size: 1000
 
+  # Simulator profile: lab | field
+  profile: lab
+
+  # Field mode knobs (used when profile=field)
+  field:
+    operation-delay-min-ms: 2000
+    operation-delay-max-ms: 10000
+    not-ready-probability: 0.05
+    rejection-probability: 0.1
+    rejection-wrong-pin-probability: 0.5
+
 logging:
   level:
     root: INFO

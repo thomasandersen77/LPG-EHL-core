@@ -9,7 +9,8 @@
 
 ehl:
   serial:
-    port: /dev/ttyS3
+    port: /tmp/vserial1
+    #port: /dev/ttyS3
     baud-rate: 9600
     parity: NONE
     data-bits: 8
@@ -17,4 +18,4 @@ ehl:
 payment:
   terminal:
     enabled: true
-    base-url: http://localhost:18080
+    base-url: ${PAYMENT_TERMINAL_BASE_URL:http://192.168.0.9:18080}

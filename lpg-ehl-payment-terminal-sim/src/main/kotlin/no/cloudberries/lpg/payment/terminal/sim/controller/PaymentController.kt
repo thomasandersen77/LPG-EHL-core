@@ -18,6 +18,7 @@ import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioManager
 import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioSelection
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalStateManager
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -43,7 +44,12 @@ class PaymentController(
     private val log = LoggerFactory.getLogger(PaymentController::class.java)
 
     // Idempotency cache: ClientRequestId -> OperationResponse
-    private val operationCache = ConcurrentHashMap<String, OperationResponse>()
+    private val operationCache = ConcurrentHashMap<String, CachedOperation>()
+
+    private data class CachedOperation(
+        val status: Int,
+        val response: OperationResponse
+    )
 
     /**
      * POST /v1/payments/purchase
@@ -58,18 +64,12 @@ class PaymentController(
         log.info("Purchase request: amount={}, operatorId={}, clientRequestId={}",
             request.amountMinor, request.operatorId, request.clientRequestId)
 
-        // Check idempotency
-        request.clientRequestId?.let { clientId ->
-            operationCache[clientId]?.let { cached ->
-                log.info("Returning cached response for clientRequestId={}", clientId)
-                return ResponseEntity.ok(cached)
-            }
-        }
+        cachedResponse(request.clientRequestId)?.let { return it }
 
         // Select scenario
         val scenarioSelection = scenarioManager.selectScenario(httpRequest)
         scenarioManager.applyScenarioTerminalState(scenarioSelection)
-        val scenario = scenarioSelection.enumScenario
+        val scenario = scenarioManager.selectFieldRejection(scenarioSelection) ?: scenarioSelection.enumScenario
         log.debug("Selected scenario: {}", scenario)
 
         // Execute operation
@@ -93,7 +93,11 @@ class PaymentController(
             log.debug("Simulating operation delay: {} ms", delay)
 
             val flow = scenarioSelection.definition?.flow?.takeIf { it.isNotEmpty() } ?: defaultPurchaseFlow()
-            publishDisplayFlow(operationId, flow, delay)
+            val flowDelay = publishDisplayFlow(operationId, flow, delay)
+            val remainingDelay = delay - flowDelay
+            if (remainingDelay > 0) {
+                Thread.sleep(remainingDelay)
+            }
 
             // Generate response based on scenario
             val completedAt = Instant.now()
@@ -106,8 +110,11 @@ class PaymentController(
                 request.amountMinor,
                 defaultReceiptTemplate = "purchase"
             )
+            val responseWithReceipt = ensureReceipt(response, request.amountMinor, completedAt, operationId, "purchase")
+            val finalResponse = applyRejectedError(responseWithReceipt)
+            val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
 
-            if (response.Success.not() && flow.none { it.displayTextId == 1001 }) {
+            if (finalResponse.Success.not() && flow.none { it.displayTextId == 1001 }) {
                 eventStore.publishEvent("DisplayText", operationId, mapOf("text" to "TA UT KORTET", "displayTextId" to 1001))
             }
 
@@ -115,10 +122,10 @@ class PaymentController(
             eventStore.publishEvent(
                 eventType = "DisplayText",
                 operationId = operationId,
-                payload = mapOf("text" to (response.LastDisplayText ?: ""))
+                payload = mapOf("text" to (finalResponse.LastDisplayText ?: ""))
             )
 
-            response.PrintTextRaw?.let {
+            finalResponse.PrintTextRaw?.let {
                 eventStore.publishEvent(
                     eventType = "PrintText",
                     operationId = operationId,
@@ -130,19 +137,17 @@ class PaymentController(
                 eventType = "OperationCompleted",
                 operationId = operationId,
                 payload = mapOf(
-                    "Success" to response.Success,
+                    "Success" to finalResponse.Success,
                     "OperationType" to "purchase",
                     "AmountMinor" to request.amountMinor
                 )
             )
 
             // Cache for idempotency
-            request.clientRequestId?.let { clientId ->
-                operationCache[clientId] = response
-            }
+            cacheResponse(request.clientRequestId, status, finalResponse)
 
-            log.info("Purchase completed: operationId={}, success={}", operationId, response.Success)
-            return ResponseEntity.ok(response)
+            log.info("Purchase completed: operationId={}, success={}", operationId, finalResponse.Success)
+            return ResponseEntity.status(status).body(finalResponse)
         } finally {
             stateManager.endOperation(operationId)
         }
@@ -162,16 +167,11 @@ class PaymentController(
         log.info("Reservation request: amount={} kr, operatorId={}, clientRequestId={}",
             request.amountMinor / 100.0, request.operatorId, request.clientRequestId)
 
-        request.clientRequestId?.let { clientId ->
-            operationCache[clientId]?.let { cached ->
-                log.info("Returning cached response for clientRequestId={}", clientId)
-                return ResponseEntity.ok(cached)
-            }
-        }
+        cachedResponse(request.clientRequestId)?.let { return it }
 
         val scenarioSelection = scenarioManager.selectScenario(httpRequest)
         scenarioManager.applyScenarioTerminalState(scenarioSelection)
-        val scenario = scenarioSelection.enumScenario
+        val scenario = scenarioManager.selectFieldRejection(scenarioSelection) ?: scenarioSelection.enumScenario
 
         val operationId = UUID.randomUUID().toString()
         val startedAt = Instant.now()
@@ -189,7 +189,11 @@ class PaymentController(
 
             val delay = scenarioManager.getOperationDelay(scenarioSelection)
             val flow = scenarioSelection.definition?.flow?.takeIf { it.isNotEmpty() } ?: defaultPurchaseFlow()
-            publishDisplayFlow(operationId, flow, delay)
+            val flowDelay = publishDisplayFlow(operationId, flow, delay)
+            val remainingDelay = delay - flowDelay
+            if (remainingDelay > 0) {
+                Thread.sleep(remainingDelay)
+            }
 
             val completedAt = Instant.now()
             val response = buildFinancialResponse(
@@ -202,7 +206,11 @@ class PaymentController(
                 defaultReceiptTemplate = "purchase"
             )
 
-            if (response.Success) {
+            val responseWithReceipt = ensureReceipt(response, request.amountMinor, completedAt, operationId, "purchase")
+            val finalResponse = applyRejectedError(responseWithReceipt)
+            val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
+
+            if (finalResponse.Success) {
                 reservationStore.put(operationId, request.amountMinor)
             }
 
@@ -210,21 +218,19 @@ class PaymentController(
                 eventType = "OperationCompleted",
                 operationId = operationId,
                 payload = mapOf(
-                    "Success" to response.Success,
+                    "Success" to finalResponse.Success,
                     "OperationType" to "reservation",
                     "AmountMinor" to request.amountMinor,
-                    "ResponseCode" to (response.ResponseCode ?: ""),
+                    "ResponseCode" to (finalResponse.ResponseCode ?: ""),
                     "EntryMode" to "CHIP"
                 )
             )
 
-            request.clientRequestId?.let { clientId ->
-                operationCache[clientId] = response
-            }
+            cacheResponse(request.clientRequestId, status, finalResponse)
 
             log.info("Reservation completed: operationId={}, success={}, amount={} kr",
-                operationId, response.Success, request.amountMinor / 100.0)
-            return ResponseEntity.ok(response)
+                operationId, finalResponse.Success, request.amountMinor / 100.0)
+            return ResponseEntity.status(status).body(finalResponse)
         } finally {
             stateManager.endOperation(operationId)
         }
@@ -338,17 +344,11 @@ class PaymentController(
         log.info("Refund request: amount={}, operatorId={}, clientRequestId={}",
             request.amountMinor, request.operatorId, request.clientRequestId)
 
-        // Check idempotency
-        request.clientRequestId?.let { clientId ->
-            operationCache[clientId]?.let { cached ->
-                log.info("Returning cached response for clientRequestId={}", clientId)
-                return ResponseEntity.ok(cached)
-            }
-        }
+        cachedResponse(request.clientRequestId)?.let { return it }
 
         val scenarioSelection = scenarioManager.selectScenario(httpRequest)
         scenarioManager.applyScenarioTerminalState(scenarioSelection)
-        val scenario = scenarioSelection.enumScenario
+        val scenario = scenarioManager.selectFieldRejection(scenarioSelection) ?: scenarioSelection.enumScenario
 
         val operationId = UUID.randomUUID().toString()
         val startedAt = Instant.now()
@@ -370,15 +370,16 @@ class PaymentController(
                 request.amountMinor,
                 defaultReceiptTemplate = "refund"
             )
+            val responseWithReceipt = ensureReceipt(response, request.amountMinor, completedAt, operationId, "refund")
+            val finalResponse = applyRejectedError(responseWithReceipt)
+            val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("Success" to response.Success))
+            eventStore.publishEvent("OperationCompleted", operationId, mapOf("Success" to finalResponse.Success))
 
-            request.clientRequestId?.let { clientId ->
-                operationCache[clientId] = response
-            }
+            cacheResponse(request.clientRequestId, status, finalResponse)
 
-            log.info("Refund completed: operationId={}, success={}", operationId, response.Success)
-            return ResponseEntity.ok(response)
+            log.info("Refund completed: operationId={}, success={}", operationId, finalResponse.Success)
+            return ResponseEntity.status(status).body(finalResponse)
         } finally {
             stateManager.endOperation(operationId)
         }
@@ -397,15 +398,11 @@ class PaymentController(
         log.info("Cashback request: purchase={}, cashback={}, clientRequestId={}",
             request.purchaseMinor, request.cashbackMinor, request.clientRequestId)
 
-        request.clientRequestId?.let { clientId ->
-            operationCache[clientId]?.let { cached ->
-                return ResponseEntity.ok(cached)
-            }
-        }
+        cachedResponse(request.clientRequestId)?.let { return it }
 
         val scenarioSelection = scenarioManager.selectScenario(httpRequest)
         scenarioManager.applyScenarioTerminalState(scenarioSelection)
-        val scenario = scenarioSelection.enumScenario
+        val scenario = scenarioManager.selectFieldRejection(scenarioSelection) ?: scenarioSelection.enumScenario
 
         val operationId = UUID.randomUUID().toString()
         val startedAt = Instant.now()
@@ -428,15 +425,16 @@ class PaymentController(
                 totalAmount,
                 defaultReceiptTemplate = "purchase"
             )
+            val responseWithReceipt = ensureReceipt(response, totalAmount, completedAt, operationId, "purchase")
+            val finalResponse = applyRejectedError(responseWithReceipt)
+            val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("Success" to response.Success))
+            eventStore.publishEvent("OperationCompleted", operationId, mapOf("Success" to finalResponse.Success))
 
-            request.clientRequestId?.let { clientId ->
-                operationCache[clientId] = response
-            }
+            cacheResponse(request.clientRequestId, status, finalResponse)
 
-            log.info("Cashback completed: operationId={}, success={}", operationId, response.Success)
-            return ResponseEntity.ok(response)
+            log.info("Cashback completed: operationId={}, success={}", operationId, finalResponse.Success)
+            return ResponseEntity.status(status).body(finalResponse)
         } finally {
             stateManager.endOperation(operationId)
         }
@@ -450,11 +448,12 @@ class PaymentController(
         )
     }
 
-    private fun publishDisplayFlow(operationId: String, flow: List<ScenarioFlowEvent>, defaultDelay: Long) {
+    private fun publishDisplayFlow(operationId: String, flow: List<ScenarioFlowEvent>, defaultDelay: Long): Long {
         if (flow.isEmpty()) {
-            return
+            return 0
         }
 
+        var totalDelay = 0L
         val fallbackDelay = if (flow.isNotEmpty()) defaultDelay / flow.size else defaultDelay
         flow.forEach { event ->
             if (event.event.equals("DisplayText", ignoreCase = true)) {
@@ -468,11 +467,14 @@ class PaymentController(
                 )
             }
 
-            val delay = event.delayMs ?: fallbackDelay
+            val delay = (event.delayMs ?: fallbackDelay).coerceAtLeast(0)
             if (delay > 0) {
                 Thread.sleep(delay)
             }
+            totalDelay += delay
         }
+
+        return totalDelay
     }
 
     private fun buildFinancialResponse(
@@ -583,5 +585,56 @@ class PaymentController(
                 responseCode = responseCode
             )
         }
+    }
+
+    private fun cachedResponse(clientRequestId: String?): ResponseEntity<OperationResponse>? {
+        if (clientRequestId.isNullOrBlank()) {
+            return null
+        }
+        val cached = operationCache[clientRequestId] ?: return null
+        log.info("Returning cached response for clientRequestId={}", clientRequestId)
+        return ResponseEntity.status(cached.status).body(cached.response)
+    }
+
+    private fun cacheResponse(clientRequestId: String?, status: HttpStatus, response: OperationResponse) {
+        if (clientRequestId.isNullOrBlank()) {
+            return
+        }
+        operationCache[clientRequestId] = CachedOperation(status.value(), response)
+    }
+
+    private fun ensureReceipt(
+        response: OperationResponse,
+        amountMinor: Int,
+        completedAt: Instant,
+        operationId: String,
+        template: String
+    ): OperationResponse {
+        if (!config.field.isEnabled(config.profile)) {
+            return response
+        }
+        if (response.PrintTextRaw != null) {
+            return response
+        }
+        val receipt = when (template.lowercase()) {
+            "refund" -> receiptGenerator.generateRefundReceipt(amountMinor, completedAt, operationId)
+            else -> receiptGenerator.generatePurchaseReceipt(
+                amountMinor,
+                completedAt,
+                operationId,
+                approved = response.Success,
+                responseCode = response.ResponseCode
+            )
+        }
+        return response.copy(PrintTextRaw = receipt, PrintTextSanitized = receipt)
+    }
+
+    private fun applyRejectedError(response: OperationResponse): OperationResponse {
+        if (response.Success) {
+            return response
+        }
+        val errorCode = response.ErrorCode ?: "operation_rejected"
+        val errorText = response.Error ?: "Terminal rejected the operation"
+        return response.copy(Error = errorText, ErrorCode = errorCode)
     }
 }
