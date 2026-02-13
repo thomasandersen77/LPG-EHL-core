@@ -7,14 +7,17 @@
 # - Seriell port til ekte enhet
 # ═══════════════════════════════════════════════════════════════════════════════
 
+lpg:
+  dispenser:
+    address: 33
 ehl:
   serial:
-    port: /tmp/vserial1
-    #port: /dev/ttyS3
+    port: /dev/ttyS3
     baud-rate: 9600
     parity: NONE
     data-bits: 8
     stop-bits: 1
+
 payment:
   terminal:
     enabled: true

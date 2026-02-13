@@ -30,6 +30,19 @@ interface PumpAuthorizationRepository : JpaRepository<PumpAuthorization, UUID> {
         dispenserAddress: Int,
         statuses: List<AuthorizationStatus>
     ): PumpAuthorization?
+
+    /**
+     * Finn siste STOPPED autorisasjon for en dispenser.
+     */
+    fun findFirstByDispenserAddressAndStatusOrderByCreatedAtDesc(
+        dispenserAddress: Int,
+        status: AuthorizationStatus
+    ): PumpAuthorization?
+
+    /**
+     * Finn autorisasjon tilknyttet en transaksjon.
+     */
+    fun findFirstByTransactionId(transactionId: UUID): PumpAuthorization?
     
     /**
      * Finn siste autorisasjon for en dispenser (uansett status).

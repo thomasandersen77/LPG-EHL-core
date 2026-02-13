@@ -2,6 +2,7 @@ package no.cloudberries.lpg.service.transaction
 
 import no.cloudberries.lpg.service.dto.PageResponse
 import no.cloudberries.lpg.service.dto.TransactionResponse
+import no.cloudberries.lpg.service.pump.PumpAuthorizationService
 import no.cloudberries.lpg.service.transaction.Transaction
 import no.cloudberries.lpg.service.transaction.TransactionRepository
 import org.slf4j.LoggerFactory
@@ -16,7 +17,8 @@ import java.util.*
 @Transactional(readOnly = true)
 class TransactionService(
     private val transactionRepository: TransactionRepository,
-    private val transactionSyncService: TransactionSyncService?
+    private val transactionSyncService: TransactionSyncService?,
+    private val authorizationService: PumpAuthorizationService
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -122,6 +124,10 @@ class TransactionService(
         
         // Queue for Azure sync when payment is updated
         transactionSyncService?.queueTransactionForSync(saved, "PAYMENT_UPDATED")
+
+        if (paymentStatus == "PAID") {
+            completeAuthorizationForPaidTransaction(saved, paymentMethod, "PAYMENT_UPDATED")
+        }
         
         logger.info("✅ Updated transaction {} payment: method={}, status={}", transactionId, paymentMethod, paymentStatus)
         
@@ -208,6 +214,8 @@ class TransactionService(
         
         // Queue for Azure sync
         transactionSyncService?.queueTransactionForSync(saved, "PAID")
+
+        completeAuthorizationForPaidTransaction(saved, paymentMethod, "MARK_TRANSACTION_PAID")
         
         logger.info("💳 Transaksjon betalt: ID={}, volum={} L, beløp={} kr, metode={}",
             transactionId, 
@@ -235,6 +243,8 @@ class TransactionService(
             
             // Queue for Azure sync
             transactionSyncService?.queueTransactionForSync(saved, "PAID")
+
+            completeAuthorizationForPaidTransaction(saved, paymentMethod, "PAY_ALL_PENDING")
             
             logger.info("✅ Transaksjon betalt: ID={}, volum={} L, beløp={} kr",
                 saved.transactionId,
@@ -247,5 +257,31 @@ class TransactionService(
         logger.info("✅ Totalt {} transaksjoner betalt", paidTransactions.size)
         
         return paidTransactions
+    }
+
+    private fun completeAuthorizationForPaidTransaction(
+        transaction: Transaction,
+        paymentMethod: String,
+        source: String
+    ) {
+        val completedByTransaction = transaction.transactionId?.let { transactionId ->
+            authorizationService.completeStoppedAuthorizationByTransaction(
+                transactionId,
+                paymentMethod,
+                source
+            )
+        }
+
+        if (completedByTransaction == null) {
+            val completedByDispenser = authorizationService.completeStoppedAuthorizationByDispenser(
+                transaction.dispenserAddress,
+                paymentMethod,
+                source
+            )
+
+            if (completedByDispenser == null) {
+                logger.info("ℹ️ Ingen STOPPED autorisasjon å fullføre for transaksjon {}", transaction.transactionId)
+            }
+        }
     }
 }

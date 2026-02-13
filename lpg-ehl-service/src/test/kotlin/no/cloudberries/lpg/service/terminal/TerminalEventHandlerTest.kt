@@ -8,7 +8,7 @@ import org.mockito.kotlin.verify
 class TerminalEventHandlerTest {
 
     @Test
-    fun `reservation completed with lowercase success triggers unblock`() {
+    fun `purchase completed with lowercase success triggers pump start`() {
         val orchestrator = mock<PumpPaymentOrchestrator>()
         val handler = TerminalEventHandler(orchestrator)
 
@@ -20,17 +20,18 @@ class TerminalEventHandlerTest {
             eventType = "OperationCompleted",
             payload = mapOf(
                 "success" to true,
-                "OperationType" to "reservation",
+                "OperationType" to "purchase",
                 "AmountMinor" to 150000
             )
         )
 
         handler.handleOperationCompleted(event)
 
-        verify(orchestrator).unblockPumpAfterReservation(
-            operationId = "op-123",
-            amountMinor = 150000,
-            pumpId = 1
+        verify(orchestrator).startPumpingAfterPayment(
+            amountCents = 150000,
+            pumpId = 1,
+            productId = 1,
+            operationId = "op-123"
         )
     }
 }

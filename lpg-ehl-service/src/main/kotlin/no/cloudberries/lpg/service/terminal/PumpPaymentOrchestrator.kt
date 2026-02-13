@@ -11,15 +11,12 @@ import org.springframework.stereotype.Service
 
 /**
  * Orkestrerer koblingen mellom betaling og pumping.
- * 
- * Flow (reservation):
- * 1. Terminal reservation godkjent -> unblock pump (UNBLOCK via PumpStateService)
- * 2. Bruker fyller (PLS knapp eller webapp)
- * 3. Pump stoppet -> terminal capture + settle
- * 
- * Flow (full purchase - legacy):
- * 1. Terminal purchase godkjent -> FuelPumpService.startFueling
- * 4. Hvis feil -> reverser betaling på terminal
+ *
+ * Flow (station owner):
+ * 1. Open terminal
+ * 2. Purchase approved
+ * 3. Start fueling
+ * 4. If pump fails -> reversal on terminal
  */
 @Service
 @ConditionalOnProperty(name = ["payment.terminal.enabled"], havingValue = "true")
@@ -28,31 +25,52 @@ class PumpPaymentOrchestrator(
     private val pumpStateService: PumpStateService,
     private val transactionService: TransactionService,
     private val priceService: PriceService,
-    private val terminalClient: TerminalClient?,
-    private val sessionStore: TerminalPumpSession
+    private val terminalClient: TerminalClient?
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Unblock pump after reservation approval.
-     * Sends UNBLOCK to pump (PLS/emulator). User can then start filling via PLS GUI or webapp.
+     * Station owner flow: open terminal then purchase before starting pump.
      */
-    fun unblockPumpAfterReservation(operationId: String, amountMinor: Int, pumpId: Int = 1) {
-        log.info("⛽ Unblocking pump {} after reservation (operationId={}, reserved={} kr)", pumpId, operationId, amountMinor / 100.0)
+    fun openTerminalAndPurchase(
+        amountMinor: Int,
+        pumpId: Int = 1,
+        productId: Int = 1,
+        optionalData: String? = null,
+        clientRequestId: String? = null
+    ): TerminalOperationResponse {
+        if (terminalClient == null) {
+            log.warn("Terminal client not configured; cannot perform purchase")
+            return TerminalOperationResponse(success = false, error = "Terminal client not configured")
+        }
 
-        sessionStore.put(pumpId, operationId, amountMinor)
+        log.info("Opening terminal for purchase (pumpId={}, amountMinor={})", pumpId, amountMinor)
+        val openResponse = terminalClient.openTerminal()
+        if (!openResponse.success) {
+            log.error("Terminal open failed: {}", openResponse.error)
+            return TerminalOperationResponse(success = false, error = openResponse.error)
+        }
 
-        val result = pumpStateService.unblock(pumpId)
-        result.fold(
-            onSuccess = {
-                log.info("✅ Pump {} unblocked - user can start filling (PLS Start or webapp)", pumpId)
-            },
-            onFailure = { e ->
-                log.error("❌ Failed to unblock pump {}: {}", pumpId, e.message)
-                sessionStore.remove(pumpId)
-                terminalClient?.reversal(operationId)
-            }
+        val purchaseResponse = terminalClient.purchase(
+            TerminalPurchaseRequest(
+                amountMinor = amountMinor,
+                optionalData = optionalData,
+                clientRequestId = clientRequestId
+            )
         )
+
+        if (purchaseResponse.success && !purchaseResponse.operationId.isNullOrBlank()) {
+            startPumpingAfterPayment(
+                amountCents = amountMinor.toLong(),
+                pumpId = pumpId,
+                productId = productId,
+                operationId = purchaseResponse.operationId
+            )
+        } else {
+            log.error("Purchase failed: {}", purchaseResponse.error ?: purchaseResponse.errorCode)
+        }
+
+        return purchaseResponse
     }
 
     /**

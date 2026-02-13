@@ -1,11 +1,6 @@
-#!/bin/bash
-
 java -Xms512m -Xmx512m \
   -XX:+UseG1GC -XX:MaxGCPauseMillis=100 \
+  -Dspring.config.additional-location=file:release/config/ \
+  -Dlogging.config=file:release/config/logback-spring.xml \
   -jar release/lpg-ehl-webapp.jar \
-  --spring.profiles.active=field \
-  --ehl.serial.port=/tmp/vserial1 \
-  --ehl.serial.baud-rate=9600 \
-  --ehl.serial.data-bits=8 \
-  --ehl.serial.parity=NONE \
-  --ehl.serial.stop-bits=1
+  --spring.profiles.active=field

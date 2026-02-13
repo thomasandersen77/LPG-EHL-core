@@ -141,6 +141,107 @@
   backdrop-filter: blur(10px);
 }
 
+/* Left panel STATUS chip (ONLINE/OFFLINE) */
+.left-panel-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.left-panel-status-label {
+  color: #95a5a6;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.left-panel-status-chip {
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.left-panel-status-chip.online {
+  background: rgba(46, 204, 113, 0.25);
+  border: 1px solid #2ecc71;
+  color: #2ecc71;
+}
+
+.left-panel-status-chip.offline {
+  background: rgba(231, 76, 60, 0.25);
+  border: 1px solid #e74c3c;
+  color: #e74c3c;
+}
+
+/* Report tabs (Omsetningsrapport, Veibruksavgift, etc.) */
+.report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.report-tab {
+  background: rgba(52, 73, 94, 0.5);
+  color: #ecf0f1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.report-tab:hover {
+  background: rgba(52, 73, 94, 0.8);
+}
+
+.report-tab.active {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: #4caf50;
+  color: #4caf50;
+}
+
+.report-date-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.report-date-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #95a5a6;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.report-date-input {
+  background: rgba(52, 73, 94, 0.6);
+  border: 2px solid rgba(76, 175, 80, 0.3);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  color: white;
+  font-size: 0.9rem;
+}
+
+.report-date-input:focus {
+  outline: none;
+  border-color: #4caf50;
+}
+
+.report-fetch-btn {
+  background: linear-gradient(135deg, #e67e22 0%, #d35400 100%) !important;
+}
+
+.report-fetch-btn:hover {
+  background: linear-gradient(135deg, #d35400 0%, #c0392b 100%) !important;
+}
+
 .panel-header h2 {
   color: #4caf50;
   font-size: 1.25rem;
@@ -489,6 +590,104 @@
   letter-spacing: 2px;
 }
 
+/* ==================== PRISVISNING section ==================== */
+.prisvisning-section {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  background: rgba(44, 62, 80, 0.4);
+  border-radius: 10px;
+  border: 1px solid rgba(52, 152, 219, 0.2);
+}
+
+.prisvisning-title {
+  color: #95a5a6;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.prisvisning-tax {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.radio-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #ecf0f1;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.radio-label:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.radio-label input[type="radio"] {
+  accent-color: #4caf50;
+}
+
+.payment-choice-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.payment-choice-label {
+  display: block;
+  color: #95a5a6;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.payment-choice-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.prisvisning-lock-msg,
+.instruction-hint {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #b0b0b0;
+  font-style: italic;
+}
+
+.display-input {
+  text-align: center;
+  font-size: 1.5rem !important;
+  font-weight: bold;
+}
+
+/* Control instructions (START/STOPP) */
+.control-instructions {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(52, 73, 94, 0.3);
+  border-radius: 8px;
+  border-left: 4px solid #3498db;
+}
+
+.instruction-time {
+  font-size: 0.9rem;
+  color: #f1c40f;
+  margin-bottom: 0.5rem;
+}
+
+.instruction-main {
+  font-size: 0.9rem;
+  color: #b0b0b0;
+  margin: 0;
+}
+
 /* ==================== Price Display ==================== */
 .price-display {
   background: rgba(44, 62, 80, 0.8);
@@ -496,7 +695,12 @@
   border-radius: 12px;
   padding: 1rem 1.5rem;
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 0;
+}
+
+.prisvisning-section .price-display {
+  margin-top: 1rem;
+  margin-bottom: 0;
 }
 
 .price-label {

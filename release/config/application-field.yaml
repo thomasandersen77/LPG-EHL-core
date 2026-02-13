@@ -1,11 +1,22 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# TERMINAL-SIM PROFIL – Aktiverer kobling til Payment Terminal Simulator
+# FIELD PROFIL - Produksjon med ekte dispenser
 # ═══════════════════════════════════════════════════════════════════════════════
-# Bruk sammen med field: --spring.profiles.active=field,terminal-sim
+# Bruk: java -jar lpg-ehl-webapp.jar --spring.profiles.active=field
 #
-# Når aktiv: TerminalEventPoller poller /v1/events, ved reservation success
-# sender UNBLOCK til pumpen. PLS simulator kan da starte fylling via START-knappen.
+# Arver alt fra application.yaml, overstyrer kun:
+# - Seriell port til ekte enhet
 # ═══════════════════════════════════════════════════════════════════════════════
+
+lpg:
+  dispenser:
+    address: 33
+ehl:
+  serial:
+    port: /tmp/vserial1
+    baud-rate: 9600
+    parity: NONE
+    data-bits: 8
+    stop-bits: 1
 
 payment:
   terminal:

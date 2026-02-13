@@ -36,12 +36,12 @@ class PaymentTerminalDiagnosticsService(
 
     fun openTerminal(): JsonNode {
         log.info("Payment terminal diagnostics: POST /v1/terminal/open")
-        return postJson("/v1/terminal/open", null)
+        return postJson("/v1/terminal/open", "{}")
     }
 
     fun closeTerminal(): JsonNode {
         log.info("Payment terminal diagnostics: POST /v1/terminal/close")
-        return postJson("/v1/terminal/close", null)
+        return postJson("/v1/terminal/close", "{}")
     }
 
     fun getDiagnosticsSchema(): JsonNode {

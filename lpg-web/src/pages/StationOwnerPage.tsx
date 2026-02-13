@@ -5,6 +5,7 @@ import { pumpApi, type PumpStatus } from '../api/pump';
 import '../styles/DispenserControl.css';
 
 type ActivePanel = 'status' | 'reports' | 'history' | 'pricing';
+type ReportTab = 'omsetning' | 'veibruksavgift' | 'uttak' | 'kvitteringer';
 
 export function StationOwnerPage() {
   const navigate = useNavigate();
@@ -13,7 +14,18 @@ export function StationOwnerPage() {
   // State management
   const [pumpStatus, setPumpStatus] = useState<PumpStatus | null>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel>('status');
+  const [reportTab, setReportTab] = useState<ReportTab>('omsetning');
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [pricePerLiter, setPricePerLiter] = useState(17.99);
+  const [withRoadTax, setWithRoadTax] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState<'CARD' | 'CREDIT'>('CARD');
+  const [amountInput, setAmountInput] = useState('');
+  const [litersInput, setLitersInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -158,9 +170,17 @@ export function StationOwnerPage() {
   const isPumping = state === 'PUMPING';
   const isPaymentPending = state === 'PAYMENT_PENDING' && pumpStatus?.hasPendingTransaction;
 
-  // Format display values
-  const displayAmount = pumpStatus?.amountKr?.toFixed(2) || '0.00';
-  const displayVolume = pumpStatus?.volumeLitres?.toFixed(2) || '0.00';
+  // Connected = choices locked (tax, payment, amount/liters shown from pump)
+  const isConnected = isReadyToPump || isPumping || isPaymentPending;
+  const isOnline = pumpStatus != null && state !== 'OFFLINE';
+
+  // Format display values (when connected use live data, else use inputs or 0)
+  const displayAmount = isConnected
+    ? (pumpStatus?.amountKr?.toFixed(2) ?? '0.00')
+    : (amountInput || '0,00').replace('.', ',');
+  const displayVolume = isConnected
+    ? (pumpStatus?.volumeLitres?.toFixed(2) ?? '0.00')
+    : (litersInput || '0,00').replace('.', ',');
   const statusText = state;
 
   return (
@@ -192,6 +212,14 @@ export function StationOwnerPage() {
       <div className="control-container">
         {/* Left Panel - Menu and Overview */}
         <div className="left-panel">
+          {/* STATUS chip (ONLINE/OFFLINE) - matches dashboard image */}
+          <div className="left-panel-status-row">
+            <span className="left-panel-status-label">STATUS</span>
+            <span className={`left-panel-status-chip ${isOnline ? 'online' : 'offline'}`}>
+              {isOnline ? 'ONLINE' : 'OFFLINE'}
+            </span>
+          </div>
+
           <div className="panel-header">
             <h2>Oversikt, status og rapporter</h2>
             <p className="panel-subtitle">
@@ -263,20 +291,84 @@ export function StationOwnerPage() {
 
             {activePanel === 'reports' && (
               <div className="info-section">
-                <h3>Rapportering</h3>
-                <p>Generer rapporter for fylleoperasjoner</p>
-                <Link to="/reports" className="secondary-btn">
-                  📊 Åpne rapporter
+                <h3>Rapporter</h3>
+                <div className="report-tabs">
+                  {(
+                    [
+                      ['omsetning', 'Omsetningsrapport'],
+                      ['veibruksavgift', 'Veibruksavgift'],
+                      ['uttak', 'Uttaksrapport'],
+                      ['kvitteringer', 'Kvitteringer'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`report-tab ${reportTab === key ? 'active' : ''}`}
+                      onClick={() => setReportTab(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="report-date-range">
+                  <label className="report-date-label">
+                    FRA DATO
+                    <input
+                      type="date"
+                      className="report-date-input"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                  </label>
+                  <label className="report-date-label">
+                    TIL DATO
+                    <input
+                      type="date"
+                      className="report-date-input"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <Link
+                  to={reportTab === 'kvitteringer' ? `/transactions?from=${dateFrom}&to=${dateTo}` : '/reports'}
+                  className="secondary-btn report-fetch-btn"
+                >
+                  Hent rapporter
                 </Link>
               </div>
             )}
 
             {activePanel === 'history' && (
               <div className="info-section">
-                <h3>Historikk</h3>
-                <p>Se tidligere fylleoperasjoner og kvitteringer</p>
-                <Link to="/transactions" className="secondary-btn">
-                  Vis historikk
+                <h3>Historikk og kvitteringer</h3>
+                <p>Hent dokumentasjon for valgt periode. Denne delen er kun informativ.</p>
+                <div className="report-date-range">
+                  <label className="report-date-label">
+                    FRA DATO
+                    <input
+                      type="date"
+                      className="report-date-input"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                  </label>
+                  <label className="report-date-label">
+                    TIL DATO
+                    <input
+                      type="date"
+                      className="report-date-input"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <Link
+                  to={`/transactions?from=${dateFrom}&to=${dateTo}`}
+                  className="secondary-btn report-fetch-btn"
+                >
+                  Hent kvitteringer
                 </Link>
               </div>
             )}
@@ -345,61 +437,143 @@ export function StationOwnerPage() {
             </div>
           </div>
 
-          {/* Amount Displays */}
-          <div className="displays">
-            <div className="display-box">
-              <div className="display-label">Beløp (kr)</div>
-              <div className="display-value">{displayAmount}</div>
+          {/* PRISVISNING - tax, amount/liter, price (matches dashboard image) */}
+          <div className="prisvisning-section">
+            <h3 className="prisvisning-title">PRISVISNING</h3>
+            <div className="prisvisning-tax">
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="roadTax"
+                  checked={withRoadTax}
+                  onChange={() => setWithRoadTax(true)}
+                  disabled={isConnected}
+                />
+                <span>Med veibruksavgift</span>
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="roadTax"
+                  checked={!withRoadTax}
+                  onChange={() => setWithRoadTax(false)}
+                  disabled={isConnected}
+                />
+                <span>Uten avgift</span>
+              </label>
             </div>
-
-            <div className="display-box">
-              <div className="display-label">Volum (liter)</div>
-              <div className="display-value">{displayVolume}</div>
+            <div className="displays">
+              <div className="display-box">
+                <div className="display-label">Beløp å betale</div>
+                {isConnected ? (
+                  <div className="display-value">{displayAmount}</div>
+                ) : (
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="option-input display-input"
+                    placeholder="0000,00"
+                    value={amountInput}
+                    onChange={(e) => setAmountInput(e.target.value)}
+                  />
+                )}
+              </div>
+              <div className="display-box">
+                <div className="display-label">Antall liter</div>
+                {isConnected ? (
+                  <div className="display-value">{displayVolume}</div>
+                ) : (
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="option-input display-input"
+                    placeholder="0000,00"
+                    value={litersInput}
+                    onChange={(e) => setLitersInput(e.target.value)}
+                  />
+                )}
+              </div>
             </div>
+            <div className="price-display">
+              <div className="price-label">PRIS (kr/l)</div>
+              <div className="price-value">{pricePerLiter.toFixed(2)}</div>
+            </div>
+            {/* Velg betaling - kredittavtale / bankterminal */}
+            <div className="payment-choice-section">
+              <span className="payment-choice-label">Velg betaling:</span>
+              <div className="payment-choice-radios">
+                <label className="radio-label">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    checked={paymentMethod === 'CREDIT'}
+                    onChange={() => setPaymentMethod('CREDIT')}
+                    disabled={isConnected}
+                  />
+                  <span>Kredittavtale</span>
+                </label>
+                <label className="radio-label">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    checked={paymentMethod === 'CARD'}
+                    onChange={() => setPaymentMethod('CARD')}
+                    disabled={isConnected}
+                  />
+                  <span>Bankterminal</span>
+                </label>
+              </div>
+            </div>
+            {isConnected && (
+              <p className="prisvisning-lock-msg">
+                Avgiftsvalg, pris og betalingsmåte låses når kunden kobler til dispenser.
+              </p>
+            )}
           </div>
 
-          {/* Price Display */}
-          <div className="price-display">
-            <div className="price-label">PRIS KR/L</div>
-            <div className="price-value">{pricePerLiter.toFixed(2)}</div>
-          </div>
+          {!isConnected && (
+            <p className="instruction-hint">
+              Avgiftsvalg, pris og betalingsmåte låses når kunden kobler til dispenser.
+            </p>
+          )}
 
-          {/* Control Buttons - State-based */}
+          {/* Koble til dispenser / START / STOPP */}
           <div className="control-buttons">
-            {/* IDLE/VENTER: Release dispenser */}
+            {/* IDLE/VENTER: Koble til dispenser (same as FRI DISPENSER) */}
             {canRelease && (
               <button
                 className="control-btn start-btn"
                 onClick={handleReleaseDispenser}
                 disabled={loading}
+                title="Koble til dispenser – aktiverer betalingsflyt og reserverer dispenser"
               >
-                {loading ? '⏳...' : '🔓 FRI DISPENSER'}
+                {loading ? '⏳...' : 'Koble til dispenser'}
               </button>
             )}
 
-            {/* READY_TO_PUMP: Pump unblocked, show START PUMPING */}
+            {/* READY_TO_PUMP: START - start fylling innen gyldighetstiden */}
             {isReadyToPump && (
               <button
                 className="control-btn start-btn"
                 onClick={handleStartPumping}
                 disabled={loading || countdown === 0}
               >
-                {loading ? '⏳...' : '⛽ START FYLLING'}
+                {loading ? '⏳...' : 'START'}
               </button>
             )}
 
-            {/* PUMPING: Show STOP button */}
+            {/* PUMPING: STOPP */}
             {isPumping && (
               <button
                 className="control-btn stop-btn"
                 onClick={handleStop}
                 disabled={loading}
               >
-                {loading ? '⏳ Stopper...' : '🛑 STOPP'}
+                {loading ? '⏳ Stopper...' : 'STOPP'}
               </button>
             )}
 
-            {/* PAYMENT_PENDING: Show payment method choice */}
+            {/* PAYMENT_PENDING: Betaling */}
             {isPaymentPending && (
               <>
                 <button
@@ -418,6 +592,18 @@ export function StationOwnerPage() {
                 </button>
               </>
             )}
+          </div>
+
+          {/* Instruksjoner: START/STOPP skjer fysisk på dispenseren */}
+          <div className="control-instructions">
+            {isReadyToPump && countdown !== null && countdown > 0 && (
+              <p className="instruction-time">
+                Du har <strong>{countdown}</strong> sekunder på å starte fylling. Hvis fylling ikke startes innen tiden, frigjøres dispenser automatisk.
+              </p>
+            )}
+            <p className="instruction-main">
+              Hold START inne for å fylle. Slipp START for å stoppe. START/STOPP styres fysisk på dispenseren.
+            </p>
           </div>
 
           {/* Reset Button (for errors or stuck states) */}

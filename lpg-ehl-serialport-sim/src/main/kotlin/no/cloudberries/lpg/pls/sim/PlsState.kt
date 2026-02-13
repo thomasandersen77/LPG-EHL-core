@@ -578,6 +578,9 @@ class PlsState(
                 if (nozzleLifted) {
                     statusByte = statusByte or 0x02
                 }
+                if (fieldConfig.profile == SimProfile.FIELD) {
+                    statusByte = statusByte or 0x02
+                }
             }
             DispenserState.PUMPING -> {
                 // Start switch + nozzle lifted + delivery active = PUMPING

@@ -5,36 +5,46 @@ package no.cloudberries.lpg.service.terminal
  */
 interface TerminalClient {
     /**
-     * Reserve an amount on the card (pre-auth).
-     * Pump can be freed after successful reservation.
+     * Open the payment terminal before performing financial operations.
      */
-    fun reserve(amountMinor: Int): ReservationResponse
+    fun openTerminal(): TerminalSimpleResponse
 
     /**
-     * Complete a prior reservation by charging the actual amount.
+     * Perform a purchase (card payment) on the terminal.
      */
-    fun capture(operationId: String, amountMinor: Int): CaptureResponse
+    fun purchase(request: TerminalPurchaseRequest): TerminalOperationResponse
 
     /**
      * Attempt to reverse the current/last operation.
      */
-    fun reversal(operationId: String? = null): ReversalResponse
+    fun reversal(operationId: String? = null): TerminalOperationResponse
 }
 
-data class ReservationResponse(
+data class TerminalSimpleResponse(
     val success: Boolean,
-    val operationId: String? = null,
+    val message: String? = null,
     val error: String? = null
 )
 
-data class CaptureResponse(
+data class TerminalOperationResponse(
     val success: Boolean,
     val operationId: String? = null,
-    val error: String? = null
+    val callResult: Int? = null,
+    val error: String? = null,
+    val errorCode: String? = null
 )
 
-data class ReversalResponse(
-    val success: Boolean,
-    val operationId: String? = null,
-    val error: String? = null
+data class TerminalPurchaseRequest(
+    val amountMinor: Int,
+    val operatorId: String = "0000",
+    val currency: String = "NOK",
+    val optionalData: String? = null,
+    val clientRequestId: String? = null,
+    val preAvstemming: TerminalPreAvstemmingConfig? = null
+)
+
+data class TerminalPreAvstemmingConfig(
+    val enabled: Boolean = false,
+    val password: String = "0000",
+    val timeoutSeconds: Int? = null
 )

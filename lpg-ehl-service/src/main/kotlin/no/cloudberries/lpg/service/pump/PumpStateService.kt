@@ -278,7 +278,7 @@ class PumpStateService(
                     logger.info("📋 Pumping med autorisasjon: ${auth.authorizationId}")
                     state.authorizationId = auth.authorizationId
                     // Mark authorization as PUMPING
-                    authService.markPumping(auth.authorizationId)
+                    authService.markPumping(auth.authorizationId, state.pendingTransactionId)
                 }
             }
         } else {
@@ -529,6 +529,13 @@ class PumpStateService(
         if (transactionId != null) {
             try {
                 transactionService.markTransactionPaid(transactionId, paymentMethod)
+                if (authorizationId == null) {
+                    authorizationService?.completeStoppedAuthorizationByTransaction(
+                        transactionId,
+                        paymentMethod,
+                        "SETTLE_PAYMENT"
+                    )
+                }
                 serviceLog(LogLevel.INFO, "💳 Betaling fullført: ${state.volumeLitres} L = ${state.amountKr} kr via $paymentMethod")
             } catch (e: Exception) {
                 serviceLog(LogLevel.ERROR, "❌ Kunne ikke markere transaksjon som betalt: ${e.message}")
@@ -548,6 +555,11 @@ class PumpStateService(
                     includesRoadTax = true
                 )
                 transactionService.saveTransaction(transaction)
+                authorizationService?.completeStoppedAuthorizationByDispenser(
+                    address,
+                    paymentMethod,
+                    "SETTLE_FALLBACK"
+                )
                 serviceLog(LogLevel.INFO, "💾 Transaksjon lagret til database (fallback)")
             } catch (e: Exception) {
                 serviceLog(LogLevel.ERROR, "❌ Kunne ikke lagre transaksjon: ${e.message}")

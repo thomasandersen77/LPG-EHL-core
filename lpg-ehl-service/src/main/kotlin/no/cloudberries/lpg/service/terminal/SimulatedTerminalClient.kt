@@ -14,7 +14,7 @@ import java.time.Duration
 
 /**
  * HTTP client for Payment Terminal Simulator.
- * Implements reserve/capture flow for pump-triggered filling.
+ * Implements OPEN -> PURCHASE flow for station-owner operations.
  */
 @Component
 @ConditionalOnProperty(name = ["payment.terminal.enabled"], havingValue = "true")
@@ -28,64 +28,68 @@ class SimulatedTerminalClient(
         .build()
     private val objectMapper = ObjectMapper()
 
-    override fun reserve(amountMinor: Int): ReservationResponse {
+    override fun openTerminal(): TerminalSimpleResponse {
         return try {
-            val body = """
-                {"AmountMinor": $amountMinor, "Currency": "NOK", "OperatorId": "0000"}
-            """.trimIndent()
-
             val request = HttpRequest.newBuilder()
-                .uri(URI.create("$baseUrl/v1/payments/reservation"))
+                .uri(URI.create("$baseUrl/v1/terminal/open"))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
                 .timeout(Duration.ofSeconds(30))
                 .build()
 
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             val json = objectMapper.readTree(response.body())
 
-            val success = json.path("Success").asBoolean(false)
-            val operationId = json.path("OperationId").takeIf { !it.isMissingNode }?.asText()
-            val error = json.path("Error").takeIf { !it.isMissingNode }?.asText()
+            val success = readBoolean(json, "Success", "success")
+            val message = readText(json, "Message", "message")
+            val error = readText(json, "Error", "error")
 
-            log.info("Reservation: success={}, operationId={}, amount={} kr", success, operationId, amountMinor / 100.0)
-            ReservationResponse(success = success, operationId = operationId, error = error)
+            log.info("Terminal open: success={}, message={}", success, message)
+            TerminalSimpleResponse(success = success, message = message, error = error)
         } catch (e: Exception) {
-            log.error("Reservation failed: {}", e.message)
-            ReservationResponse(success = false, error = e.message)
+            log.error("Terminal open failed: {}", e.message)
+            TerminalSimpleResponse(success = false, error = e.message)
         }
     }
 
-    override fun capture(operationId: String, amountMinor: Int): CaptureResponse {
+    override fun purchase(request: TerminalPurchaseRequest): TerminalOperationResponse {
         return try {
-            val body = """
-                {"OperationId": "$operationId", "AmountMinor": $amountMinor, "Currency": "NOK", "OperatorId": "0000"}
-            """.trimIndent()
-
-            val request = HttpRequest.newBuilder()
-                .uri(URI.create("$baseUrl/v1/payments/completion"))
+            val body = buildPurchaseBody(request)
+            val httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create("$baseUrl/v1/payments/purchase"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
-                .timeout(Duration.ofSeconds(30))
+                .timeout(Duration.ofSeconds(60))
                 .build()
 
-            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            val response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString())
             val json = objectMapper.readTree(response.body())
 
-            val success = json.path("Success").asBoolean(false)
-            val error = json.path("Error").takeIf { !it.isMissingNode }?.asText()
+            val success = readBoolean(json, "Success", "success")
+            val operationId = readText(json, "OperationId", "operationId")
+            val callResult = readInt(json, "CallResult", "callResult")
+            val error = readText(json, "Error", "error")
+            val errorCode = readText(json, "ErrorCode", "errorCode")
 
-            log.info("Capture: operationId={}, amount={} kr, success={}", operationId, amountMinor / 100.0, success)
-            CaptureResponse(success = success, operationId = operationId, error = error)
+            log.info("Purchase: operationId={}, amountMinor={}, success={}", operationId, request.amountMinor, success)
+            TerminalOperationResponse(
+                success = success,
+                operationId = operationId,
+                callResult = callResult,
+                error = error,
+                errorCode = errorCode
+            )
         } catch (e: Exception) {
-            log.error("Capture failed: {}", e.message)
-            CaptureResponse(success = false, operationId = operationId, error = e.message)
+            log.error("Purchase failed: {}", e.message)
+            TerminalOperationResponse(success = false, error = e.message)
         }
     }
 
-    override fun reversal(operationId: String?): ReversalResponse {
+    override fun reversal(operationId: String?): TerminalOperationResponse {
         return try {
-            val body = """{"Password": "0000"}"""
+            val body = objectMapper.createObjectNode()
+                .put("Password", "0000")
+                .toString()
 
             val request = HttpRequest.newBuilder()
                 .uri(URI.create("$baseUrl/v1/admin/reversal"))
@@ -97,15 +101,63 @@ class SimulatedTerminalClient(
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             val json = objectMapper.readTree(response.body())
 
-            val success = json.path("Success").asBoolean(false)
-            val opId = json.path("OperationId").takeIf { !it.isMissingNode }?.asText()
-            val error = json.path("Error").takeIf { !it.isMissingNode }?.asText()
+            val success = readBoolean(json, "Success", "success")
+            val opId = readText(json, "OperationId", "operationId")
+            val callResult = readInt(json, "CallResult", "callResult")
+            val error = readText(json, "Error", "error")
+            val errorCode = readText(json, "ErrorCode", "errorCode")
 
             log.info("Reversal: operationId={}, success={}", operationId ?: opId, success)
-            ReversalResponse(success = success, operationId = opId, error = error)
+            TerminalOperationResponse(
+                success = success,
+                operationId = opId,
+                callResult = callResult,
+                error = error,
+                errorCode = errorCode
+            )
         } catch (e: Exception) {
             log.error("Reversal failed: {}", e.message)
-            ReversalResponse(success = false, operationId = operationId, error = e.message)
+            TerminalOperationResponse(success = false, operationId = operationId, error = e.message)
         }
+    }
+
+    private fun buildPurchaseBody(request: TerminalPurchaseRequest): String {
+        val root = objectMapper.createObjectNode()
+        root.put("AmountMinor", request.amountMinor)
+        root.put("OperatorId", request.operatorId)
+        root.put("Currency", request.currency)
+        request.optionalData?.let { root.put("OptionalData", it) }
+        request.clientRequestId?.let { root.put("ClientRequestId", it) }
+        request.preAvstemming?.let { config ->
+            root.putObject("PreAvstemming")
+                .put("Enabled", config.enabled)
+                .put("Password", config.password)
+                .apply {
+                    config.timeoutSeconds?.let { put("TimeoutSeconds", it) }
+                }
+        }
+        return root.toString()
+    }
+
+    private fun readBoolean(node: JsonNode, vararg names: String): Boolean {
+        return names.asSequence()
+            .map { node.path(it) }
+            .firstOrNull { !it.isMissingNode && !it.isNull }
+            ?.asBoolean(false)
+            ?: false
+    }
+
+    private fun readText(node: JsonNode, vararg names: String): String? {
+        return names.asSequence()
+            .map { node.path(it) }
+            .firstOrNull { !it.isMissingNode && !it.isNull }
+            ?.asText()
+    }
+
+    private fun readInt(node: JsonNode, vararg names: String): Int? {
+        return names.asSequence()
+            .map { node.path(it) }
+            .firstOrNull { !it.isMissingNode && !it.isNull }
+            ?.asInt()
     }
 }
