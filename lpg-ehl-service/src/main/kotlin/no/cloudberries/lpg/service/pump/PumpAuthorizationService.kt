@@ -205,21 +205,94 @@ class PumpAuthorizationService(
         if (auth.status != AuthorizationStatus.STOPPED) {
             throw IllegalStateException("Kan bare bekrefte betaling for STOPPED autorisasjoner (nåværende: ${auth.status})")
         }
-        
+
+        return completeAuthorization(auth, paymentMethod, "CONFIRM_PAYMENT")
+    }
+
+    /**
+     * Fullfør STOPPED-autorisasjon ved betaling via transaksjon.
+     */
+    fun completeStoppedAuthorizationByTransaction(
+        transactionId: UUID,
+        paymentMethod: String = "SIMULATION",
+        source: String = "TRANSACTION_PAYMENT"
+    ): PumpAuthorization? {
+        val auth = authorizationRepository.findFirstByTransactionId(transactionId) ?: return null
+        return completeStoppedAuthorization(auth, paymentMethod, source)
+    }
+
+    /**
+     * Fullfør STOPPED-autorisasjon ved å slå opp siste stoppede autorisasjon for dispenser.
+     */
+    fun completeStoppedAuthorizationByDispenser(
+        dispenserAddress: Int,
+        paymentMethod: String = "SIMULATION",
+        source: String = "TRANSACTION_PAYMENT"
+    ): PumpAuthorization? {
+        val auth = authorizationRepository.findFirstByDispenserAddressAndStatusOrderByCreatedAtDesc(
+            dispenserAddress,
+            AuthorizationStatus.STOPPED
+        ) ?: return null
+
+        return completeStoppedAuthorization(auth, paymentMethod, source)
+    }
+
+    /**
+     * Fullfør alle STOPPED-autorisasjoner (brukes ved reset/cleanup).
+     */
+    fun completeStoppedAuthorizations(reason: String = "ADMIN_RESET"): Int {
+        val stoppedAuths = authorizationRepository.findByStatus(AuthorizationStatus.STOPPED)
+
+        if (stoppedAuths.isEmpty()) {
+            logger.info("ℹ️ No STOPPED authorizations found to complete")
+            return 0
+        }
+
+        logger.warn("🧾 Fullfører ${stoppedAuths.size} STOPPED autorisasjon(er) - årsak: $reason")
+
+        stoppedAuths.forEach { auth ->
+            auth.status = AuthorizationStatus.COMPLETED
+            auth.completedAt = LocalDateTime.now()
+            authorizationRepository.save(auth)
+            logger.info("   ✅ Fullført: ${auth.authorizationId}")
+        }
+
+        return stoppedAuths.size
+    }
+
+    private fun completeStoppedAuthorization(
+        auth: PumpAuthorization,
+        paymentMethod: String,
+        source: String
+    ): PumpAuthorization? {
+        if (auth.status != AuthorizationStatus.STOPPED) {
+            logger.warn("⚠️ Kan ikke fullføre autorisasjon ${auth.authorizationId} med status ${auth.status} (kilde: $source)")
+            return null
+        }
+
+        return completeAuthorization(auth, paymentMethod, source)
+    }
+
+    private fun completeAuthorization(
+        auth: PumpAuthorization,
+        paymentMethod: String,
+        source: String
+    ): PumpAuthorization {
         auth.status = AuthorizationStatus.COMPLETED
         auth.completedAt = LocalDateTime.now()
-        
+
         val saved = authorizationRepository.save(auth)
-        
+
         logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         logger.info("💳 BETALING BEKREFTET")
-        logger.info("   Auth ID: $authorizationId")
+        logger.info("   Auth ID: ${auth.authorizationId}")
         logger.info("   Volum: ${auth.actualVolumeLiters} L")
         logger.info("   Beløp: ${auth.actualAmountKr} kr")
         logger.info("   Metode: $paymentMethod")
+        logger.info("   Kilde: $source")
         logger.info("   Status: COMPLETED ✅")
         logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        
+
         return saved
     }
     

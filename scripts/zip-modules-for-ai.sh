@@ -36,7 +36,7 @@ zip_module() {
     
     cd "$module_dir"
     zip -q -r "$output_file" . \
-        -x "*.git/*" \'
+        -x "*.git/*" \
         -x "*target/*" \
         -x "*node_modules/*" \
         -x "*dist/*" \

@@ -12,6 +12,7 @@ import { CreditAccountsPage } from './pages/CreditAccountsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { EmulatorDebugPage } from './pages/EmulatorDebugPage';
 import { PaymentTerminalPage } from './pages/PaymentTerminalPage';
+import { PaymentTerminalDiagnosticsPage } from './pages/PaymentTerminalDiagnosticsPage';
 import { AzureStoragePage } from './pages/AzureStoragePage';
 import { FuelingPage } from './pages/FuelingPage';
 import { PriceAdminPage } from './pages/PriceAdminPage';
@@ -110,6 +111,13 @@ function AppContent() {
             <LabModeBanner />
             <FieldModeBanner />
             <DiagnosePage />
+          </ProtectedRoute>
+        } />
+        <Route path="/diagnose/terminal" element={
+          <ProtectedRoute>
+            <LabModeBanner />
+            <FieldModeBanner />
+            <PaymentTerminalDiagnosticsPage />
           </ProtectedRoute>
         } />
         

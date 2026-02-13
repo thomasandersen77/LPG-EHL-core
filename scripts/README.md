@@ -1,54 +1,66 @@
-# Scripts Guide
+# Scripts
 
-## 🚀 Hovedskripter
+`scripts/` er ryddet for å fokusere på det som brukes i praksis: starte simulatorene og bygge artifacts.
 
-### 1. `start-socat-sim.sh` - Start Simulator
+## 🚀 Simulator-start (3 scripts)
 
-Starter både SOCAT og PLS simulator i én kommando.
-
-**Grunnleggende bruk:**
-```bash
-./scripts/start-socat-sim.sh
-```
-
-**Avansert konfigurasjon:**
-```bash
-./scripts/start-socat-sim.sh \
-  --address=1 \
-  --price=1590 \
-  --baud=9600 \
-  --parity=NONE \
-  --blocked=true
-```
-
-### 2. `start-webapp-field.sh` - Start Webapp
-
-**Grunnleggende bruk (anbefalt):**
-```bash
-./scripts/start-webapp-field.sh --auto-detect
-```
-
-### 3. `start-headless-field.sh` - Start Headless App
-
-**Grunnleggende bruk:**
-```bash
-./scripts/start-headless-field.sh --auto-detect
-```
-
----
-
-## 📋 Typisk Workflow
+### 1) PLS (pumpestyring) + socat
 
 ```bash
-# Terminal 1: Start simulator
-./scripts/start-socat-sim.sh
-
-# Terminal 2: Start webapp
-./scripts/start-webapp-field.sh --auto-detect
-
-# Browser: http://localhost:8080
+./scripts/sim-pls.sh
+# GUI (dødmannsknapp):
+./scripts/sim-pls.sh --gui
 ```
 
----
+Dette lager virtuelle porter:
+- `/tmp/vserial0` ↔ `/tmp/vserial1`
 
-**Se [../GETTING_STARTED.md](../GETTING_STARTED.md) for full dokumentasjon.**
+**Viktig for IntelliJ / field-mode:** Webapp/headless skal koble til PLS via:
+- `--ehl.serial.port=/tmp/vserial1`
+
+### 2) Payment terminal
+
+```bash
+./scripts/sim-terminal.sh
+# GUI:
+./scripts/sim-terminal.sh --gui
+```
+
+Default port: `18080` (overstyr med `--port=...`).
+
+### 3) Alt-i-ett (terminal + PLS)
+
+```bash
+./scripts/sim-all.sh
+# GUI for begge:
+./scripts/sim-all.sh --gui
+```
+
+## 🔨 Build
+
+### Bygg webapp (React + webapp-jar)
+
+```bash
+./scripts/build-webapp.sh
+```
+
+Output:
+- `release/lpg-ehl-webapp.jar`
+
+### Bygg simulatorer (PLS + terminal)
+
+```bash
+./scripts/build-simulators.sh
+```
+
+Output:
+- `release/pls-sim.jar`
+- `release/payment-terminal-sim.jar`
+- `release/payment-terminal-gui.jar`
+
+## 🧰 Tools
+
+Nyttige hjelpere ligger i `scripts/tools/` (ikke en del av normal oppstart). Eksempel:
+- `scripts/tools/full-pump-test.sh`
+- `scripts/tools/cleanup-stuck-auth.sh`
+- `scripts/tools/h2-console.sh`

@@ -1,0 +1,19 @@
+    PROGRAM 2.04 OK
+
+Bax: 42696609-1229329
+08/02/2026 20:08
+Valuta: NOK
+Sesjon.: 012
+
+DATASET STATUS
+
+01 BankAxept 
+30 BankAxept 
+43 Basic     
+
+DATASET - OK
+
+PRODUKT
+Ubetjent terminal Norge
+
+

@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useEffect, useState, useRef } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
-const EMULATOR_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || 
-  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080');
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+const EMULATOR_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || '';
 const WS_BASE_URL = EMULATOR_BASE_URL.replace(/^http/, 'ws');
 
 interface LiveStatus {

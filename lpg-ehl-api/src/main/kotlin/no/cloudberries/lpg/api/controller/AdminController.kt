@@ -92,6 +92,8 @@ class AdminController(
                 updatedCount++
                 logger.info("   ✅ Marked transaction {} as PAID", tx.transactionId)
             }
+
+            val completedAuthorizations = authorizationService.completeStoppedAuthorizations("ADMIN_OVERRIDE")
             
             logger.info("✅ Marked {} transaction(s) as PAID", updatedCount)
             
@@ -99,6 +101,7 @@ class AdminController(
                 "success" to true,
                 "message" to "Marked $updatedCount transaction(s) as PAID",
                 "updatedCount" to updatedCount,
+                "authorizationsCompleted" to completedAuthorizations,
                 "transactions" to pendingTransactions.map { it.transactionId }
             ))
         } catch (e: Exception) {
@@ -129,11 +132,14 @@ class AdminController(
                 tx.paymentType = "ADMIN_RESET"
                 transactionRepository.save(tx)
             }
-            
-            // 2. Cancel stuck authorizations
+
+            // 2. Fullfør STOPPED autorisasjoner
+            val completedAuth = authorizationService.completeStoppedAuthorizations("ADMIN_RESET")
+
+            // 3. Cancel stuck authorizations
             val cancelledAuth = authorizationService.cancelAllStuckAuthorizations()
-            
-            // 3. Reset all pumps
+
+            // 4. Reset all pumps
             pumpStateService.resetAllPumps()
             
             logger.info("✅ Full reset completed: {} transactions marked paid, {} authorizations cancelled", 
@@ -143,6 +149,7 @@ class AdminController(
                 "success" to true,
                 "message" to "Full system reset completed",
                 "transactionsMarkedPaid" to pendingTransactions.size,
+                "authorizationsCompleted" to completedAuth,
                 "authorizationsCancelled" to cancelledAuth
             ))
         } catch (e: Exception) {

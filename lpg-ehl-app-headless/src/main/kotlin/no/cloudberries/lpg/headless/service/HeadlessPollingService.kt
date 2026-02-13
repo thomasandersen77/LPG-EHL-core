@@ -58,7 +58,7 @@ class HeadlessPollingService(
     private var isRunning = false
     
     companion object {
-        const val POLL_TIMEOUT_MS = 2000L  // Match serial timeout (was 1000ms - too tight)
+        const val POLL_TIMEOUT_MS = 3000L  // Match default serial timeout (was 1000ms - too tight)
         const val WARN_AFTER_CONSECUTIVE_TIMEOUTS = 3  // Only ERROR after N consecutive failures
     }
     

@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.servlet.resource.NoResourceFoundException
 
 /**
  * Global exception handler for REST controllers.
@@ -16,6 +17,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 class TerminalExceptionHandler {
 
     private val log = LoggerFactory.getLogger(TerminalExceptionHandler::class.java)
+
+    @ExceptionHandler(NoResourceFoundException::class)
+    fun handleNoResourceFound(@Suppress("UNUSED_PARAMETER") ex: NoResourceFoundException): ResponseEntity<Void> {
+        // Missing static resources (e.g. /__admin/mappings) are not actionable errors.
+        // Avoid logging stack traces here, since browsers / tooling may probe endpoints.
+        log.debug("Static resource not found")
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).build()
+    }
 
     @ExceptionHandler(TerminalBusyException::class)
     fun handleTerminalBusy(ex: TerminalBusyException): ResponseEntity<ErrorResponse> {

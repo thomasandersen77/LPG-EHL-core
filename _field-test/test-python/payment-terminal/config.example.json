@@ -1,0 +1,27 @@
+{
+  "baxi_listener": {
+    "bind_host": "0.0.0.0",
+    "bind_port": 6001,
+    "accept_timeout_ms": 1000
+  },
+  "tcp": {
+    "host": "192.168.1.50",
+    "port": 12345,
+    "connect_timeout_ms": 2500,
+    "read_timeout_ms": 3000,
+    "tls": {
+      "enabled": false,
+      "server_name": "",
+      "insecure_skip_verify": false
+    }
+  },
+  "serial_linux": {
+    "port": "/dev/ttyS3",
+    "baud": 9600
+  },
+  "logging": {
+    "console_level": "INFO",
+    "file_level": "DEBUG"
+  }
+}
+

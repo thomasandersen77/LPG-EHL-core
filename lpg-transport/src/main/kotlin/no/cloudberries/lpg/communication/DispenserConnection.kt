@@ -71,7 +71,7 @@ class DispenserConnection(
     suspend fun sendCommand(
         command: EhlCommand,
         data: ByteArray = ByteArray(0),
-        timeoutMs: Long = 2000
+        timeoutMs: Long = 3000
     ): EhlPacket {
         val packet = EhlPacket(
             address = address,
@@ -89,7 +89,7 @@ class DispenserConnection(
      * @param timeoutMs Timeout in milliseconds
      * @return Response packet
      */
-    suspend fun sendPacket(packet: EhlPacket, timeoutMs: Long = 2000): EhlPacket {
+    suspend fun sendPacket(packet: EhlPacket, timeoutMs: Long = 3000): EhlPacket {
         require(packet.address == address) {
             "Packet address ${packet.address} does not match dispenser address $address"
         }
@@ -148,35 +148,35 @@ class DispenserConnection(
     /**
      * Query the dispenser state
      */
-    suspend fun queryState(timeoutMs: Long = 2000): EhlPacket {
+    suspend fun queryState(timeoutMs: Long = 3000): EhlPacket {
         return sendCommand(EhlCommand.STATE, timeoutMs = timeoutMs)
     }
 
     /**
      * Unblock the dispenser (start delivery mode)
      */
-    suspend fun unblock(timeoutMs: Long = 2000): EhlPacket {
+    suspend fun unblock(timeoutMs: Long = 3000): EhlPacket {
         return sendCommand(EhlCommand.UNBLOCK, timeoutMs = timeoutMs)
     }
 
     /**
      * Block the dispenser (stop/pause)
      */
-    suspend fun block(timeoutMs: Long = 2000): EhlPacket {
+    suspend fun block(timeoutMs: Long = 3000): EhlPacket {
         return sendCommand(EhlCommand.BLOCK, timeoutMs = timeoutMs)
     }
 
     /**
      * Program fuel price
      */
-    suspend fun programPrice(priceData: ByteArray, timeoutMs: Long = 2000): EhlPacket {
+    suspend fun programPrice(priceData: ByteArray, timeoutMs: Long = 3000): EhlPacket {
         return sendCommand(EhlCommand.PROG_PRC, data = priceData, timeoutMs = timeoutMs)
     }
 
     /**
      * Program value preset (amount in øre)
      */
-    suspend fun programValue(valueData: ByteArray, timeoutMs: Long = 2000): EhlPacket {
+    suspend fun programValue(valueData: ByteArray, timeoutMs: Long = 3000): EhlPacket {
         return sendCommand(EhlCommand.PROG_AMOUNT, data = valueData, timeoutMs = timeoutMs)
     }
 

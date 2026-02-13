@@ -1,41 +1,22 @@
 #!/bin/bash
 #═══════════════════════════════════════════════════════════════════════
-# START ALL SIMULATORS – Socat + Terminal + PLS + Webapp
-#═══════════════════════════════════════════════════════════════════════
-#
-# Starter hele stacken for terminal/pumpe-integrasjon:
-#   1. Socat       – virtuell seriell kobling (vserial0 <-> vserial1)
-#   2. Terminal    – Payment Terminal Simulator med GUI (port 18080)
-#   3. PLS         – Pumpe-simulator med GUI (vserial0)
-#   4. Webapp      – LPG-EHL Webapp (vserial1, field+terminal-sim)
-#
-# Port-fordeling:
-#   - /tmp/vserial0  → PLS Simulator (pumpestyring)
-#   - /tmp/vserial1  → Webapp
-#
-# Usage:
-#   ./scripts/start-all-simulators.sh
-#   ./scripts/start-all-simulators.sh --build   # Bygg JARs først
-#
-# Stop: Ctrl+C
-#
+# START ALL SIMULATORS – Socat + Terminal + PLS
 #═══════════════════════════════════════════════════════════════════════
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# JAR paths (release/ or target/)
+# JAR paths
 RELEASE="$PROJECT_ROOT/release"
+PAYMENT_TERMINAL_SIM_JAR="$RELEASE/payment-terminal-sim.jar"
 PAYMENT_TERMINAL_GUI_JAR="$RELEASE/payment-terminal-gui.jar"
 PLS_SIM_JAR="$RELEASE/pls-sim.jar"
-WEBAPP_JAR="$RELEASE/lpg-ehl-webapp.jar"
 
 # PIDs
 SOCAT_PID=""
 TERMINAL_PID=""
 PLS_PID=""
-WEBAPP_PID=""
 
 # Colors
 GREEN='\033[0;32m'
@@ -47,89 +28,196 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 DO_BUILD=false
-for arg in "$@"; do
-    case $arg in
-        --build) DO_BUILD=true ;;
-    esac
+FIELD_MODE=false
+GUI_ENABLED=false
+TERMINAL_PORT=18080
+TERMINAL_HEADLESS=false
+
+show_help() {
+  cat <<'EOF'
+START ALL SIMULATORS – Socat + Terminal + PLS
+
+Starter simulatorene for terminal/pumpe-integrasjon.
+
+Default-modus (lokal utvikling):
+  1. Socat       – virtuell seriell kobling (/tmp/vserial0 <-> /tmp/vserial1)
+  2. PLS         – Pumpe-simulator (/tmp/vserial0)
+  3. Terminal    – Payment Terminal Simulator (port 18080)
+
+--field modus (ARK/edge – kun socat + PLS):
+  1. Socat       – virtuell seriell kobling (/tmp/vserial0 <-> /tmp/vserial1)
+  2. PLS         – Pumpe-simulator (/tmp/vserial0)
+
+  Webapp startes separat:
+    java -jar release/lpg-ehl-webapp.jar \
+        --spring.profiles.active=field \
+        --ehl.serial.port=/tmp/vserial1
+  Eller via IntelliJ med "WebApp (FIELD - Auto-detect)" run config.
+
+Port-fordeling:
+  /tmp/vserial0  → PLS Simulator (pumpestyring)
+  /tmp/vserial1  → Webapp / IntelliJ (FIELD)
+
+Valgfrie parametre:
+  --help, -h             Vis denne hjelpen
+  --build                Bygg JARs først
+  --field                ARK/edge-modus: kun socat + PLS (ingen terminal sim)
+  --gui                  Aktiver GUI for PLS simulator
+  --terminal-port=PORT   Terminal sim port (default: 18080)
+  --terminal-headless    Headless terminal sim (ingen GUI)
+
+Eksempler:
+  ./scripts/start-all-simulators.sh                  # Alt (lokal dev)
+  ./scripts/start-all-simulators.sh --field           # ARK/edge
+  ./scripts/start-all-simulators.sh --field --gui     # ARK/edge med PLS GUI
+  ./scripts/start-all-simulators.sh --build           # Bygg + start alt
+  ./scripts/start-all-simulators.sh --terminal-headless
+
+Stop: Ctrl+C
+EOF
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    help|--help|-h) show_help ;;
+    --build) DO_BUILD=true; shift ;;
+    --field) FIELD_MODE=true; shift ;;
+    --gui) GUI_ENABLED=true; shift ;;
+    --terminal-port=*) TERMINAL_PORT="${1#*=}"; shift ;;
+    --terminal-headless) TERMINAL_HEADLESS=true; shift ;;
+    *) echo -e "${RED}Unknown option: $1${NC}"; show_help ;;
+  esac
 done
 
+# Step count
+TOTAL_STEPS=3
+if [[ "$FIELD_MODE" == "true" ]]; then
+    TOTAL_STEPS=2
+fi
+
+CLEANUP_DONE=false
 cleanup() {
-    echo ""
-    echo -e "${CYAN}🛑 Stopping all services...${NC}"
+  if [[ "$CLEANUP_DONE" == "true" ]]; then
+    return
+  fi
+  CLEANUP_DONE=true
 
-    # Webapp
-    if [ -n "${WEBAPP_PID:-}" ] && kill -0 "$WEBAPP_PID" 2>/dev/null; then
-        kill "$WEBAPP_PID" 2>/dev/null || true
-        echo -e "  ✓ Webapp stopped"
-    fi
+  trap - EXIT INT TERM
 
-    # PLS Simulator
-    if [ -n "${PLS_PID:-}" ] && kill -0 "$PLS_PID" 2>/dev/null; then
-        kill "$PLS_PID" 2>/dev/null || true
-        sleep 0.3
-        echo -e "  ✓ PLS Simulator stopped"
-    fi
-    pkill -f "pls-sim.jar" 2>/dev/null || true
+  echo ""
+  echo -e "${CYAN}🛑 Stopping all services...${NC}"
 
-    # Payment Terminal GUI
-    if [ -n "${TERMINAL_PID:-}" ] && kill -0 "$TERMINAL_PID" 2>/dev/null; then
-        kill "$TERMINAL_PID" 2>/dev/null || true
-        echo -e "  ✓ Payment Terminal Simulator stopped"
-    fi
-    pkill -f "payment-terminal-gui" 2>/dev/null || true
+  # PLS Simulator
+  if [ -n "${PLS_PID:-}" ] && kill -0 "$PLS_PID" 2>/dev/null; then
+    kill "$PLS_PID" 2>/dev/null || true
+    sleep 0.3
+    echo -e "  ✓ PLS Simulator stopped"
+  fi
+  pkill -f "pls-sim\.jar" 2>/dev/null || true
+  pkill -9 -f "pls-sim\.jar" 2>/dev/null || true
 
-    # Socat
-    if [ -n "${SOCAT_PID:-}" ] && kill -0 "$SOCAT_PID" 2>/dev/null; then
-        kill "$SOCAT_PID" 2>/dev/null || true
-        echo -e "  ✓ Socat stopped"
-    fi
+  # Payment Terminal
+  if [ -n "${TERMINAL_PID:-}" ] && kill -0 "$TERMINAL_PID" 2>/dev/null; then
+    kill "$TERMINAL_PID" 2>/dev/null || true
+    sleep 0.3
+    echo -e "  ✓ Payment Terminal Simulator stopped"
+  fi
+  pkill -f "payment-terminal-sim\.jar" 2>/dev/null || true
+  pkill -f "payment-terminal-gui\.jar" 2>/dev/null || true
 
-    rm -f /tmp/vserial0 /tmp/vserial1 2>/dev/null || true
-    echo ""
-    echo "Bye!"
+  # Socat
+  if [ -n "${SOCAT_PID:-}" ] && kill -0 "$SOCAT_PID" 2>/dev/null; then
+    kill "$SOCAT_PID" 2>/dev/null || true
+    echo -e "  ✓ Socat stopped"
+  fi
+
+  rm -f /tmp/vserial0 /tmp/vserial1 2>/dev/null || true
+  echo ""
+  echo "Bye!"
 }
-trap cleanup EXIT SIGINT SIGTERM
 
-# Check socat
+on_int() { exit 130; }
+on_term() { exit 143; }
+trap on_int INT
+trap on_term TERM
+trap cleanup EXIT
+
+# Check socat (auto-install on Debian)
 if ! command -v socat &> /dev/null; then
+  if [ -f /etc/debian_version ]; then
+    echo -e "${YELLOW}socat ikke installert. Installerer automatisk på Debian...${NC}"
+    if command -v apt-get &> /dev/null; then
+      sudo apt-get update -qq
+      sudo apt-get install -y socat
+      echo -e "${GREEN}✓ socat installert${NC}"
+    else
+      echo -e "${RED}Kunne ikke finne apt-get for å installere socat${NC}"
+      exit 1
+    fi
+  else
     echo -e "${RED}socat ikke installert. Kjør: brew install socat${NC}"
     exit 1
+  fi
 fi
 
 # Build if requested or JARs missing
 build_if_needed() {
-    local missing=""
-    [ ! -f "$PAYMENT_TERMINAL_GUI_JAR" ] && missing="$missing payment-terminal-gui"
-    [ ! -f "$PLS_SIM_JAR" ] && missing="$missing pls-sim"
-    [ ! -f "$WEBAPP_JAR" ] && missing="$missing webapp"
+  local missing=()
+  [[ ! -f "$PLS_SIM_JAR" ]] && missing+=("pls-sim")
 
-    if [ -n "$missing" ] || [ "$DO_BUILD" = true ]; then
-        echo -e "${YELLOW}Bygger manglende JARs...${NC}"
-        cd "$PROJECT_ROOT"
-        ./build_monolith.sh
-        cd - >/dev/null
+  if [[ "$FIELD_MODE" != "true" ]]; then
+    if [[ "$TERMINAL_HEADLESS" == "true" ]]; then
+      [[ ! -f "$PAYMENT_TERMINAL_SIM_JAR" ]] && missing+=("payment-terminal-sim")
+    else
+      [[ ! -f "$PAYMENT_TERMINAL_GUI_JAR" ]] && missing+=("payment-terminal-gui")
     fi
+  fi
+
+  if [[ ${#missing[@]} -gt 0 ]] || [[ "$DO_BUILD" == "true" ]]; then
+    echo -e "${YELLOW}Bygger artifacts: ${missing[*]}${NC}"
+    cd "$PROJECT_ROOT"
+    if [[ -x "$PROJECT_ROOT/scripts/build-simulators.sh" ]]; then
+      "$PROJECT_ROOT/scripts/build-simulators.sh" --skip-tests
+    else
+      ./build_monolith.sh --skip-tests
+    fi
+    cd - >/dev/null
+  fi
 }
 build_if_needed
 
-# Verify JARs exist
-for j in "$PAYMENT_TERMINAL_GUI_JAR" "$PLS_SIM_JAR" "$WEBAPP_JAR"; do
-    if [ ! -f "$j" ]; then
-        echo -e "${RED}Manglende JAR: $j${NC}"
-        echo -e "Kjør: ./build_monolith.sh"
-        exit 1
-    fi
+# Verify required jars exist
+REQUIRED_JARS=("$PLS_SIM_JAR")
+if [[ "$FIELD_MODE" != "true" ]]; then
+  if [[ "$TERMINAL_HEADLESS" == "true" ]]; then
+    REQUIRED_JARS+=("$PAYMENT_TERMINAL_SIM_JAR")
+  else
+    REQUIRED_JARS+=("$PAYMENT_TERMINAL_GUI_JAR")
+  fi
+fi
+
+for j in "${REQUIRED_JARS[@]}"; do
+  if [ ! -f "$j" ]; then
+    echo -e "${RED}Manglende JAR: $j${NC}"
+    echo -e "Kjør: ./scripts/build-simulators.sh"
+    exit 1
+  fi
 done
 
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  🛢️  Start All Simulators${NC}"
+if [[ "$FIELD_MODE" == "true" ]]; then
+    echo -e "${BOLD}  🛢️  Start Simulators – FIELD mode (ARK/edge)${NC}"
+else
+    echo -e "${BOLD}  🛢️  Start All Simulators${NC}"
+fi
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
 # 1. Socat
 rm -f /tmp/vserial0 /tmp/vserial1
-echo -e "${CYAN}[1/4] Starting socat...${NC}"
+echo -e "${CYAN}[1/$TOTAL_STEPS] Starting socat...${NC}"
 echo -e "      ${BOLD}/tmp/vserial0${NC}  ${GRAY}← PLS Simulator${NC}"
 echo -e "      ${BOLD}/tmp/vserial1${NC}  ${GRAY}← Webapp${NC}"
 
@@ -158,28 +246,19 @@ fi
 echo -e "${GREEN}      ✓ Socat running (PID: $SOCAT_PID)${NC}"
 echo ""
 
-# 2. Payment Terminal Simulator
-echo -e "${CYAN}[2/4] Starting Payment Terminal Simulator (GUI)...${NC}"
-echo -e "      Port: ${BOLD}18080${NC}"
+# 2. PLS Simulator
+echo -e "${CYAN}[2/$TOTAL_STEPS] Starting PLS Simulator (pumpestyring)...${NC}"
+echo -e "      Port: ${BOLD}/tmp/vserial0${NC}  (adresse 1)";
 
-java -jar "$PAYMENT_TERMINAL_GUI_JAR" &
-TERMINAL_PID=$!
-sleep 2
-echo -e "${GREEN}      ✓ Terminal running (PID: $TERMINAL_PID)${NC}"
-echo -e "      ${GRAY}→ http://localhost:18080${NC}"
-echo ""
-
-# 3. PLS Simulator
-echo -e "${CYAN}[3/4] Starting PLS Simulator (pumpestyring)...${NC}"
-echo -e "      Port: ${BOLD}/tmp/vserial0${NC}  (adresse 1, GUI)";
-
-java -Xms64m -Xmx64m -XX:+UseSerialGC \
-    -jar "$PLS_SIM_JAR" \
-    --port="$PTY0" \
-    --address=1 \
-    --mode=ehl \
-    --gui \
-    &
+PLS_CMD=(java -Xms64m -Xmx64m -XX:+UseSerialGC
+    -jar "$PLS_SIM_JAR"
+    --port="$PTY0"
+    --address=1
+    --mode=ehl)
+if [[ "$GUI_ENABLED" == "true" ]]; then
+    PLS_CMD+=(--gui)
+fi
+"${PLS_CMD[@]}" &
 PLS_PID=$!
 sleep 2
 
@@ -190,42 +269,59 @@ fi
 echo -e "${GREEN}      ✓ PLS Simulator running (PID: $PLS_PID)${NC}"
 echo ""
 
-# 4. Webapp
-echo -e "${CYAN}[4/4] Starting Webapp...${NC}"
-echo -e "      Port: ${BOLD}8080${NC}"
-echo -e "      Serial: ${BOLD}/tmp/vserial1${NC}"
-echo -e "      Profiler: ${BOLD}field,terminal-sim${NC}"
+# 3. Payment Terminal Simulator (only in default mode, skipped in --field)
+if [[ "$FIELD_MODE" != "true" ]]; then
+    terminal_jar="$PAYMENT_TERMINAL_GUI_JAR"
+    terminal_mode="GUI"
+    if [[ "$TERMINAL_HEADLESS" == "true" ]]; then
+      terminal_jar="$PAYMENT_TERMINAL_SIM_JAR"
+      terminal_mode="HEADLESS"
+    fi
 
-java -jar "$WEBAPP_JAR" \
-    --spring.profiles.active=field,terminal-sim \
-    --ehl.serial.port=/tmp/vserial1 \
-    &
-WEBAPP_PID=$!
-sleep 4
+    echo -e "${CYAN}[3/$TOTAL_STEPS] Starting Payment Terminal Simulator (${terminal_mode})...${NC}"
+    echo -e "      Port: ${BOLD}${TERMINAL_PORT}${NC}"
 
-if ! kill -0 "$WEBAPP_PID" 2>/dev/null; then
-    echo -e "${RED}Webapp startet ikke${NC}"
-    exit 1
+    # Ensure port is free
+    if command -v lsof &> /dev/null; then
+      if lsof -ti:"$TERMINAL_PORT" > /dev/null 2>&1; then
+        echo -e "${YELLOW}⚠️  Port $TERMINAL_PORT is in use. Killing existing process...${NC}"
+        lsof -ti:"$TERMINAL_PORT" | xargs kill -9 2>/dev/null || true
+        sleep 1
+      fi
+    fi
+
+    java -jar "$terminal_jar" --server.port="$TERMINAL_PORT" &
+    TERMINAL_PID=$!
+    sleep 2
+    echo -e "${GREEN}      ✓ Terminal running (PID: $TERMINAL_PID)${NC}"
+    echo -e "      ${GRAY}→ http://localhost:${TERMINAL_PORT}${NC}"
+    echo ""
 fi
-echo -e "${GREEN}      ✓ Webapp running (PID: $WEBAPP_PID)${NC}"
-echo -e "      ${GRAY}→ http://localhost:8080${NC}"
-echo ""
 
 # Ready
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  ✅ Klart for testing${NC}"
+echo -e "${BOLD}  ✅ Klart${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${BOLD}Flyt:${NC}"
-echo -e "  1. Åpne terminal i Payment Terminal Simulator"
-echo -e "  2. Trykk «Trekke kort» (scenario APPROVED)"
-echo -e "  3. PLS får UNBLOCK → trykk START i PLS GUI"
-echo -e "  4. Fylling teller i webapp og PLS"
+if [[ "$FIELD_MODE" == "true" ]]; then
+    echo -e "  ${BOLD}Field mode – start webapp separat:${NC}"
+    echo -e "  java -jar release/lpg-ehl-webapp.jar \\"
+    echo -e "      --spring.profiles.active=field \\"
+    echo -e "      --ehl.serial.port=/tmp/vserial1"
+    echo ""
+    echo -e "  PLS: /tmp/vserial0  →  socat  →  /tmp/vserial1 (webapp)"
+else
+    echo -e "  ${BOLD}Flyt:${NC}"
+    echo -e "  1. Åpne terminal i Payment Terminal Simulator"
+    echo -e "  2. Trykk «Trekke kort» (scenario APPROVED)"
+    echo -e "  3. PLS får UNBLOCK → trykk START i PLS GUI"
+    echo -e "  4. Start webapp separat for å fullføre testen"
+fi
 echo ""
 echo -e "  ${GRAY}Stop alt: Ctrl+C${NC}"
 echo ""
 
 # Keep alive
-while kill -0 "$SOCAT_PID" 2>/dev/null; do
+while kill -0 "$SOCAT_PID" 2>/dev/null && kill -0 "$PLS_PID" 2>/dev/null; do
     sleep 1
 done

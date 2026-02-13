@@ -7,6 +7,18 @@
 # - Seriell port til ekte enhet
 # ═══════════════════════════════════════════════════════════════════════════════
 
+lpg:
+  dispenser:
+    address: 33
 ehl:
   serial:
     port: /dev/ttyS3
+    baud-rate: 9600
+    parity: NONE
+    data-bits: 8
+    stop-bits: 1
+
+payment:
+  terminal:
+    enabled: true
+    base-url: ${PAYMENT_TERMINAL_BASE_URL:http://192.168.0.9:18080}

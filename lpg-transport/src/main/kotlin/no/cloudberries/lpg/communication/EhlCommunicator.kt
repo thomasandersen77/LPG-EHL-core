@@ -75,6 +75,7 @@ class EhlCommunicator(
     private val receiveBuffer = mutableListOf<Byte>()
     private val bufferLock = Any()
     private val txMutex = Mutex()  // Ensures only one request/response at a time
+    private val attemptTracker: CommandAttemptTracker? = transport as? CommandAttemptTracker
     
     // Retry statistics for monitoring
     @Volatile private var totalRetries: Long = 0
@@ -101,7 +102,7 @@ class EhlCommunicator(
      */
     suspend fun sendAndReceive(
         packet: EhlPacket, 
-        timeoutMs: Long = 2000
+        timeoutMs: Long = 3000
     ): EhlPacket {
         return txMutex.withLock {
             sendAndReceiveWithRetry(packet, timeoutMs)
@@ -119,6 +120,8 @@ class EhlCommunicator(
         var lastException: Exception? = null
         var attempt = 0
         val maxAttempts = retryConfig.maxRetries + 1  // +1 for initial attempt
+
+        attemptTracker?.recordAttempt()
         
         while (attempt < maxAttempts) {
             try {
@@ -133,7 +136,9 @@ class EhlCommunicator(
                     send(packet)
                     
                     // Since we own the mutex, first valid response is ours
-                    receive(timeoutMs)
+                    val response = receive(timeoutMs)
+                    attemptTracker?.recordSuccess()
+                    response
                 }
             } catch (e: TimeoutCancellationException) {
                 lastException = e
@@ -153,13 +158,31 @@ class EhlCommunicator(
             } catch (e: IOException) {
                 // Serial port error - don't retry, fail immediately
                 logger.error("🔌 Serial port error (no retry): ${e.message}")
+                attemptTracker?.recordFailure()
+                attemptImmediateReconnect()
                 throw e
             }
         }
         
         // All retries exhausted - lastException is guaranteed to be set since we only get here
         // after failing maxAttempts times, each of which sets lastException
+        attemptTracker?.recordFailure()
         throw lastException!!
+    }
+
+    private fun attemptImmediateReconnect() {
+        val watchdogCapable = transport as? HardwareWatchdogCapable ?: return
+        try {
+            logger.warn("🔧 Immediate reconnect triggered due to serial I/O error")
+            val success = watchdogCapable.reconnect()
+            if (success) {
+                logger.info("🎉 Immediate reconnect succeeded after I/O error")
+            } else {
+                logger.error("💥 Immediate reconnect failed after I/O error")
+            }
+        } catch (e: Exception) {
+            logger.error("Immediate reconnect failed with exception: ${e.message}", e)
+        }
     }
     
     /**
@@ -198,6 +221,127 @@ class EhlCommunicator(
         totalRetries = 0
         successfulRetries = 0
         failedAfterRetries = 0
+    }
+
+    /**
+     * Execute a block while holding the RS-485 line lock (half-duplex).
+     * Use this for multi-step sequences: drain → send → receiveUntil.
+     *
+     * @param block Suspending block that runs with exclusive line access
+     * @return Result of the block
+     */
+    suspend fun <T> withExclusive(block: suspend EhlCommunicator.() -> T): T {
+        return txMutex.withLock { block(this) }
+    }
+
+    /**
+     * Execute a block with exclusive line access AND attempt tracking.
+     *
+     * Use this for multi-step command flows that manually call send()/receiveUntil().
+     * This records a single attempt for the whole block and marks success/failure accordingly.
+     *
+     * IMPORTANT: Do not call sendAndReceive() inside this block, or you'll double-count attempts.
+     */
+    suspend fun <T> withExclusiveAttempt(block: suspend EhlCommunicator.() -> T): T {
+        return txMutex.withLock {
+            attemptTracker?.recordAttempt()
+            try {
+                val result = block(this)
+                attemptTracker?.recordSuccess()
+                result
+            } catch (e: IOException) {
+                attemptTracker?.recordFailure()
+                attemptImmediateReconnect()
+                throw e
+            } catch (e: Exception) {
+                attemptTracker?.recordFailure()
+                throw e
+            }
+        }
+    }
+
+    /**
+     * Drain the receive buffer and serial port for the given duration.
+     * Reads and discards all incoming bytes. Use before sending to clear old traffic.
+     *
+     * MUST be called from within [withExclusive] for correct half-duplex behavior.
+     *
+     * @param durationMs How long to read and discard (e.g. 50–150 ms)
+     */
+    suspend fun drain(durationMs: Long) {
+        require(durationMs in 0..10_000) { "drain duration must be 0–10000 ms, got $durationMs" }
+        val deadline = System.currentTimeMillis() + durationMs
+        var totalDiscarded = 0
+        while (System.currentTimeMillis() < deadline) {
+            val chunk = transport.readAvailable()
+            if (chunk.isNotEmpty()) {
+                totalDiscarded += chunk.size
+                if (enableRawLogging) logger.debug("Drain: discarding ${chunk.size} bytes")
+            }
+            synchronized(bufferLock) { receiveBuffer.clear() }
+            delay(10)
+        }
+        if (totalDiscarded > 0) logger.debug("Drained for ${durationMs}ms, discarded $totalDiscarded bytes")
+    }
+
+    /**
+     * Receive packets until one matches the predicate or timeout.
+     * Ignores non-matching packets (logs at DEBUG: "ignored while awaiting ...").
+     *
+     * MUST be called from within [withExclusive] for correct half-duplex behavior.
+     *
+     * @param timeoutMs Maximum time to wait
+     * @param predicate Return true to accept the packet
+     * @param awaitingLabel Label for log when ignoring packets (e.g. "STATE(open bit 0x02)")
+     * @return Matching packet, or null on timeout
+     */
+    suspend fun receiveUntil(
+        timeoutMs: Long,
+        predicate: (EhlPacket) -> Boolean,
+        awaitingLabel: String = ""
+    ): EhlPacket? = withContext(Dispatchers.IO) {
+        val label = awaitingLabel.ifEmpty { "predicate" }
+        var invalidByteStreak = 0
+        val maxInvalidStreak = 10
+        val deadline = System.currentTimeMillis() + timeoutMs
+
+        while (System.currentTimeMillis() < deadline) {
+            when (val result = tryParseBufferWithStatus()) {
+                is ParseStatus.Success -> {
+                    invalidByteStreak = 0
+                    val p = result.packet
+                    if (predicate(p)) {
+                        logger.debug("📥 Matched: ${p.command} addr=${p.address}")
+                        return@withContext p
+                    }
+                    logger.debug("Ignored ${p.command} addr=${p.address} while awaiting $label")
+                }
+                is ParseStatus.Incomplete -> {
+                    if (synchronized(bufferLock) { receiveBuffer.size } >= EhlProtocol.MIN_PACKET_LENGTH) {
+                        invalidByteStreak++
+                    }
+                }
+                is ParseStatus.ParseError -> invalidByteStreak++
+            }
+
+            val newData = transport.readAvailable()
+            if (newData.isNotEmpty()) {
+                if (enableRawLogging) logger.debug("📥 RX HEX: [${newData.toHexString()}]")
+                synchronized(bufferLock) { receiveBuffer.addAll(newData.toList()) }
+            }
+
+            synchronized(bufferLock) {
+                if (receiveBuffer.size > MAX_BUFFER_SIZE) {
+                    receiveBuffer.subList(0, receiveBuffer.size - MAX_BUFFER_SIZE).clear()
+                }
+                if (invalidByteStreak >= maxInvalidStreak) {
+                    receiveBuffer.clear()
+                    invalidByteStreak = 0
+                }
+            }
+            delay(10)
+        }
+        null
     }
 
     /**

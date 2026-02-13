@@ -3,7 +3,7 @@
 This document describes running the **`python-test/`** scripts against the **PLS serial-port simulator** (`release/pls-sim.jar`) using **virtual serial ports** created by **socat**.
 
 It covers:
-- how `./scripts/start-socat-sim.sh` wires socat + the simulator together (especially on macOS)
+- how `./scripts/sim-pls.sh` wires socat + the simulator together (especially on macOS)
 - what each Python script tested
 - the observed results
 - why two of the fault-injection Python tests *reported* failure even though the simulator did inject the faults
@@ -26,7 +26,7 @@ This verifies the same “serial line contract” that the Kotlin/Java stack use
 ## 2) How the socat + simulator setup works
 
 ### 2.1 Virtual serial ports
-`./scripts/start-socat-sim.sh` starts socat and creates two symlinks:
+`./scripts/sim-pls.sh` starts socat and creates two symlinks:
 
 - `/tmp/vserial0` — intended as the **simulator side**
 - `/tmp/vserial1` — intended as the **client side** (Python/Webapp)
@@ -36,7 +36,7 @@ Under the hood, socat also creates the *real* PTY device nodes (e.g. `/dev/ttys0
 ### 2.2 Why the script detects PTY paths on macOS
 On macOS, Java serial libraries may not reliably enumerate socat-created PTYs, but they can usually **open them if given the exact PTY device path**.
 
-So `start-socat-sim.sh`:
+So `sim-pls.sh`:
 1) captures socat output
 2) extracts the actual PTY paths (`N PTY is /dev/ttysXYZ`)
 3) starts the simulator with `--port=<actual PTY path>`
@@ -44,7 +44,7 @@ So `start-socat-sim.sh`:
 The Python scripts still use `/tmp/vserial1` (the symlink) on their side.
 
 ### 2.3 Simulator startup and configuration
-`./scripts/start-socat-sim.sh` will build the simulator JAR if it’s missing (via `./mvnw ... -pl lpg-ehl-serialport-sim -am`).
+`./scripts/sim-pls.sh` will build the simulator artifacts if they’re missing (via `./scripts/build-simulators.sh`).
 
 The simulator is then started with a command conceptually like:
 
@@ -184,7 +184,7 @@ So the simulator is behaving correctly (closing/disconnecting), but the client-s
 From repo root:
 
 ```bash
-./scripts/start-socat-sim.sh --address=1 --logHex=true
+./scripts/sim-pls.sh --address=1 --logHex=true
 ```
 
 This should show:
@@ -216,17 +216,17 @@ Restart the simulator with one mode at a time.
 
 Disconnect after 5s:
 ```bash
-./scripts/start-socat-sim.sh --address=1 --logHex=true --disconnectAfterSeconds=5
+./scripts/sim-pls.sh --address=1 --logHex=true --disconnectAfterSeconds=5
 ```
 
 Bad checksum rate 50%:
 ```bash
-./scripts/start-socat-sim.sh --address=1 --logHex=true --badChecksumRate=0.5
+./scripts/sim-pls.sh --address=1 --logHex=true --badChecksumRate=0.5
 ```
 
 Power fault after 5s:
 ```bash
-./scripts/start-socat-sim.sh --address=1 --logHex=true --powerfaultAfterSeconds=5
+./scripts/sim-pls.sh --address=1 --logHex=true --powerfaultAfterSeconds=5
 ```
 
 Then run:

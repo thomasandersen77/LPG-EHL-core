@@ -37,26 +37,26 @@ class ScenarioManager(
      * 2. Default configuration
      */
     fun selectScenario(request: HttpServletRequest): ScenarioSelection {
-        val scenarioName = resolveScenarioName(request)
+        val (scenarioName, source) = resolveScenarioName(request)
         val definition = scenarioLoader.loadScenario(scenarioName)
         val enumScenario = definition?.name?.let { toEnum(it) } ?: toEnum(scenarioName) ?: Scenario.APPROVED
 
         log.debug("Scenario selected: name={}, enum={}, yamlLoaded={}", scenarioName, enumScenario, definition != null)
-        return ScenarioSelection(scenarioName, enumScenario, definition)
+        return ScenarioSelection(scenarioName, enumScenario, definition, source)
     }
 
     /**
      * Get default scenario from configuration.
      */
-    private fun resolveScenarioName(request: HttpServletRequest): String {
+    private fun resolveScenarioName(request: HttpServletRequest): Pair<String, ScenarioSource> {
         if (config.allowScenarioHeader) {
             val headerValue = request.getHeader(SCENARIO_HEADER)?.trim()
             if (!headerValue.isNullOrBlank()) {
-                return headerValue.uppercase()
+                return headerValue.uppercase() to ScenarioSource.HEADER
             }
         }
 
-        return config.defaultScenario.uppercase()
+        return config.defaultScenario.uppercase() to ScenarioSource.DEFAULT
     }
 
     private fun toEnum(value: String): Scenario? {
@@ -74,16 +74,37 @@ class ScenarioManager(
      */
     fun getOperationDelay(selection: ScenarioSelection? = null): Long {
         val timing = selection?.definition?.timing
-        val baseDelay = timing?.operationDelayMs ?: config.operationDelayMs
-        val jitterEnabled = timing?.jitter ?: config.enableRandomJitter
+        val scenarioDelay = timing?.operationDelayMs
+        if (scenarioDelay != null) {
+            val jitterEnabled = timing.jitter ?: config.enableRandomJitter
+            return if (jitterEnabled) {
+                Random.nextLong((scenarioDelay / 2).coerceAtLeast(1), scenarioDelay + 1)
+            } else {
+                scenarioDelay
+            }
+        }
+
+        if (config.field.isEnabled(config.profile)) {
+            val minDelay = config.field.operationDelayMinMs.coerceAtLeast(0)
+            val maxDelay = config.field.operationDelayMaxMs.coerceAtLeast(minDelay + 1)
+            return Random.nextLong(minDelay, maxDelay + 1)
+        }
+
+        val baseDelay = config.operationDelayMs
+        val jitterEnabled = config.enableRandomJitter
         return if (jitterEnabled) {
-            Random.nextLong(baseDelay / 2, baseDelay)
+            Random.nextLong((baseDelay / 2).coerceAtLeast(1), baseDelay + 1)
         } else {
             baseDelay
         }
     }
 
     fun applyScenarioTerminalState(selection: ScenarioSelection) {
+        if (config.field.isEnabled(config.profile) && selection.source == ScenarioSource.DEFAULT) {
+            if (Random.nextDouble() < config.field.notReadyProbability) {
+                throw TerminalNotReadyException("Simulated terminal not ready (field)")
+            }
+        }
         val terminalState = selection.definition?.terminalState
         when {
             terminalState?.timeout == true -> throw OperationTimeoutException("Simulated timeout")
@@ -94,10 +115,33 @@ class ScenarioManager(
             selection.enumScenario == Scenario.NOT_READY -> throw TerminalNotReadyException("Simulated terminal not ready")
         }
     }
+
+    fun selectFieldRejection(selection: ScenarioSelection): Scenario? {
+        if (!config.field.isEnabled(config.profile)) {
+            return null
+        }
+        if (selection.source != ScenarioSource.DEFAULT) {
+            return null
+        }
+        if (selection.enumScenario != Scenario.APPROVED) {
+            return null
+        }
+        if (Random.nextDouble() >= config.field.rejectionProbability) {
+            return null
+        }
+        val wrongPin = Random.nextDouble() < config.field.rejectionWrongPinProbability
+        return if (wrongPin) Scenario.WRONG_PIN else Scenario.USER_CANCEL
+    }
 }
 
 data class ScenarioSelection(
     val name: String,
     val enumScenario: Scenario,
-    val definition: ScenarioDefinition?
+    val definition: ScenarioDefinition?,
+    val source: ScenarioSource
 )
+
+enum class ScenarioSource {
+    HEADER,
+    DEFAULT
+}

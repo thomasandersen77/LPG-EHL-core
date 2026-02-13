@@ -7,10 +7,9 @@ import org.springframework.stereotype.Service
 
 /**
  * Håndterer terminal events og trigge business logic.
- * 
+ *
  * Flow:
- * - Reservation godkjent -> frigjør pumpe (UNBLOCK)
- * - Pump stoppet -> terminal capture med faktisk beløp
+ * - Purchase godkjent -> start pump
  */
 @Service
 @ConditionalOnProperty(name = ["payment.terminal.enabled"], havingValue = "true")
@@ -38,19 +37,7 @@ class TerminalEventHandler(
         log.info("🟢 Terminal operation completed: OperationId={}, Success={}, Type={}, Amount={} kr",
             event.operationId, success, operationType, amountMinor / 100)
 
-        if (success && operationType == "reservation") {
-            log.info("✅ Reservation approved - freeing pump for filling")
-            try {
-                orchestrator?.unblockPumpAfterReservation(
-                    operationId = event.operationId ?: "unknown",
-                    amountMinor = amountMinor,
-                    pumpId = 1
-                )
-            } catch (e: Exception) {
-                log.error("Failed to unblock pump after reservation", e)
-            }
-        } else if (success && (operationType == "purchase" || operationType == null)) {
-            // Legacy: full purchase approval
+        if (success && (operationType == "purchase" || operationType == null)) {
             log.info("✅ Purchase approved - triggering pump authorization")
             try {
                 orchestrator?.startPumpingAfterPayment(
@@ -62,6 +49,8 @@ class TerminalEventHandler(
             } catch (e: Exception) {
                 log.error("Failed to start pumping after payment approval", e)
             }
+        } else if (success && operationType == "reservation") {
+            log.info("Reservation event received but reservation flow is disabled in open->purchase mode")
         } else if (!success) {
             val rejectionReason = payload["RejectionReason"] as? String
             log.warn("❌ Payment declined: Reason={}", rejectionReason)

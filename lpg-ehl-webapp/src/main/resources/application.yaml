@@ -99,11 +99,19 @@ server:
   compression:
     enabled: true
 
+# Payment Terminal (for diagnostics page)
+payment:
+  terminal:
+    enabled: ${PAYMENT_TERMINAL_ENABLED:false}
+    base-url: ${PAYMENT_TERMINAL_BASE_URL:http://localhost:18080}
+
 # Logging
 logging:
   level:
     root: INFO
     no.cloudberries.lpg: INFO
+    no.cloudberries.lpg.service.terminal: DEBUG
+    no.cloudberries.lpg.api.controller.PaymentTerminalDiagController: DEBUG
     org.hibernate.SQL: WARN
     org.springframework: WARN
     liquibase: WARN

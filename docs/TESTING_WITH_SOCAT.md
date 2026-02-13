@@ -38,15 +38,17 @@ socat -V
 
 ## Quick Start (3 Terminals)
 
-### Terminal 1: Start Virtual Serial Ports
+### Terminal 1: Start socat + PLS simulator
 
 ```bash
-./start-virtual-serial.sh
+# Builds simulator jars if missing
+./scripts/sim-pls.sh --build
 ```
 
 This creates:
-- `/tmp/vserial0` ← Simulator listens here
-- `/tmp/vserial1` ← Clients connect here
+- `/tmp/vserial0` ↔ `/tmp/vserial1`
+
+The PLS simulator listens on the socat-created PTY, and clients connect via `/tmp/vserial1`.
 
 **Output:**
 ```
@@ -64,14 +66,11 @@ Press Ctrl+C to stop
 
 Leave this terminal running.
 
-### Terminal 2: Start Standalone Simulator
+### Terminal 2: Run Python tests
 
 ```bash
-# Build first (if not already done)
-./build_monolith.sh --skip-tests
-
-# Run simulator
-java -jar release/pls-sim.jar --port /tmp/vserial0
+cd python-test
+python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1
 ```
 
 **Options:**
@@ -223,7 +222,7 @@ Common causes:
 - **Wrong baud rate**: Both must match (default 9600)
   ```bash
   # Simulator
-  java -jar pls-sim.jar --port /tmp/vserial0 --baud 9600
+  ./scripts/sim-pls.sh --baud=9600
   
   # Python
   python3 01_probe_readonly.py --port /tmp/vserial1 --baud 9600
@@ -233,72 +232,34 @@ Common causes:
 
 ## Advanced Usage
 
-### Custom Price Testing
+### Start simulator with custom settings
+
+`sim-pls.sh` exposes most useful knobs directly:
 
 ```bash
-# Start simulator with 18.50 kr/L
-java -jar release/pls-sim.jar --port /tmp/vserial0 --price 18.50
-
-# Query price via Python
-python3 -c "
-from ehl_protocol import *
-from serial_linux import open_serial
-
-port, _ = open_serial('/tmp/vserial1', baud=9600)
-frame = build_frame(1, 0x5C, b'', stx=STX_CONTROLLER)  # PRICE query
-port.write(frame)
-# ... read response
-"
+./scripts/sim-pls.sh --address=1 --price=1850 --baud=9600 --parity=NONE --logHex=true
 ```
 
-### Multiple Dispensers
-
-Run multiple simulators on different addresses:
+### Logging all traffic
 
 ```bash
-# Terminal 2a: Dispenser 1 on port pair 0/1
-./start-virtual-serial.sh  # Creates vserial0/1
-java -jar pls-sim.jar --port /tmp/vserial0 --address 1
-
-# Terminal 2b: Dispenser 2 on port pair 2/3
-# (Modify start-virtual-serial.sh to create vserial2/3)
-java -jar pls-sim.jar --port /tmp/vserial2 --address 2
+python3 python-test/01_probe_readonly.py --port /tmp/vserial1 --addr 1 --debug
 ```
 
-### Logging All Traffic
+## Integration with webapp (FIELD)
 
-Enable debug logging to see all hex bytes:
-
-```bash
-# Simulator: Set log level in logback.xml
-# Python: Use --debug flag
-python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1 --debug
-```
-
-## Integration with lpg-ehl-webapp
-
-Instead of standalone simulator, you can run webapp in FIELD mode pointing to socat:
-
-```bash
-# Terminal 1: socat (as before)
-./start-virtual-serial.sh
-
-# Terminal 2: webapp in FIELD mode (NOT standalone sim)
-./start-lpg-ehl.sh --field --serial-port /tmp/vserial0
-
-# Terminal 3: Python tests
-python3 python-test/01_probe_readonly.py --port /tmp/vserial1 --addr 1
-```
-
-**Note:** This uses the full webapp stack (DB, REST API, etc.) instead of just the simulator.
+- Start simulator:
+  - `./scripts/sim-pls.sh`
+- Start webapp i IntelliJ med:
+  - `--spring.profiles.active=field`
+  - `--ehl.serial.port=/tmp/vserial1`
 
 ## Cleanup
 
 When done testing:
 
-1. **Stop Python script** (Ctrl+C in Terminal 3)
-2. **Stop simulator** (Ctrl+C in Terminal 2)
-3. **Stop socat** (Ctrl+C in Terminal 1)
+1. **Stop Python script** (Ctrl+C)
+2. **Stop simulator stack** (Ctrl+C i terminalen der du kjørte `./scripts/sim-pls.sh`)
 
 Virtual ports will be automatically cleaned up.
 

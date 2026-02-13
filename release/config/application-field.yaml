@@ -1,0 +1,24 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# FIELD PROFIL - Produksjon med ekte dispenser
+# ═══════════════════════════════════════════════════════════════════════════════
+# Bruk: java -jar lpg-ehl-webapp.jar --spring.profiles.active=field
+#
+# Arver alt fra application.yaml, overstyrer kun:
+# - Seriell port til ekte enhet
+# ═══════════════════════════════════════════════════════════════════════════════
+
+lpg:
+  dispenser:
+    address: 33
+ehl:
+  serial:
+    port: /tmp/vserial1
+    baud-rate: 9600
+    parity: NONE
+    data-bits: 8
+    stop-bits: 1
+
+payment:
+  terminal:
+    enabled: true
+    base-url: ${PAYMENT_TERMINAL_BASE_URL:http://192.168.0.9:18080}

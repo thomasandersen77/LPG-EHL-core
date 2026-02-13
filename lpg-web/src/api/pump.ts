@@ -1,8 +1,7 @@
 import axios from 'axios';
 
-// API configuration - same as backend
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080');
+// Use relative URLs that work with the backend proxy
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -60,6 +59,15 @@ export const pumpApi = {
    */
   unblock: async (address: number = 1): Promise<any> => {
     const response = await api.post(`/api/v1/emulator/pump/${address}/unblock`);
+    return response.data;
+  },
+
+  /**
+   * Release dispenser (station manager flow)
+   * Sends UNBLOCK command to physical dispenser without card authorization
+   */
+  releaseDispenser: async (address: number = 1): Promise<any> => {
+    const response = await api.post(`/api/v1/emulator/pump/${address}/release`);
     return response.data;
   },
 

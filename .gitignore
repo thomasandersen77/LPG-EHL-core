@@ -24,8 +24,8 @@ buildNumber.properties
 *.rar
 hs_err_pid*
 
-.pycache/**
-__pycache__/**
+__pycache__/
+.pycache/
 
 # Legacy VB6 executables
 *.exe
@@ -110,6 +110,7 @@ local-data/
 backups/
 *.sql
 !init-db.sql
+!scripts/tools/cleanup-database.sql
 *.sql.gz
 
 # AI export archives
@@ -118,3 +119,10 @@ ai-exports/
 # AI export archives
 ai-exports/
 data/
+
+# .NET build artifacts
+obj/
+
+# WireMock
+wiremock-standalone-*.jar
+wiremock/

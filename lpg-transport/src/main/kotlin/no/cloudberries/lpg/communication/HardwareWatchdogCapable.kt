@@ -19,10 +19,10 @@ interface HardwareWatchdogCapable {
     fun disableWatchdog()
     
     /**
-     * Check if the connection is alive (has received data recently).
+     * Check if the connection is alive (attempt-based).
      * This should be called periodically by the application.
-     * 
-     * @return true if connection is healthy, false if watchdog timeout exceeded
+     *
+     * @return true if connection is healthy, false if failure threshold exceeded
      */
     fun checkWatchdog(): Boolean
     
@@ -35,8 +35,8 @@ interface HardwareWatchdogCapable {
     fun reconnect(): Boolean
     
     /**
-     * Get time since last data was received (for monitoring).
-     * 
+     * Get time since last data was received (telemetry only).
+     *
      * @return milliseconds since last data received
      */
     fun getTimeSinceLastData(): Long

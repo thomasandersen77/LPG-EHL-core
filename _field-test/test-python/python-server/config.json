@@ -1,0 +1,29 @@
+{
+  "server": {
+    "listen_host": "0.0.0.0",
+    "listen_port": 8082
+  },
+  "serial": {
+    "port": "/dev/ttyS3",
+    "baud": 9600,
+    "addr": 33,
+    "timeout_ms": 1200,
+    "inter_command_delay_ms": 120,
+    "rs485": {
+      "enabled": false,
+      "rts_before_ms": 0,
+      "rts_after_ms": 0
+    }
+  },
+  "defaults": {
+    "product_select_byte": 48,
+    "price": "15.90",
+    "verify_timeout_ms": 2500,
+    "verify_interval_ms": 200
+  },
+  "logging": {
+    "console_level": "INFO",
+    "file_level": "DEBUG"
+  }
+}
+

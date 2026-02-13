@@ -37,7 +37,7 @@ class PumpStateService(
     private val ehlCommunicator: EhlCommunicator,
     private val dispenserEmulator: IEhlDispenserEmulator?,  // Null i FIELD MODE
     private val priceService: PriceService,
-    private val authorizationService: PumpAuthorizationService? = null  // Optional - for kortdragning-flow
+    private val authorizationService: PumpAuthorizationService? = null
 ) {
     private val logger = LoggerFactory.getLogger(PumpStateService::class.java)
     private val protocolLogger = LoggerFactory.getLogger("no.cloudberries.lpg.protocol")
@@ -57,6 +57,9 @@ class PumpStateService(
     
     // Last logged volume milestone (for 0.5L logging)
     private val lastLoggedMilestone = ConcurrentHashMap<Int, Double>()
+
+    // Per-address locks for RS-485 half-duplex: one command sequence per address at a time
+    private val addressLocks = ConcurrentHashMap<Int, Any>()
     
     /**
      * Ved oppstart: Les pris fra database og synkroniser med emulator og UI.
@@ -148,13 +151,7 @@ class PumpStateService(
         )
     }
     
-    // STATE byte flags for dispenser status (from EHL protocol)
-    companion object {
-        const val STATE_FLAG_TRANSACTION_COMPLETE = 0x08  // Payment pending - transaction not settled
-        const val STATE_FLAG_PUMPING = 0x04               // Currently pumping
-        const val STATE_FLAG_AUTHORIZED = 0x02            // Authorized for pumping
-        const val STATE_FLAG_NOZZLE_LIFTED = 0x01         // Nozzle is lifted
-    }
+    // Use StatusBitMasks from core for SSOT: OPEN_FOR_DELIVERY=0x02, START_BUTTON_PRESSED=0x04, AUTOMODE=0x08, ERROR_FLAG=0x80
     
     /**
      * Helper to log to SERVICE channel (WebSocket + console).
@@ -177,86 +174,77 @@ class PumpStateService(
     
     /**
      * Unblock pump ("Fri pumpe") - Start pumping.
-     * 
-     * Sender UNBLOCK-kommando til dispenser via EhlCommunicator.
-     * TX/RX HEX logges automatisk til Protocol-fanen.
-     * 
-     * VIKTIG: Validerer respons for å sikre at UNBLOCK faktisk ble akseptert:
-     * - Sjekker at respons er OK
-     * - Henter STATE og verifiserer at TRANSACTION_COMPLETE flag (0x08) ikke er satt
-     * - Oppretter transaksjon KUN etter bekreftet UNBLOCK
+     *
+     * Result-oriented (Python-paritet): Does NOT require OK. Verifies open_for_delivery (0x02) via STATE poll.
+     * Tolerates VOLUME/interleaved frames via receiveUntil predicate.
      */
-    fun unblock(address: Int = 1): Result<PumpStatus> {
+    fun unblock(address: Int = 1, withAuthorization: Boolean = true): Result<PumpStatus> {
         val state = pumpStates.getOrPut(address) { PumpState(address = address, pricePerLitreKr = currentPriceKr) }
-        
+
         if (state.state == "PUMPING") {
             return Result.failure(IllegalStateException("Pump is already pumping"))
         }
-        
+
         if (state.hasPendingTransaction) {
             return Result.failure(IllegalStateException("Previous transaction not settled"))
         }
-        
-        // Send UNBLOCK-kommando via EhlCommunicator (HEX logges automatisk)
-        val unblockResponse: EhlPacket
-        try {
-            val unblockPacket = EhlPacket(address, EhlCommand.UNBLOCK, ByteArray(0))
-            
-            protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            protocolLogger.info("⛽ FRI PUMPE - Sender UNBLOCK til dispenser #$address")
-            
-            unblockResponse = runBlocking {
-                ehlCommunicator.sendAndReceive(unblockPacket, 3000)
+
+        if (!withAuthorization) {
+            // Station manager flow: cancel any pending authorization and ignore card flow
+            state.authorizationId = null
+            authorizationService?.findActiveAuthorization(address)?.let { auth ->
+                if (auth.status == AuthorizationStatus.PENDING || auth.status == AuthorizationStatus.AUTHORIZED) {
+                    logger.info("🧾 Cancelling active authorization ${auth.authorizationId} (manager release without card)")
+                    authorizationService.cancel(auth.authorizationId, "Station manager release without card")
+                }
             }
-            
-            protocolLogger.info("📥 UNBLOCK Respons: ${unblockResponse.command}")
-            
-        } catch (e: Exception) {
-            protocolLogger.error("❌ UNBLOCK FEILET: ${e.message}")
-            return Result.failure(e)
         }
-        
-        // Steg 1: Valider at respons er OK
-        if (unblockResponse.command != EhlCommand.OK) {
-            protocolLogger.warn("⚠️ UNBLOCK avvist: Forventet OK, fikk ${unblockResponse.command}")
-            protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            return Result.failure(IllegalStateException("UNBLOCK rejected by dispenser: ${unblockResponse.command}"))
-        }
-        
-        // Steg 2: Hent STATE for å verifisere at dispenser faktisk er unblocked
-        val stateResponse: EhlPacket = try {
-            val statePacket = EhlPacket(address, EhlCommand.STATE, ByteArray(0))
-            protocolLogger.info("🔍 Verifiserer dispenser-state...")
-            
-            val response = runBlocking {
-                ehlCommunicator.sendAndReceive(statePacket, 3000)
+
+        val addr = address and 0xFF
+        val lock = addressLocks.getOrPut(address) { Any() }
+
+        synchronized(lock) {
+            try {
+                protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                protocolLogger.info("⛽ FRI PUMPE - Sender UNBLOCK til dispenser #$address")
+                val t0 = System.currentTimeMillis()
+
+                runBlocking {
+                    ehlCommunicator.withExclusive {
+                        drain(100)
+                        val unblockPacket = EhlPacket(address, EhlCommand.UNBLOCK, ByteArray(0))
+                        send(unblockPacket)
+                        protocolLogger.info("Awaiting STATE(open bit 0x02) for addr $addr")
+                        val predicate: (EhlPacket) -> Boolean = { p ->
+                            p.address == addr && p.command == EhlCommand.STATE
+                        }
+                        val verifyDeadline = System.currentTimeMillis() + 6000
+                        var firstStateHex: String? = null
+                        while (System.currentTimeMillis() < verifyDeadline) {
+                            send(EhlPacket(address, EhlCommand.STATE, ByteArray(0)))
+                            val p = receiveUntil(800, predicate, "STATE(open bit 0x02)")
+                            if (p != null && p.data.isNotEmpty()) {
+                                val sb = p.data[0].toInt() and 0xFF
+                                if (firstStateHex == null) {
+                                    firstStateHex = p.data.joinToString(" ") { b -> "%02X".format(b) }
+                                }
+                                if ((sb and StatusBitMasks.OPEN_FOR_DELIVERY) != 0) {
+                                    val elapsed = System.currentTimeMillis() - t0
+                                    protocolLogger.info("✅ UNBLOCK verified: open_for_delivery=1 after ${elapsed}ms, first STATE raw=0x$firstStateHex")
+                                    return@withExclusive
+                                }
+                            }
+                            kotlinx.coroutines.delay(300)
+                        }
+                        throw IllegalStateException("UNBLOCK: open_for_delivery bit not observed within 6s")
+                    }
+                }
+            } catch (e: Exception) {
+                protocolLogger.error("❌ UNBLOCK FEILET: ${e.message}")
+                return Result.failure(e)
             }
-            
-            protocolLogger.info("📥 STATE Respons: ${response.command}, data=${response.data.joinToString(" ") { "%02X".format(it) }}")
-            response
-            
-        } catch (e: Exception) {
-            protocolLogger.warn("⚠️ Kunne ikke hente STATE etter UNBLOCK: ${e.message}")
-            // Fortsett likevel - UNBLOCK ble akseptert, men returner tom STATE for å hoppe over validering
-            EhlPacket(address, EhlCommand.OK, ByteArray(0))  // Return OK (not STATE) to skip validation
         }
-        
-        // Steg 3: Log STATE-respons for debugging (payment validation er service-lagets ansvar, ikke hardware)
-        // TRANSACTION_COMPLETE flag (0x08) fra hardware betyr bare at forrige pumping er stoppet,
-        // IKKE at betaling mangler - det håndteres av service-laget via hasPendingTransaction sjekk ovenfor
-        if (stateResponse.command == EhlCommand.STATE && stateResponse.data.isNotEmpty()) {
-            val stateByte = stateResponse.data[0].toInt() and 0xFF
-            
-            // Log state flags for debugging
-            val flagsDesc = buildString {
-                if ((stateByte and STATE_FLAG_PUMPING) != 0) append("PUMPING ")
-                if ((stateByte and STATE_FLAG_AUTHORIZED) != 0) append("AUTHORIZED ")
-                if ((stateByte and STATE_FLAG_NOZZLE_LIFTED) != 0) append("NOZZLE_LIFTED ")
-                if ((stateByte and STATE_FLAG_TRANSACTION_COMPLETE) != 0) append("TRANSACTION_COMPLETE ")
-            }
-            protocolLogger.info("✅ STATE validert: 0x%02X (%s)".format(stateByte, flagsDesc.ifEmpty { "IDLE" }))
-        }
-        
+
         protocolLogger.info("✅ UNBLOCK BEKREFTET - Dispenser klar for pumping")
         protocolLogger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         
@@ -282,15 +270,19 @@ class PumpStateService(
             serviceLog(LogLevel.ERROR, "❌ Kunne ikke opprette transaksjon: ${e.message}")
         }
         
-        // Find active authorization if any
-        authorizationService?.let { authService ->
-            val auth = authService.findActiveAuthorization(address)
-            if (auth != null) {
-                logger.info("📋 Pumping med autorisasjon: ${auth.authorizationId}")
-                state.authorizationId = auth.authorizationId
-                // Mark authorization as PUMPING
-                authService.markPumping(auth.authorizationId)
+        // Find active authorization if any (only for card flow)
+        if (withAuthorization) {
+            authorizationService?.let { authService ->
+                val auth = authService.findActiveAuthorization(address)
+                if (auth != null) {
+                    logger.info("📋 Pumping med autorisasjon: ${auth.authorizationId}")
+                    state.authorizationId = auth.authorizationId
+                    // Mark authorization as PUMPING
+                    authService.markPumping(auth.authorizationId, state.pendingTransactionId)
+                }
             }
+        } else {
+            state.authorizationId = null
         }
         
         logger.info("═══════════════════════════════════════════════════════════")
@@ -537,6 +529,13 @@ class PumpStateService(
         if (transactionId != null) {
             try {
                 transactionService.markTransactionPaid(transactionId, paymentMethod)
+                if (authorizationId == null) {
+                    authorizationService?.completeStoppedAuthorizationByTransaction(
+                        transactionId,
+                        paymentMethod,
+                        "SETTLE_PAYMENT"
+                    )
+                }
                 serviceLog(LogLevel.INFO, "💳 Betaling fullført: ${state.volumeLitres} L = ${state.amountKr} kr via $paymentMethod")
             } catch (e: Exception) {
                 serviceLog(LogLevel.ERROR, "❌ Kunne ikke markere transaksjon som betalt: ${e.message}")
@@ -556,6 +555,11 @@ class PumpStateService(
                     includesRoadTax = true
                 )
                 transactionService.saveTransaction(transaction)
+                authorizationService?.completeStoppedAuthorizationByDispenser(
+                    address,
+                    paymentMethod,
+                    "SETTLE_FALLBACK"
+                )
                 serviceLog(LogLevel.INFO, "💾 Transaksjon lagret til database (fallback)")
             } catch (e: Exception) {
                 serviceLog(LogLevel.ERROR, "❌ Kunne ikke lagre transaksjon: ${e.message}")
@@ -808,10 +812,11 @@ class PumpStateService(
                 if (response.data.isNotEmpty()) {
                     val rawState = response.data[0].toInt() and 0xFF
                     
-                    // Check for PUMPING: bits 0x04 (DELIVERY_ACTIVE) + 0x02 (NOZZLE_LIFTED)
-                    // Raw state 0x06 or 0x07 indicates pumping has started
-                    val deliveryActive = (rawState and 0x04) != 0
-                    val nozzleLifted = (rawState and 0x02) != 0
+                    // SSOT: PUMPING = OPEN_FOR_DELIVERY (0x02) + START_BUTTON_PRESSED (0x04)
+                    val openForDelivery = (rawState and StatusBitMasks.OPEN_FOR_DELIVERY) != 0
+                    val startButtonPressed = (rawState and StatusBitMasks.START_BUTTON_PRESSED) != 0
+                    val deliveryActive = startButtonPressed && openForDelivery
+                    val nozzleLifted = openForDelivery
                     
                     if (deliveryActive && nozzleLifted) {
                         logger.info("⛽ HARDWARE PUMPING DETECTED: Raw state 0x%02X for pump %d".format(rawState, state.address))

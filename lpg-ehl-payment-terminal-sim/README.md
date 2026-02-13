@@ -321,6 +321,17 @@ payment-terminal-sim:
 
   # Event buffer size (for SSE)
   event-buffer-size: 1000
+
+  # Simulator profile: lab | field
+  profile: lab
+
+  # Field mode knobs (used when profile=field)
+  field:
+    operation-delay-min-ms: 2000
+    operation-delay-max-ms: 10000
+    not-ready-probability: 0.05
+    rejection-probability: 0.1
+    rejection-wrong-pin-probability: 0.5
 ```
 
 ## Scenarios
@@ -328,9 +339,9 @@ payment-terminal-sim:
 | Scenario | HTTP | Success | LocalModeResult | ResponseCode | Description |
 |----------|------|---------|-----------------|--------------|-------------|
 | `APPROVED` | 200 | true | 0 | "00" | Purchase approved |
-| `WRONG_PIN` | 200 | false | 2 | "Z1" | Wrong PIN entered |
-| `USER_CANCEL` | 200 | false | 2 | "" | User cancelled |
-| `DECLINED` | 200 | false | 2 | "05" | Card declined |
+| `WRONG_PIN` | 422 | false | 2 | "Z1" | Wrong PIN entered |
+| `USER_CANCEL` | 422 | false | 2 | "" | User cancelled |
+| `DECLINED` | 422 | false | 2 | "05" | Card declined |
 | `TIMEOUT` | 408 | - | - | - | Operation timeout |
 | `BUSY` | 409 | - | - | - | Terminal busy (automatic) |
 | `NOT_READY` | 503 | - | - | - | Terminal not ready (automatic) |
@@ -372,12 +383,26 @@ curl -X POST http://localhost:18080/v1/payments/purchase \
 | 503 | `terminal_not_ready` | Terminal not ready |
 | 500 | `vendor_call_failure` | Internal error |
 
-Error response format:
+Error response format (busy/not ready/timeout):
 ```json
 {
   "Error": "Terminal is busy with another operation",
   "ErrorCode": "terminal_busy",
   "Details": "Current operation: abc-123"
+}
+```
+
+Rejected response format (422, OperationResponse):
+```json
+{
+  "Success": false,
+  "OperationId": "op-123",
+  "CallResult": 1,
+  "ResponseCode": "Z1",
+  "RejectionReason": "3:2:Z1",
+  "LastDisplayText": "AVVIST",
+  "ErrorCode": "operation_rejected",
+  "Error": "Terminal rejected the operation"
 }
 ```
 
@@ -417,6 +442,14 @@ curl -X POST http://localhost:18080/v1/payments/purchase -d '{"AmountMinor": 200
 curl -X POST http://localhost:18080/v1/terminal/close
 curl -X POST http://localhost:18080/v1/payments/purchase -d '{"AmountMinor": 10000}'
 # Should return 503 Service Unavailable
+```
+
+### 4. Test Timeout
+
+```bash
+curl -X POST http://localhost:18080/v1/payments/purchase \
+  -H "X-Terminal-Scenario: TIMEOUT" \
+  -d '{"AmountMinor": 10000}'
 ```
 
 ### 4. Test Event Stream with WebSocat

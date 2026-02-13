@@ -9,22 +9,21 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * PART 4: HARDWARE WATCHDOG SERVICE
- * 
+ *
  * Monitors RS-485 serial connection health and automatically attempts reconnection
- * when the connection appears dead (no data received for 60 seconds).
- * 
- * This handles production scenarios like:
+ * when recent command attempts repeatedly fail.
+ *
+ * Policy: Attempt-based. Silence is OK unless there have been recent failed attempts.
+ *
+ * Handles production scenarios:
  * - USB-to-RS485 adapter unplugged
  * - Driver hangs/crashes
  * - Cable disconnection
  * - Power loss to RS-485 bus
- * 
- * The service runs every 30 seconds and checks if data has been received.
- * If watchdog timeout is exceeded, it triggers automatic reconnection.
  */
 @Service
 class HardwareWatchdogService(
-    private val watchdogCapable: HardwareWatchdogCapable? = null  // Optional - for production use
+    private val watchdogCapable: HardwareWatchdogCapable? = null
 ) {
     private val logger = LoggerFactory.getLogger(HardwareWatchdogService::class.java)
     
@@ -68,9 +67,7 @@ class HardwareWatchdogService(
                     consecutiveFailures.set(0)
                 }
                 lastSuccessfulCheck.set(System.currentTimeMillis())
-                
             } else {
-                // Connection appears dead
                 handleConnectionFailure()
             }
             

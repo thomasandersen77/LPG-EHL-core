@@ -10,3 +10,8 @@
 ehl:
   serial:
     port: /tmp/vserial1
+
+payment:
+  terminal:
+    enabled: true
+    base-url: ${PAYMENT_TERMINAL_BASE_URL:http://localhost:18080}

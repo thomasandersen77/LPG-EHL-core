@@ -6,20 +6,14 @@ Serial port PLS (Pump Level System) simulator for testing EHL protocol without p
 
 ## Quick Start
 
-The easiest way to use the PLS Simulator is with the startup script:
+Bygg simulator-artifacts og start PLS via SOCAT:
 
 ```bash
-# Build JARs first
-mvn -q -DskipTests package
+./scripts/build-simulators.sh
+./scripts/sim-pls.sh
 
-# Start socat + simulator + webapp
-./scripts/start-socat-sim.sh
-
-# Or just socat + simulator (for manual testing)
-./scripts/start-socat-sim.sh --sim-only
-
-# Headless with debug API for curl testing
-./scripts/start-socat-sim.sh --headless --debug-api
+# GUI (dødmannsknapp)
+./scripts/sim-pls.sh --gui
 ```
 
 ## Build
@@ -51,12 +45,38 @@ java -jar lpg-ehl-serialport-sim/target/pls-sim.jar --port=<port> [options]
 | `--address=<addr>` | 1 | Dispenser address (1-8) |
 | `--price=<cents>` | 1590 | Price per liter in cents |
 | `--blocked=<bool>` | true | Initial blocked state |
+| `--profile=<lab|field>` | lab | Simulator profile |
+| `--field.noAckOnUnblock=<bool>` | true | No OK on UNBLOCK (field mode) |
+| `--field.noAckOnBlock=<bool>` | true | No OK on BLOCK (field mode) |
+| `--field.mechanicalOpenDelayMs=MIN-MAX` | 800-1500 | Delay before open_for_delivery |
+| `--field.unsolicitedVolumeIntervalMs=MIN-MAX` | 400-800 | Unsolicited VOLUME interval |
+| `--field.concatFramesProbability=<p>` | 0.5 | Concatenate frames probability |
+| `--field.dropResponseProbability=<p>` | 0.1 | Drop response probability |
+| `--field.interCharacterDelayMs=MIN-MAX` | 1-2 | Delay between bytes |
+| `--field.readChunkingMode=<off|random>` | random | Chunking mode |
 
 ### Frame Modes
 
 - **line**: Frames terminated by `\n` (newline)
 - **stxetx**: Frames wrapped in STX (0x02) ... ETX (0x03)
 - **ehl**: Binary EHL protocol frames: STX (0x10/0x20) LEN ADDR CMD [DATA...] CHK ETX (0x36)
+
+### Drammen (Field) Profile Example
+
+```bash
+java -jar lpg-ehl-serialport-sim/target/pls-sim.jar \
+  --port=/tmp/ttyV0 \
+  --mode=ehl \
+  --profile=field \
+  --field.noAckOnUnblock=true \
+  --field.noAckOnBlock=true \
+  --field.mechanicalOpenDelayMs=1200 \
+  --field.unsolicitedVolumeIntervalMs=500 \
+  --field.concatFramesProbability=0.5 \
+  --field.dropResponseProbability=0.1 \
+  --field.interCharacterDelayMs=2 \
+  --field.readChunkingMode=random
+```
 
 ### Supported Commands
 

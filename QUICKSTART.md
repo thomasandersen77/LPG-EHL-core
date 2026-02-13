@@ -84,9 +84,9 @@ java -Xms256m -Xmx512m \
 
 ## 🧪 Testing med Simulator
 
-### Terminal 1: Start simulator
+### Terminal 1: Start PLS simulator (SOCAT)
 ```bash
-./scripts/start-socat-sim.sh --parity=NONE --address=2
+./scripts/sim-pls.sh --address=2 --parity=NONE
 ```
 
 ### Terminal 2: Start webapp
@@ -255,7 +255,7 @@ java -jar app.jar ... --ehl.serial.parity-auto-detect=true
 
 ```bash
 # 1. Start simulator (testing)
-./scripts/start-socat-sim.sh --address=2 --parity=NONE &
+./scripts/sim-pls.sh --address=2 --parity=NONE &
 
 # 2. Start webapp med ekstern YAML
 java -Xms256m -Xmx512m \

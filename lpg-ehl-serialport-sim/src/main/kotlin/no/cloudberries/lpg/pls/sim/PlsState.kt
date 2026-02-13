@@ -34,7 +34,8 @@ class PlsState(
     val powerfaultAfterSeconds: Double? = null,
     private val onDisconnect: (() -> Unit)? = null,  // Callback to disconnect serial port
     private val onPowerfault: (() -> Unit)? = null,  // Callback for power fault
-    val manualNozzleControl: Boolean = false         // When true, UNBLOCK stays AUTHORIZED; GUI button controls nozzle
+    val manualNozzleControl: Boolean = false,        // When true, UNBLOCK stays AUTHORIZED; GUI button controls nozzle
+    private val fieldConfig: FieldConfig = FieldConfig()
 ) {
     private val log = LoggerFactory.getLogger(PlsState::class.java)
     
@@ -45,6 +46,7 @@ class PlsState(
     
     private val currentVolumeMl = AtomicLong(0L)  // Volume in milliliters
     private val currentPriceCents = AtomicInteger(priceCents)
+    private val mechanicalOpenToken = AtomicLong(0L)
     
     // Transaction freeze for payment pending
     @Volatile
@@ -179,6 +181,8 @@ class PlsState(
     }
 
     fun getState(): DispenserState = state
+
+    fun getPrimaryAddressByte(): Byte = defaultAddress.toByte()
     
     fun isBlocked(): Boolean = state == DispenserState.IDLE
     
@@ -206,6 +210,20 @@ class PlsState(
         log.info("Volume reset to 0")
     }
 
+    fun buildStateData(): ByteArray {
+        return byteArrayOf(buildStatusByte())
+    }
+
+    fun buildVolumeData(): ByteArray {
+        val volumeCl = (getVolumeMl() / 10).toInt().coerceIn(0, 99999)
+        val volumeStr = "%05d".format(volumeCl)
+        return volumeStr.reversed().map { it.code.toByte() }.toByteArray()
+    }
+
+    fun isPaymentPendingLike(): Boolean {
+        return state == DispenserState.PAYMENT_PENDING
+    }
+
     /**
      * Simulate nozzle lift/holster.
      * Used for testing the complete fueling lifecycle.
@@ -229,8 +247,14 @@ class PlsState(
             // If pumping and nozzle holstered, stop delivery
             if (state == DispenserState.PUMPING) {
                 pumpingActive.set(false)
-                state = DispenserState.IDLE  // Go directly to IDLE - payment is webapp's responsibility
-                log.info("🔄 STATE: PUMPING → IDLE (nozzle holstered, hardware reset)")
+                if (fieldConfig.profile == SimProfile.FIELD) {
+                    state = DispenserState.STOPPED
+                    freezeTransaction()
+                    log.info("🔄 STATE: PUMPING → PAYMENT_PENDING (nozzle holstered)")
+                } else {
+                    state = DispenserState.IDLE  // Go directly to IDLE - payment is webapp's responsibility
+                    log.info("🔄 STATE: PUMPING → IDLE (nozzle holstered, hardware reset)")
+                }
                 log.info("⏹️ Auto-pumping STOPPED - Final volume: ${"%.2f".format(getVolumeMl()/1000.0)} L")
                 // Volume remains for webapp to read, but hardware is ready for next transaction
             }
@@ -348,10 +372,8 @@ class PlsState(
             EhlFrameCodec.CMD_VOLUME -> {
                 // Core expects 5 ASCII digits in LSB-first order (centiliters)
                 val volumeCl = (getVolumeMl() / 10).toInt().coerceIn(0, 99999)
-                val volumeStr = "%05d".format(volumeCl)
-                val volumeBytes = volumeStr.reversed().map { it.code.toByte() }.toByteArray()
                 log.debug("⛽ VOLUME addr=$addrInt -> ${getVolumeMl()/1000.0} L (cl=$volumeCl)")
-                EhlCommandResult.VolumeResponse(frame.addr, volumeBytes)
+                EhlCommandResult.VolumeResponse(frame.addr, buildVolumeData())
             }
             EhlFrameCodec.CMD_TANKBIT -> {
                 // Alejandro tested: TANKBIT (0xC5) - returns tank level status
@@ -380,9 +402,16 @@ class PlsState(
                 
                 if (state == DispenserState.PUMPING) {
                     pumpingActive.set(false)
-                    state = DispenserState.IDLE  // Go directly to IDLE - payment is webapp's responsibility
-                    log.info("🛑 BLOCK addr=$addrInt")
-                    log.info("🔄 STATE: $previousState → IDLE (hardware reset)")
+                    if (fieldConfig.profile == SimProfile.FIELD) {
+                        state = DispenserState.STOPPED
+                        freezeTransaction()
+                        log.info("🛑 BLOCK addr=$addrInt")
+                        log.info("🔄 STATE: $previousState → PAYMENT_PENDING")
+                    } else {
+                        state = DispenserState.IDLE  // Go directly to IDLE - payment is webapp's responsibility
+                        log.info("🛑 BLOCK addr=$addrInt")
+                        log.info("🔄 STATE: $previousState → IDLE (hardware reset)")
+                    }
                     log.info("⏹️ Auto-pumping STOPPED - Final volume: ${"%.2f".format(getVolumeMl()/1000.0)} L")
                     // Volume remains for webapp to read, but hardware is ready for next transaction
                 } else {
@@ -400,7 +429,15 @@ class PlsState(
                     // Payment is webapp/service layer's responsibility
                     when (state) {
                         DispenserState.IDLE, DispenserState.AUTHORIZED, DispenserState.STOPPED -> {
-                            if (manualNozzleControl) {
+                            if (fieldConfig.profile == SimProfile.FIELD && !manualNozzleControl) {
+                                nozzleLifted = false
+                                state = DispenserState.AUTHORIZED
+                                resetVolume()
+                                pumpingActive.set(false)
+                                scheduleMechanicalOpen()
+                                log.info("✅ UNBLOCK addr=$addrInt from $previousState")
+                                log.info("🔄 STATE: $previousState → AUTHORIZED (field mode)")
+                            } else if (manualNozzleControl) {
                                 // GUI mode: stay AUTHORIZED, wait for GUI button to lift nozzle
                                 nozzleLifted = false
                                 state = DispenserState.AUTHORIZED
@@ -431,14 +468,22 @@ class PlsState(
                                 nozzleLifted = false
                                 state = DispenserState.AUTHORIZED
                             } else {
-                                nozzleLifted = true
-                                state = DispenserState.PUMPING
-                                startedAtMs = System.currentTimeMillis()
-                                resetVolume()
-                                pumpingActive.set(true)
+                                if (fieldConfig.profile == SimProfile.FIELD) {
+                                    nozzleLifted = false
+                                    state = DispenserState.AUTHORIZED
+                                    resetVolume()
+                                    pumpingActive.set(false)
+                                    scheduleMechanicalOpen()
+                                } else {
+                                    nozzleLifted = true
+                                    state = DispenserState.PUMPING
+                                    startedAtMs = System.currentTimeMillis()
+                                    resetVolume()
+                                    pumpingActive.set(true)
+                                }
                             }
                             frozenTransaction = null
-                            if (!manualNozzleControl) {
+                            if (!manualNozzleControl && fieldConfig.profile != SimProfile.FIELD) {
                                 log.info("▶️ Auto-pumping STARTED at ${flowRateMlPerSecond}ml/s")
                             }
                             log.info("✅ UNBLOCK addr=$addrInt (payment pending cleared)")
@@ -455,9 +500,16 @@ class PlsState(
                 
                 if (state == DispenserState.PUMPING) {
                     pumpingActive.set(false)
-                    state = DispenserState.IDLE  // Go directly to IDLE - payment is webapp's responsibility
-                    log.info("⏹️ STOP addr=$addrInt")
-                    log.info("🔄 STATE: $previousState → IDLE (hardware reset)")
+                    if (fieldConfig.profile == SimProfile.FIELD) {
+                        state = DispenserState.STOPPED
+                        freezeTransaction()
+                        log.info("⏹️ STOP addr=$addrInt")
+                        log.info("🔄 STATE: $previousState → PAYMENT_PENDING")
+                    } else {
+                        state = DispenserState.IDLE  // Go directly to IDLE - payment is webapp's responsibility
+                        log.info("⏹️ STOP addr=$addrInt")
+                        log.info("🔄 STATE: $previousState → IDLE (hardware reset)")
+                    }
                     log.info("⏹️ Auto-pumping STOPPED - Final volume: ${"%.2f".format(getVolumeMl()/1000.0)} L")
                     // Volume remains for webapp to read, but hardware is ready for next transaction
                 } else {
@@ -480,6 +532,22 @@ class PlsState(
             else -> {
                 log.info("❓ Unknown cmd=0x${cmd.toHex()} addr=$addrInt -> ACK")
                 EhlCommandResult.OkAck(frame.addr)  // Generic ACK
+            }
+        }
+    }
+
+    private fun scheduleMechanicalOpen() {
+        val token = mechanicalOpenToken.incrementAndGet()
+        val delayMs = fieldConfig.mechanicalOpenDelayMs.nextMs()
+        thread(name = "pls-sim-open-delay", isDaemon = true) {
+            try {
+                Thread.sleep(delayMs)
+                if (token == mechanicalOpenToken.get() && state == DispenserState.AUTHORIZED && !nozzleLifted) {
+                    nozzleLifted = true
+                    log.info("FIELD: open_for_delivery set after ${delayMs}ms")
+                }
+            } catch (_: InterruptedException) {
+                // ignore
             }
         }
     }
@@ -508,6 +576,9 @@ class PlsState(
                 statusByte = 0x01  // START_SWITCH_ACTIVE
                 // Add nozzle lifted flag if lifted
                 if (nozzleLifted) {
+                    statusByte = statusByte or 0x02
+                }
+                if (fieldConfig.profile == SimProfile.FIELD) {
                     statusByte = statusByte or 0x02
                 }
             }

@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 
 // API configuration
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:8080';
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || '';
 
 // Types based on backend models
 interface AvailablePort {

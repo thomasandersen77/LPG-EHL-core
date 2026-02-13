@@ -1,0 +1,46 @@
+# payment-terminal-fieldtest event timeline (TSV)
+2026-02-10T12:13:50.7924170Z	call	method=Open	hostIpOverride=	hostPortOverride=	vendorInfoExtended=ECR;;;;	traceLevelOverride=	logFilePathOverride=	logFilePrefixOverride=	socketListenerPortOverride=
+2026-02-10T12:13:52.7639920Z	event	name=OnLocalMode	result=1	responseCode=	rejectionSource=0	rejectionReason=	totalAmount=0
+2026-02-10T12:13:52.7687230Z	event	name=OnTerminalReady
+2026-02-10T12:13:52.7885130Z	call	method=TransferAmount	operId=4321	amount1=50	type1=48	amount2=0	type2=48	amount3=0	type3=48	optionalData=
+2026-02-10T12:13:52.9706640Z	event	name=OnStdRsp	response=00
+2026-02-10T12:13:53.7605450Z	event	name=OnDisplayText	text=VENTER PÅ KORTET\r	displayTextId=1011	displayTextSourceId=1
+2026-02-10T12:14:05.4182670Z	event	name=OnDisplayText	text=SETT INN KORTET\r	displayTextId=1003	displayTextSourceId=1
+2026-02-10T12:14:21.3398520Z	event	name=OnTLDReceived	tldType=STATUS	tldLen=0	tldDataB64=
+2026-02-10T12:14:23.8126700Z	event	name=OnDisplayText	text=Kode + OK\r	displayTextId=1	displayTextSourceId=1
+2026-02-10T12:14:28.8180670Z	event	name=OnDisplayText	text=AVVIST\r	displayTextId=1043	displayTextSourceId=1
+2026-02-10T12:14:29.4336710Z	event	name=OnPrintText	len=243	textB64=Tk9SR0VTR0FTUyBBUwpORURSRSBFSUtFUlZFSSAyNgpEUkFNTUVOCgpCYXg6IDQyNjk2NjA5LTEyMjkzMjkKMTAvMDIvMjAyNiAxMzoxNAoKQmFua0F4ZXB0IAoqKioqKioqODQwOC0zCkFJRDogRDU3ODAwMDAwMjEwMTAKVFZSOiAwMDAwMjQ4MDAwClRTSTogRTgwMApJQUM6IDAwMDAwMDAwMDAKUmVmLjogIElBXwpSZXNwLjogWjEKT3ZlcmYuOiAwMTkKCktKw5hQCk5PSyAgICAgICAgICAgICAgICAgMCw1MApBVlZJU1QKCgoKDA==
+2026-02-10T12:14:33.0413990Z	event	name=OnDisplayText	text=TA UT KORTET\r	displayTextId=1001	displayTextSourceId=1
+2026-02-10T12:14:33.2441710Z	event	name=OnTLDReceived	tldType=STATUS	tldLen=0	tldDataB64=
+2026-02-10T12:14:33.4197730Z	event	name=OnLocalMode	result=2	responseCode=Z1	rejectionSource=3	rejectionReason=3:2:Z1	totalAmount=50
+2026-02-10T12:42:44.2280990Z	call	method=Open	hostIpOverride=	hostPortOverride=	vendorInfoExtended=ECR;;;;	traceLevelOverride=	logFilePathOverride=	logFilePrefixOverride=	socketListenerPortOverride=
+2026-02-10T12:42:46.1896440Z	event	name=OnLocalMode	result=1	responseCode=	rejectionSource=0	rejectionReason=	totalAmount=0
+2026-02-10T12:42:46.1943770Z	event	name=OnTerminalReady
+2026-02-10T12:42:46.2142190Z	call	method=TransferAmount	operId=4321	amount1=50	type1=48	amount2=0	type2=48	amount3=0	type3=48	optionalData=
+2026-02-10T12:42:46.3552310Z	event	name=OnStdRsp	response=00
+2026-02-10T12:42:47.0952310Z	event	name=OnDisplayText	text=VENTER PÅ KORTET\r	displayTextId=1011	displayTextSourceId=1
+2026-02-10T12:42:57.1030890Z	event	name=OnTLDReceived	tldType=STATUS	tldLen=0	tldDataB64=
+2026-02-10T12:42:59.2996260Z	event	name=OnDisplayText	text=Kode + OK\r	displayTextId=1	displayTextSourceId=1
+2026-02-10T12:43:09.7379930Z	event	name=OnDisplayText	text=AVVIST\r	displayTextId=1043	displayTextSourceId=1
+2026-02-10T12:43:10.3450040Z	event	name=OnPrintText	len=243	textB64=Tk9SR0VTR0FTUyBBUwpORURSRSBFSUtFUlZFSSAyNgpEUkFNTUVOCgpCYXg6IDQyNjk2NjA5LTEyMjkzMjkKMTAvMDIvMjAyNiAxMzo0MgoKQmFua0F4ZXB0IAoqKioqKioqODQwOC0zCkFJRDogRDU3ODAwMDAwMjEwMTAKVFZSOiAwMDAwMjQ4MDAwClRTSTogRTgwMApJQUM6IDAwMDAwMDAwMDAKUmVmLjogIElBXwpSZXNwLjogWjEKT3ZlcmYuOiAwMTkKCktKw5hQCk5PSyAgICAgICAgICAgICAgICAgMCw1MApBVlZJU1QKCgoKDA==
+2026-02-10T12:43:11.6929640Z	event	name=OnTLDReceived	tldType=STATUS	tldLen=0	tldDataB64=
+2026-02-10T12:43:13.9565710Z	event	name=OnLocalMode	result=2	responseCode=Z1	rejectionSource=3	rejectionReason=3:2:Z1	totalAmount=50
+2026-02-10T12:46:13.7047270Z	call	method=Open	hostIpOverride=	hostPortOverride=	vendorInfoExtended=ECR;;;;	traceLevelOverride=	logFilePathOverride=	logFilePrefixOverride=	socketListenerPortOverride=
+2026-02-10T12:46:16.8855640Z	event	name=OnLocalMode	result=1	responseCode=	rejectionSource=0	rejectionReason=	totalAmount=0
+2026-02-10T12:46:16.8904890Z	event	name=OnTerminalReady
+2026-02-10T12:46:16.9106600Z	call	method=TransferAmount	operId=4321	amount1=50	type1=48	amount2=0	type2=48	amount3=0	type3=48	optionalData=
+2026-02-10T12:46:17.0871070Z	event	name=OnStdRsp	response=00
+2026-02-10T12:46:17.8891940Z	event	name=OnDisplayText	text=VENTER PÅ KORTET\r	displayTextId=1011	displayTextSourceId=1
+2026-02-10T12:48:22.3832500Z	event	name=OnDisplayText	text=Tidsavbrudd\r	displayTextId=1007	displayTextSourceId=1
+2026-02-10T12:48:22.9277490Z	event	name=OnLocalMode	result=2	responseCode=	rejectionSource=3	rejectionReason=5:0	totalAmount=50
+2026-02-10T12:48:54.2582270Z	call	method=Open	hostIpOverride=	hostPortOverride=	vendorInfoExtended=ECR;;;;	traceLevelOverride=	logFilePathOverride=	logFilePrefixOverride=	socketListenerPortOverride=
+2026-02-10T12:48:56.7617300Z	event	name=OnLocalMode	result=1	responseCode=	rejectionSource=0	rejectionReason=	totalAmount=0
+2026-02-10T12:48:56.7665120Z	event	name=OnTerminalReady
+2026-02-10T12:48:56.7864520Z	call	method=TransferAmount	operId=4321	amount1=50	type1=48	amount2=0	type2=48	amount3=0	type3=48	optionalData=
+2026-02-10T12:48:56.9492180Z	event	name=OnStdRsp	response=00
+2026-02-10T12:48:57.7201700Z	event	name=OnDisplayText	text=VENTER PÅ KORTET\r	displayTextId=1011	displayTextSourceId=1
+2026-02-10T12:49:00.6712430Z	event	name=OnDisplayText	text=VENNLIGST VENT\r	displayTextId=1025	displayTextSourceId=1
+2026-02-10T12:49:01.0510270Z	event	name=OnDisplayText	text=KJØP\rVENNLIGST VENT\r	displayTextId=1004	displayTextSourceId=1
+2026-02-10T12:49:01.8339280Z	event	name=OnDisplayText	text=GODKJENT\r	displayTextId=0	displayTextSourceId=2
+2026-02-10T12:49:01.9893830Z	event	name=OnPrintText	len=278	textB64=Tk9SR0VTR0FTUyBBUwpORURSRSBFSUtFUlZFSSAyNgpEUkFNTUVOCgpCYXg6IDQyNjk2NjA5LTEyMjkzMjkKMTAvMDIvMjAyNiAxMzo0OQoKQmFua0F4ZXB0IApDb250YWN0bGVzcwoqKioqKioqNDI0Mi0zCkFJRDogRDU3ODAwMDAwMjEwMTAKVFZSOiAwMDAwMDA4MDAwClJlZi46IDI4OTQ3MyA2MjY3MTQgS0MxClJlc3AuOiAwMApPdmVyZi46IDAxOQoKS0rDmFAKTk9LICAgICAgICAgICAgICAgICAwLDUwCkdPREtKRU5UCgoKVEFLSyBGT1IgQkVTw5hLRVQgClZFTEtPTU1FTiBJR0pFTgoKDA==
+2026-02-10T12:49:02.2124380Z	event	name=OnLocalMode	result=0	responseCode=00	rejectionSource=0	rejectionReason=	totalAmount=50

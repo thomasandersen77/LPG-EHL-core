@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom';
 
 // API base URL
 // Both webapp frontend and API run on port 8080
-const API_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || 
-  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080');
+const API_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || '';
 
 // Pump API
 const pumpApi = {

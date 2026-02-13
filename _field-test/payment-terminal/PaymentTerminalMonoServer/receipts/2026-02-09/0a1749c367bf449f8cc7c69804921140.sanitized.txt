@@ -1,0 +1,16 @@
+﻿Bax: 42696609-1229329
+09/02/2026 15:16
+Valuta: NOK
+Sesjon.: 018
+
+Avstemming
+
+------------------------
+Innsamlet              0
+Total=              0,00
+
+Kortavtaler uten
+omsetning skrives
+ikke ut.
+
+
