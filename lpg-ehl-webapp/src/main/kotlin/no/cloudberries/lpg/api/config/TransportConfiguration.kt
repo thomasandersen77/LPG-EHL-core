@@ -93,6 +93,15 @@ class TransportConfiguration {
         @Value("\${ehl.serial.data-bits:8}") dataBits: Int,
         @Value("\${ehl.serial.parity:NONE}") parity: String,
         @Value("\${ehl.serial.parity-auto-detect:false}") autoDetect: Boolean,
+        // Used for parity auto-detect probe (must match actual hardware address in FIELD mode).
+        @Value("\${lpg.dispenser.address:1}") dispenserAddress: Int,
+        // Optional RS-485 driver direction control (RTS toggle), like Python's `--rs485`.
+        @Value("\${ehl.serial.rs485.enabled:false}") rs485Enabled: Boolean,
+        @Value("\${ehl.serial.rs485.rts-high-during-send:true}") rs485RtsHighDuringSend: Boolean,
+        @Value("\${ehl.serial.rs485.rts-high-after-send:false}") rs485RtsHighAfterSend: Boolean,
+        @Value("\${ehl.serial.rs485.rx-during-tx:false}") rs485RxDuringTx: Boolean,
+        @Value("\${ehl.serial.rs485.rts-before-ms:0}") rs485RtsBeforeMs: Int,
+        @Value("\${ehl.serial.rs485.rts-after-ms:0}") rs485RtsAfterMs: Int,
         @Value("\${ehl.serial.stop-bits:1}") stopBits: Int,
         @Value("\${ehl.serial.read-timeout-ms:3000}") readTimeout: Int,
         @Value("\${ehl.serial.write-timeout-ms:1000}") writeTimeout: Int
@@ -106,24 +115,53 @@ class TransportConfiguration {
             else -> SerialPort.ONE_STOP_BIT
         }
         
-        val config = if (autoDetect) {
+        val baseConfig = if (autoDetect) {
             logger.info("")
             logger.info("════════════════════════════════════════════════════════════")
             logger.info("  🏭 FIELD MODE - AUTO-DETECT" + if (isSocat) " (via SOCAT)" else "")
             logger.info("════════════════════════════════════════════════════════════")
             logger.info("  Serial Port: $portName")
             logger.info("  Auto-detect: ENABLED")
+            logger.info("  Probe addr:  $dispenserAddress (lpg.dispenser.address)")
             logger.info("════════════════════════════════════════════════════════════")
             logger.info("")
-            
-            serialConfigService.detectAndConfigureSerial(
-                portName = portName,
-                baudRate = baudRate,
-                dataBits = dataBits,
-                stopBits = stopBitsMode,
-                autoDetect = true,
-                manualParity = null
-            )
+
+            // IMPORTANT: auto-detect is best-effort. If it fails, we still start the server
+            // so you can use /api/debug/serial/* endpoints to iterate safely.
+            runCatching {
+                serialConfigService.detectAndConfigureSerial(
+                    portName = portName,
+                    baudRate = baudRate,
+                    dataBits = dataBits,
+                    stopBits = stopBitsMode,
+                    autoDetect = true,
+                    manualParity = null,
+                    dispenserAddress = dispenserAddress,
+                    autoDetectTimeoutMs = minOf(2000L, readTimeout.toLong())
+                )
+            }.getOrElse { e ->
+                logger.error("Parity auto-detect failed, falling back to manual parity='$parity' (server will still start). Cause: ${e.message}")
+                val parityMode = when (parity.uppercase()) {
+                    "NONE" -> SerialPort.NO_PARITY
+                    "ODD" -> SerialPort.ODD_PARITY
+                    "EVEN" -> SerialPort.EVEN_PARITY
+                    "MARK" -> SerialPort.MARK_PARITY
+                    "SPACE" -> SerialPort.SPACE_PARITY
+                    else -> {
+                        logger.warn("Unknown parity '$parity', defaulting to NONE")
+                        SerialPort.NO_PARITY
+                    }
+                }
+                SerialPortConfig(
+                    portName = portName,
+                    baudRate = baudRate,
+                    dataBits = dataBits,
+                    stopBits = stopBitsMode,
+                    parity = parityMode,
+                    readTimeout = readTimeout,
+                    writeTimeout = writeTimeout
+                )
+            }
         } else {
             logger.info("")
             logger.info("════════════════════════════════════════════════════════════")
@@ -142,6 +180,7 @@ class TransportConfiguration {
             } else {
                 logger.info("  ──────────────────────────────────────────────────────────")
                 logger.info("  ⚠️  Communicating with REAL HARDWARE")
+                logger.info("  💡 If comm fails but Python works: set ehl.serial.parity=NONE or enable parity auto-detect")
             }
             logger.info("════════════════════════════════════════════════════════════")
             logger.info("")
@@ -164,10 +203,26 @@ class TransportConfiguration {
                 dataBits = dataBits,
                 stopBits = stopBitsMode,
                 parity = parityMode,
+                rs485Enabled = rs485Enabled,
+                rs485RtsHighDuringSend = rs485RtsHighDuringSend,
+                rs485RtsHighAfterSend = rs485RtsHighAfterSend,
+                rs485RxDuringTx = rs485RxDuringTx,
+                rs485DelayRtsBeforeSendMs = rs485RtsBeforeMs,
+                rs485DelayRtsAfterSendMs = rs485RtsAfterMs,
                 readTimeout = readTimeout,
                 writeTimeout = writeTimeout
             )
         }
+
+        // Apply RS-485 driver direction settings also for the auto-detect path (if enabled).
+        val config = baseConfig.copy(
+            rs485Enabled = rs485Enabled,
+            rs485RtsHighDuringSend = rs485RtsHighDuringSend,
+            rs485RtsHighAfterSend = rs485RtsHighAfterSend,
+            rs485RxDuringTx = rs485RxDuringTx,
+            rs485DelayRtsBeforeSendMs = rs485RtsBeforeMs,
+            rs485DelayRtsAfterSendMs = rs485RtsAfterMs
+        )
         
         val manager = SerialPortManager(config)
         manager.enableWatchdog()

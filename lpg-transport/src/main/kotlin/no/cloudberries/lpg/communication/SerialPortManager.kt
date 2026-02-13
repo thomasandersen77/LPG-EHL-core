@@ -55,8 +55,16 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
             logger.info("Opening serial port: ${config.portName}")
             
             val port = SerialPort.getCommPort(config.portName)
-            
-            // Open the port FIRST (must be done before configuring parameters)
+
+            // Configure parameters (safe to set pre-open; we also re-apply post-open for some drivers).
+            port.setComPortParameters(config.baudRate, config.dataBits, config.stopBits, config.parity)
+            port.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED)
+            port.setComPortTimeouts(
+                SerialPort.TIMEOUT_READ_SEMI_BLOCKING or SerialPort.TIMEOUT_WRITE_BLOCKING,
+                config.readTimeout,
+                config.writeTimeout
+            )
+
             if (!port.openPort()) {
                 // Provide detailed diagnostics
                 val availablePorts = SerialPort.getCommPorts().map { it.systemPortName }
@@ -83,18 +91,41 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
                 throw IOException("Failed to open serial port ${config.portName}")
             }
             
-            // Configure port settings AFTER opening
-            port.baudRate = config.baudRate
-            port.numDataBits = config.dataBits
-            port.numStopBits = config.stopBits
-            port.parity = config.parity
-            
-            // Set timeouts
+            // Re-apply after open (some drivers only commit changes post-open).
+            port.setComPortParameters(config.baudRate, config.dataBits, config.stopBits, config.parity)
+            port.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED)
             port.setComPortTimeouts(
                 SerialPort.TIMEOUT_READ_SEMI_BLOCKING or SerialPort.TIMEOUT_WRITE_BLOCKING,
                 config.readTimeout,
                 config.writeTimeout
             )
+
+            // Optional RS-485 driver direction control (RTS toggle) to match Python tool capability.
+            if (config.rs485Enabled) {
+                val ok = port.setRs485ModeParameters(
+                    true,
+                    config.rs485RtsHighDuringSend,
+                    config.rs485RtsHighAfterSend,
+                    config.rs485RxDuringTx,
+                    config.rs485DelayRtsBeforeSendMs,
+                    config.rs485DelayRtsAfterSendMs
+                )
+                if (ok) {
+                    logger.info(
+                        "RS-485 mode enabled (RTS during send={}, after send={}, rxDuringTx={}, rtsBeforeMs={}, rtsAfterMs={})",
+                        config.rs485RtsHighDuringSend,
+                        config.rs485RtsHighAfterSend,
+                        config.rs485RxDuringTx,
+                        config.rs485DelayRtsBeforeSendMs,
+                        config.rs485DelayRtsAfterSendMs
+                    )
+                } else {
+                    logger.warn("RS-485 mode enable failed (continuing without driver RS-485 control)")
+                }
+            } else {
+                // Best-effort: ensure any RS-485 mode from previous runs is disabled.
+                port.disableRs485ModeControl()
+            }
 
             serialPort = port
             logger.info("Serial port ${config.portName} opened successfully: ${config}")
