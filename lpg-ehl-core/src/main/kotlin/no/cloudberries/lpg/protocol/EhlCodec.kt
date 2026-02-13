@@ -305,31 +305,44 @@ object EhlDataParser {
      * tank_vol = CSng(Chr(x(8)) & Chr(x(7)) & Chr(x(6)) & "," & Chr(x(5)) & Chr(x(4)))
      * ```
      * 
-     * Format: 5 ASCII digit bytes in LSB-first order
+     * Format: ASCII digit bytes in LSB-first order.
+     *
+     * In practice we have seen both 5-byte and 6-byte payloads in the field:
+     * - 5 bytes:  "04550" -> 45.50 L
+     * - 6 bytes: "004550" -> 45.50 L  (extra thousands digit)
      * Example: 45.50 liters -> "04550" -> bytes ['0','5','5','4','0'] (LSB first)
      * 
-     * @param data Raw data bytes from VOLUME response (5 ASCII bytes)
+     * @param data Raw data bytes from VOLUME response (5 or 6 ASCII bytes)
      * @return Volume in liters as Double
      * @throws IllegalArgumentException if data format is invalid
      */
     fun parseVolumeDataVb6(data: ByteArray): Double {
-        require(data.size == 5) { "VB6 VOLUME expects 5 ASCII bytes, got ${data.size}" }
+        require(data.size == 5 || data.size == 6) {
+            "VB6 VOLUME expects 5 or 6 ASCII bytes, got ${data.size}"
+        }
         
-        // LSB-first: data[0]=0.01L, data[1]=0.1L, data[2]=1L, data[3]=10L, data[4]=100L
+        // LSB-first:
+        // - 5-byte: data[0]=0.01L, data[1]=0.1L, data[2]=1L, data[3]=10L, data[4]=100L
+        // - 6-byte: data[5]=1000L (extra digit)
         val d0 = (data[0].toInt() and 0xFF).toChar()
         val d1 = (data[1].toInt() and 0xFF).toChar()
         val d2 = (data[2].toInt() and 0xFF).toChar()
         val d3 = (data[3].toInt() and 0xFF).toChar()
         val d4 = (data[4].toInt() and 0xFF).toChar()
+        val d5 = if (data.size == 6) (data[5].toInt() and 0xFF).toChar() else null
         
-        // Reconstruct number in correct order: hundreds, tens, ones, tenths, hundredths
-        val volumeString = "$d4$d3$d2$d1$d0"  // e.g., "04550" for 45.50 L
+        // Reconstruct number in correct order: [thousands], hundreds, tens, ones, tenths, hundredths
+        val volumeString = if (d5 != null) {
+            "$d5$d4$d3$d2$d1$d0"   // e.g., "004550" for 45.50 L
+        } else {
+            "$d4$d3$d2$d1$d0"      // e.g., "04550" for 45.50 L
+        }
         
         require(volumeString.all { it.isDigit() }) { 
             "Invalid VOLUME digits: '$volumeString' (bytes: ${data.map { "%02X".format(it) }})" 
         }
         
-        return volumeString.toInt() / 100.0  // 04550 -> 45.50
+        return volumeString.toInt() / 100.0
     }
     
     /**
