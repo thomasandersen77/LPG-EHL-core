@@ -15,7 +15,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 
-@Disabled
 class TerminalClientWireMockTest {
     private val objectMapper = ObjectMapper()
     private val httpClient = HttpClient.newBuilder()

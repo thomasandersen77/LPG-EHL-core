@@ -52,6 +52,79 @@ class SimulatedTerminalClient(
         }
     }
 
+    override fun getHealth(): TerminalHealthResponse {
+        return try {
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("$baseUrl/health"))
+                .GET()
+                .timeout(Duration.ofSeconds(10))
+                .build()
+
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            val json = objectMapper.readTree(response.body())
+
+            val status = readText(json, "status", "Status") ?: "unknown"
+            val configLoaded = readBoolean(json, "configLoaded", "ConfigLoaded")
+
+            TerminalHealthResponse(status = status, configLoaded = configLoaded)
+        } catch (e: Exception) {
+            log.error("Terminal health failed: {}", e.message)
+            TerminalHealthResponse(status = "error", configLoaded = false)
+        }
+    }
+
+    override fun getStatus(): TerminalStatusResponse {
+        return try {
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("$baseUrl/v1/terminal/status"))
+                .GET()
+                .timeout(Duration.ofSeconds(10))
+                .build()
+
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            val json = objectMapper.readTree(response.body())
+
+            val terminalOpen = readBoolean(json, "TerminalOpen", "terminalOpen")
+            val terminalReady = readBoolean(json, "TerminalReady", "terminalReady")
+            val connectionState = readText(json, "ConnectionState", "connectionState")
+            val lastError = readText(json, "LastError", "lastError")
+
+            TerminalStatusResponse(
+                terminalOpen = terminalOpen,
+                terminalReady = terminalReady,
+                connectionState = connectionState,
+                lastError = lastError
+            )
+        } catch (e: Exception) {
+            log.error("Terminal status failed: {}", e.message)
+            TerminalStatusResponse(terminalOpen = false, terminalReady = false, lastError = e.message)
+        }
+    }
+
+    override fun closeTerminal(): TerminalSimpleResponse {
+        return try {
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("$baseUrl/v1/terminal/close"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .timeout(Duration.ofSeconds(30))
+                .build()
+
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            val json = objectMapper.readTree(response.body())
+
+            val success = readBoolean(json, "Success", "success")
+            val message = readText(json, "Message", "message")
+            val error = readText(json, "Error", "error")
+
+            log.info("Terminal close: success={}, message={}", success, message)
+            TerminalSimpleResponse(success = success, message = message, error = error)
+        } catch (e: Exception) {
+            log.error("Terminal close failed: {}", e.message)
+            TerminalSimpleResponse(success = false, error = e.message)
+        }
+    }
+
     override fun purchase(request: TerminalPurchaseRequest): TerminalOperationResponse {
         return try {
             val body = buildPurchaseBody(request)
@@ -68,6 +141,16 @@ class SimulatedTerminalClient(
             val success = readBoolean(json, "Success", "success")
             val operationId = readText(json, "OperationId", "operationId")
             val callResult = readInt(json, "CallResult", "callResult")
+            val entryMode = readText(json, "EntryMode", "entryMode")
+            val entryModeCode = readText(json, "EntryModeCode", "entryModeCode")
+            val localModeResultData = readText(json, "LocalModeResultData", "localModeResultData")
+            val responseCode = readText(json, "ResponseCode", "responseCode")
+            val rejectionReason = readText(json, "RejectionReason", "rejectionReason")
+            val printTextRaw = readText(json, "PrintTextRaw", "printTextRaw")
+            val printTextSanitized = readText(json, "PrintTextSanitized", "printTextSanitized")
+            val lastDisplayText = readText(json, "LastDisplayText", "lastDisplayText")
+            val localModeResult = readInt(json, "LocalModeResult", "localModeResult")
+            val durationMs = readLong(json, "DurationMs", "durationMs")
             val error = readText(json, "Error", "error")
             val errorCode = readText(json, "ErrorCode", "errorCode")
 
@@ -76,6 +159,16 @@ class SimulatedTerminalClient(
                 success = success,
                 operationId = operationId,
                 callResult = callResult,
+                entryMode = entryMode,
+                entryModeCode = entryModeCode,
+                localModeResultData = localModeResultData,
+                responseCode = responseCode,
+                rejectionReason = rejectionReason,
+                printTextRaw = printTextRaw,
+                printTextSanitized = printTextSanitized,
+                lastDisplayText = lastDisplayText,
+                localModeResult = localModeResult,
+                durationMs = durationMs,
                 error = error,
                 errorCode = errorCode
             )
@@ -159,5 +252,12 @@ class SimulatedTerminalClient(
             .map { node.path(it) }
             .firstOrNull { !it.isMissingNode && !it.isNull }
             ?.asInt()
+    }
+
+    private fun readLong(node: JsonNode, vararg names: String): Long? {
+        return names.asSequence()
+            .map { node.path(it) }
+            .firstOrNull { !it.isMissingNode && !it.isNull }
+            ?.asLong()
     }
 }

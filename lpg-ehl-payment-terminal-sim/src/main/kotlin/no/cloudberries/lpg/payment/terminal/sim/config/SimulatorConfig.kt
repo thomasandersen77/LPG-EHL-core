@@ -14,6 +14,7 @@ data class SimulatorConfig(
     val scenariosEnabled: Boolean = true,
     val scenariosPath: String? = null,
     val profile: String = "lab",
+    val responseCasing: String = "PascalCase",
     val field: FieldModeConfig = FieldModeConfig()
 )
 

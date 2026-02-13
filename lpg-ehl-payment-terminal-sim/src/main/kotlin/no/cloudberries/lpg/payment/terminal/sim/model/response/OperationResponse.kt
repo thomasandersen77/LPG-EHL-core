@@ -27,6 +27,9 @@ data class OperationResponse(
     // Terminal outcome
     val LocalModeResult: Int? = null,
     val ResponseCode: String? = null,
+    val EntryMode: String? = null,
+    val EntryModeCode: String? = null,
+    val LocalModeResultData: String? = null,
     val RejectionSource: String? = null,
     val RejectionReason: String? = null,
 
@@ -73,6 +76,9 @@ data class OperationResponse(
                 ResultEventName = "OnLocalMode",
                 LocalModeResult = 0,
                 ResponseCode = "00",
+                EntryMode = "CONTACTLESS",
+                EntryModeCode = "2",
+                LocalModeResultData = "D  ;************8408;2;more_data",
                 RejectionSource = "0",
                 LocalModeFields = mapOf(
                     "TerminalID" to terminalId,
@@ -181,6 +187,7 @@ data class OperationResponse(
                 DurationMs = completedAt.toEpochMilli() - startedAt.toEpochMilli(),
                 CallResult = 1,
                 ResultEventName = "OnLocalMode",
+                LocalModeResult = 1,
                 LastDisplayText = displayText
             )
         }

@@ -55,6 +55,16 @@ class TerminalStateManager(
     fun isBusy(): Boolean = currentState == TerminalState.BUSY
 
     /**
+     * Get connection state string used by terminal status responses.
+     */
+    fun getConnectionState(): String {
+        return when (currentState) {
+            TerminalState.CLOSED -> "None"
+            TerminalState.OPEN, TerminalState.READY, TerminalState.BUSY -> "Open"
+        }
+    }
+
+    /**
      * Open terminal.
      *
      * Transitions: CLOSED -> OPEN -> READY

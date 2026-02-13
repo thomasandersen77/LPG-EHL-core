@@ -12,12 +12,13 @@ info:
     - Single terminal, single in-flight operation
     - Terminal readiness is mandatory for financial operations
     - Operations are non-cancellable by HTTP disconnect
-    - Idempotency support via ClientRequestId
+    - Idempotency support via clientRequestId
 
     **Response Field Casing:**
-    - Responses use PascalCase (Success, OperationId, ErrorCode)
-    - Exception: /health returns lowercase keys
-    - Requests are case-insensitive
+    - Responses use camelCase (success, operationId, errorCode)
+    - Exception: /health already uses lowercase keys (camelCase)
+    - Requests are case-insensitive (camelCase or PascalCase accepted)
+    - POST endpoints require a JSON body (send `{}` for empty bodies) to avoid `411 Length Required`
 
   contact:
     name: Cloudberries
@@ -67,34 +68,46 @@ components:
     TerminalStatusResponse:
       type: object
       properties:
-        VendorDllLoadable:
+        vendorDllLoadable:
           type: boolean
           description: Whether vendor DLL is loadable
-        TerminalOpen:
+        terminalOpen:
           type: boolean
           description: Whether terminal is currently open
-        TerminalReady:
+        terminalReady:
           type: boolean
           description: Whether terminal is ready for operations
-        LastError:
+        connectionState:
+          type: string
+          nullable: true
+          description: Connection state (e.g. "Open", "Aborted", "None")
+        lastError:
           type: string
           nullable: true
           description: Last error message (if any)
+        terminalIdentity:
+          type: object
+          nullable: true
+          description: Terminal identity information (available when open)
+          properties:
+            terminalID:
+              type: string
+              description: Terminal identifier
 
     # Simple Response (used by terminal open/close)
     SimpleResponse:
       type: object
       required:
-        - Success
+        - success
       properties:
-        Success:
+        success:
           type: boolean
           description: Operation success flag
-        Message:
+        message:
           type: string
           nullable: true
           description: Success message
-        Error:
+        error:
           type: string
           nullable: true
           description: Error message (if failed)
@@ -103,25 +116,55 @@ components:
     OperationResponse:
       type: object
       required:
-        - Success
-        - OperationId
-        - CallResult
+        - success
+        - operationId
+        - callResult
       properties:
-        Success:
+        success:
           type: boolean
           description: |
             Overall success flag computed server-side.
-            For financial operations: true when CallResult==1 AND (LocalModeResult==0 OR ResponseCode=="00")
-        OperationId:
+            For financial operations: true when callResult==1 AND (localModeResult==0 OR responseCode=="00")
+            For admin operations, success may be false even when localModeResult==0 (inspect response body).
+        operationId:
           type: string
           description: Server-generated operation identifier
-        CallResult:
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Operation start timestamp
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Operation completion timestamp
+        durationMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: Operation duration in milliseconds
+
+        # Vendor call result
+        callResult:
           type: integer
           description: |
             Vendor DLL call result.
             1 = call started successfully
             Other values = call failed to start
-        ErrorCode:
+        methodRejectCode:
+          type: integer
+          nullable: true
+          description: Method reject code (vendor-specific)
+        methodRejectInfo:
+          type: string
+          nullable: true
+          description: Method reject info (vendor-specific)
+        resultEventName:
+          type: string
+          nullable: true
+          description: Terminal event name for result (e.g. "OnLocalMode")
+        errorCode:
           type: string
           nullable: true
           enum:
@@ -132,20 +175,20 @@ components:
             - vendor_call_failure
             - diagnostics_disabled
           description: Error code (if operation failed)
-        ErrorMessage:
+        error:
           type: string
           nullable: true
-          description: Human-readable error message (legacy field, use Error instead)
+          description: Human-readable error message
 
         # Terminal outcome fields
-        LocalModeResult:
+        localModeResult:
           type: integer
           nullable: true
           description: |
             Terminal local mode result.
             0 = approved
             2 = rejected/cancelled
-        ResponseCode:
+        responseCode:
           type: string
           nullable: true
           description: |
@@ -153,48 +196,60 @@ components:
             "00" = approved
             "Z1" = wrong PIN
             Empty = user cancel
-        RejectionSource:
+        entryMode:
+          type: string
+          nullable: true
+          description: Entry mode (e.g. "CHIP", "CONTACTLESS")
+        entryModeCode:
+          type: string
+          nullable: true
+          description: Entry mode code (e.g. "0"=CHIP, "2"=CONTACTLESS)
+        localModeResultData:
+          type: string
+          nullable: true
+          description: Raw semicolon-delimited result data
+        rejectionSource:
           type: string
           nullable: true
           description: Rejection source code (e.g. "3" for PIN error)
-        RejectionReason:
+        rejectionReason:
           type: string
           nullable: true
           description: Detailed rejection reason (e.g. "3:2:Z1" for wrong PIN)
 
         # Evidence/receipt data
-        PrintTextRaw:
+        printTextRaw:
           type: string
           nullable: true
           description: Raw receipt text from terminal
-        PrintTextSanitized:
+        printTextSanitized:
           type: string
           nullable: true
           description: Sanitized receipt text (cleaned formatting)
-        LastDisplayText:
+        lastDisplayText:
           type: string
           nullable: true
           description: Last display prompt shown to customer
 
         # Terminal identification
-        LocalModeFields:
+        localModeFields:
           type: object
           nullable: true
           additionalProperties: true
           description: Terminal and merchant identifier fields
 
         # Server persistence references
-        DbRowId:
+        dbRowId:
           type: integer
           nullable: true
           description: Database row ID for this operation
-        ReceiptFileId:
+        receiptFileId:
           type: string
           nullable: true
           description: Receipt file identifier
 
         # Report-specific fields (for Z/X reports, avstemming)
-        ReportFields:
+        reportFields:
           type: object
           nullable: true
           additionalProperties: true
@@ -204,69 +259,69 @@ components:
     PurchaseRequest:
       type: object
       required:
-        - AmountMinor
+        - amountMinor
       properties:
-        AmountMinor:
+        amountMinor:
           type: integer
           description: Amount in minor units (øre for NOK)
           example: 12500
-        OperatorId:
+        operatorId:
           type: string
           default: "0000"
           description: Operator ID (typically "0000" to match VB6)
-        Currency:
+        currency:
           type: string
           default: "NOK"
           description: Currency code
-        OptionalData:
+        optionalData:
           type: string
           nullable: true
           description: Optional text for receipt (e.g. "LPG Autogas")
-        ClientRequestId:
+        clientRequestId:
           type: string
           nullable: true
           description: |
             Client-provided idempotency key.
             Recommended format: "fuelingSession:<session-id>"
-        PreAvstemming:
+        preAvstemming:
           $ref: '#/components/schemas/PreAvstemmingConfig'
 
     # Refund Request
     RefundRequest:
       type: object
       required:
-        - AmountMinor
+        - amountMinor
       properties:
-        AmountMinor:
+        amountMinor:
           type: integer
           description: Amount in minor units (øre for NOK)
-        OperatorId:
+        operatorId:
           type: string
           default: "0000"
-        OptionalData:
+        optionalData:
           type: string
           nullable: true
           description: Optional text for receipt (e.g. "Return LPG Autogas")
-        ClientRequestId:
+        clientRequestId:
           type: string
           nullable: true
           description: Client-provided idempotency key
-        PreAvstemming:
+        preAvstemming:
           $ref: '#/components/schemas/PreAvstemmingConfig'
 
     # Pre-avstemming Configuration
     PreAvstemmingConfig:
       type: object
       properties:
-        Enabled:
+        enabled:
           type: boolean
           default: false
           description: Enable pre-avstemming before operation
-        Password:
+        password:
           type: string
           default: "0000"
           description: Admin password for avstemming
-        TimeoutSeconds:
+        timeoutSeconds:
           type: integer
           nullable: true
           description: Timeout in seconds (optional)
@@ -275,28 +330,28 @@ components:
     CashbackRequest:
       type: object
       required:
-        - PurchaseMinor
-        - CashbackMinor
+        - purchaseMinor
+        - cashbackMinor
       properties:
-        PurchaseMinor:
+        purchaseMinor:
           type: integer
           description: Purchase amount in minor units (CORRECTED FIELD NAME)
-        CashbackMinor:
+        cashbackMinor:
           type: integer
           description: Cashback amount in minor units (CORRECTED FIELD NAME)
-        Currency:
+        currency:
           type: string
           default: "NOK"
           description: Currency code
-        OperatorId:
+        operatorId:
           type: string
           default: "4321"
           description: Operator ID (note different default than purchase/refund)
-        OptionalData:
+        optionalData:
           type: string
           nullable: true
           description: Optional text for receipt
-        ClientRequestId:
+        clientRequestId:
           type: string
           nullable: true
           description: Client-provided idempotency key
@@ -305,9 +360,9 @@ components:
     AdminRequest:
       type: object
       required:
-        - Password
+        - password
       properties:
-        Password:
+        password:
           type: string
           default: "0000"
           description: Admin password (typically "0000")
@@ -316,9 +371,9 @@ components:
     AdminCodeRequest:
       type: object
       required:
-        - Code
+        - code
       properties:
-        Code:
+        code:
           type: integer
           description: |
             Admin code in decimal.
@@ -326,7 +381,7 @@ components:
             - 12593 (0x3131) = Empty printer buffer
             - 12598 (0x3136) = X-report
             - 12603 (0x313B) = Unknown/other
-        Password:
+        password:
           type: string
           default: "0000"
 
@@ -334,30 +389,30 @@ components:
     EventEnvelope:
       type: object
       required:
-        - Cursor
-        - EventId
-        - Timestamp
-        - EventType
+        - cursor
+        - eventId
+        - timestamp
+        - eventType
       properties:
-        Cursor:
+        cursor:
           type: integer
           format: int64
           description: Monotonic sequence number for event ordering
-        EventId:
+        eventId:
           type: string
           description: Event identifier (CORRECTED - was missing)
-        OperationId:
+        operationId:
           type: string
           nullable: true
           description: Operation ID (if event is tied to an operation)
-        Timestamp:
+        timestamp:
           type: string
           format: date-time
           description: Event timestamp
-        EventType:
+        eventType:
           type: string
           description: Event type identifier
-        Payload:
+        payload:
           type: object
           additionalProperties: true
           description: Event-specific payload data
@@ -377,20 +432,20 @@ components:
     ErrorResponse:
       type: object
       required:
-        - Error
-        - ErrorCode
+        - error
+        - errorCode
       properties:
-        Error:
+        error:
           type: string
           description: Human-readable error message (CORRECTED FIELD NAME)
-        ErrorCode:
+        errorCode:
           type: string
           description: Machine-readable error code
-        OperationId:
+        operationId:
           type: string
           nullable: true
           description: Operation ID (if applicable)
-        Details:
+        details:
           type: string
           nullable: true
           description: Additional error details as string (CORRECTED TYPE)
@@ -410,8 +465,8 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            Error: "Terminal operation did not complete within timeout"
-            ErrorCode: "operation_timeout"
+            error: "Terminal operation did not complete within timeout"
+            errorCode: "operation_timeout"
 
     Conflict:
       description: Terminal busy (another operation in progress)
@@ -420,8 +475,8 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            Error: "Another operation is currently in progress"
-            ErrorCode: "terminal_busy"
+            error: "Another operation is currently in progress"
+            errorCode: "terminal_busy"
 
     UnprocessableEntity:
       description: Operation rejected by terminal
@@ -430,8 +485,8 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            Error: "Terminal rejected the operation"
-            ErrorCode: "operation_rejected"
+            error: "Terminal rejected the operation"
+            errorCode: "operation_rejected"
 
     ServiceUnavailable:
       description: Terminal not ready
@@ -440,8 +495,8 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            Error: "Terminal is not ready for operations"
-            ErrorCode: "terminal_not_ready"
+            error: "Terminal is not ready for operations"
+            errorCode: "terminal_not_ready"
 
     InternalServerError:
       description: Vendor call failure or server error
@@ -450,8 +505,8 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            Error: "Vendor DLL call failed"
-            ErrorCode: "vendor_call_failure"
+            error: "Vendor DLL call failed"
+            errorCode: "vendor_call_failure"
 
 paths:
   # Health
@@ -462,7 +517,7 @@ paths:
       summary: Health check
       description: |
         Verify that the server process is running.
-        Returns lowercase keys (exception to PascalCase rule).
+        Returns lowercase keys (matches standard camelCase response casing).
       operationId: getHealth
       responses:
         '200':
@@ -481,9 +536,13 @@ paths:
       description: |
         Check terminal readiness before attempting operations.
         Verify that:
-        - VendorDllLoadable = true
-        - TerminalOpen = true
-        - TerminalReady = true
+        - vendorDllLoadable = true
+        - terminalOpen = true
+        - terminalReady = true
+
+        Additional fields:
+        - connectionState ("Open", "Aborted", "None")
+        - terminalIdentity.terminalID (available when open)
       operationId: getTerminalStatus
       responses:
         '200':
@@ -500,11 +559,18 @@ paths:
       summary: Open terminal
       description: |
         Initialize and open the terminal connection.
-        Call this if TerminalOpen = false.
+        Call this if terminalOpen = false.
+        Note: server requires a JSON body (send `{}`) or returns `411 Length Required`.
       operationId: openTerminal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         '200':
-          description: Terminal opened (check Success field)
+          description: Terminal opened (check success field)
           content:
             application/json:
               schema:
@@ -524,10 +590,17 @@ paths:
       description: |
         Close the terminal connection.
         Used for terminal restart: close → sleep → open.
+        Note: server requires a JSON body (send `{}`) or returns `411 Length Required`.
       operationId: closeTerminal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         '200':
-          description: Terminal closed (check Success field)
+          description: Terminal closed (check success field)
           content:
             application/json:
               schema:
@@ -554,11 +627,15 @@ paths:
         1. Call this endpoint with amount
         2. Customer interacts with terminal (insert card, enter PIN)
         3. Response indicates success or failure
-        4. If Success=true, proceed with dispenser operations
+        4. If success=true, proceed with dispenser operations
         5. If dispenser fails after approval, call /v1/admin/reversal
 
         **Idempotency:**
-        Send ClientRequestId to enable idempotent retries.
+        Send clientRequestId to enable idempotent retries.
+
+        **Observed behavior:**
+        - If the terminal is closed, the server may block for ~180 seconds and return `408 operation_timeout`
+          with `callResult=0` instead of an immediate `503 terminal_not_ready`.
       operationId: purchase
       requestBody:
         required: true
@@ -568,7 +645,7 @@ paths:
               $ref: '#/components/schemas/PurchaseRequest'
       responses:
         '200':
-          description: Purchase completed (check Success field)
+          description: Purchase completed (check success field)
           content:
             application/json:
               schema:
@@ -690,6 +767,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          description: Server may return 500 even when operation completed; inspect response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
 
   /v1/admin/cancel:
     post:
@@ -717,6 +800,12 @@ paths:
                 $ref: '#/components/schemas/OperationResponse'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          description: Server may return 500 even when operation completed; inspect response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
 
   /v1/admin/reversal:
     post:
@@ -755,6 +844,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          description: Server may return 500 even when operation completed; inspect response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
 
   /v1/admin/z-report:
     post:
@@ -787,6 +882,12 @@ paths:
           $ref: '#/components/responses/Timeout'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          description: Server may return 500 even when operation completed; inspect response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
 
   /v1/admin/last-receipt:
     post:
@@ -814,6 +915,12 @@ paths:
                 $ref: '#/components/schemas/OperationResponse'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          description: Server may return 500 even when operation completed; inspect response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
 
   /v1/admin/software:
     post:
@@ -845,6 +952,12 @@ paths:
           $ref: '#/components/responses/Timeout'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          description: Server may return 500 even when operation completed; inspect response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
 
   /v1/admin/dataset:
     post:
@@ -876,6 +989,12 @@ paths:
           $ref: '#/components/responses/Timeout'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          description: Server may return 500 even when operation completed; inspect response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
 
   /v1/admin/code:
     post:
@@ -907,6 +1026,12 @@ paths:
           $ref: '#/components/responses/Timeout'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          description: Server may return 500 even when operation completed; inspect response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
 
   # Events
   /v1/events/stream:
@@ -924,6 +1049,10 @@ paths:
         **Event format:**
         - `event:` field = EventType
         - `data:` field = JSON EventEnvelope
+
+        **Observed SSE behavior:**
+        - Initial `event: connected` with `data: {"since":"<cursor>"}`
+        - Keepalive comments every ~1 second (`: keepalive <ISO timestamp>`)
       operationId: streamEvents
       parameters:
         - name: since
@@ -994,8 +1123,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                ErrorCode: "diagnostics_disabled"
-                ErrorMessage: "Diagnostics endpoints are disabled"
+                error: "Diagnostics endpoints are disabled"
+                errorCode: "diagnostics_disabled"
+                operationId: null
+                details: null
 
   /v1/diag/sendjson:
     post:
@@ -1097,5 +1228,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                Error: "Diagnostics endpoints are disabled"
-                ErrorCode: "diagnostics_disabled"
+                error: "Diagnostics endpoints are disabled"
+                errorCode: "diagnostics_disabled"
+                operationId: null
+                details: null

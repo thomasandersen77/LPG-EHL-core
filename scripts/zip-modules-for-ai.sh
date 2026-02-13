@@ -1,8 +1,11 @@
 #!/bin/bash
 # zip-modules-for-ai.sh - Export each module as separate zip for AI analysis
-# 
+#
+# Auto-discovers all Maven modules (pom.xml) and the React frontend.
+# Only includes source code, config files, and README.
+#
 # Usage: ./scripts/zip-modules-for-ai.sh
-# Output: Separate zip files for each Maven module + React frontend
+# Output: Separate zip files per module in ai-exports/
 
 set -e
 
@@ -13,7 +16,6 @@ OUTPUT_DIR="$PROJECT_ROOT/ai-exports"
 
 cd "$PROJECT_ROOT"
 
-# Create output directory
 mkdir -p "$OUTPUT_DIR"
 
 echo "🗜️  Creating AI-friendly module archives..."
@@ -21,77 +23,93 @@ echo "📦 Timestamp: $TIMESTAMP"
 echo "📁 Output: $OUTPUT_DIR"
 echo ""
 
-# Function to zip a module
-zip_module() {
+# Zip a Maven module: only src/, pom.xml, config files, and README
+zip_maven_module() {
     local module_dir=$1
     local module_name=$(basename "$module_dir")
     local output_file="$OUTPUT_DIR/${module_name}-${TIMESTAMP}.zip"
-    
+
     if [ ! -d "$module_dir" ]; then
         echo "   ⚠️  Skipping $module_name (not found)"
         return
     fi
-    
+
     echo "📦 Zipping $module_name..."
-    
+
     cd "$module_dir"
     zip -q -r "$output_file" . \
-        -x "*.git/*" \
-        -x "*target/*" \
-        -x "*node_modules/*" \
-        -x "*dist/*" \
-        -x "*build/*" \
-        -x "*.idea/*" \
-        -x "*.vscode/*" \
-        -x "*.DS_Store" \
-        -x "*.class" \
-        -x "*.jar" \
-        -x "*.war" \
-        -x "*.log" \
-        -x "*.tmp" \
-        -x "*~" \
-        -x "*.swp" \
-        -x "*.iml"
-    
+        -i "src/*" \
+        -i "pom.xml" \
+        -i "README.md" \
+        -i "*.yaml" \
+        -i "*.yml" \
+        -i "*.properties"
     cd "$PROJECT_ROOT"
-    
+
     local size=$(du -h "$output_file" | cut -f1)
     echo "   ✅ $(basename "$output_file") ($size)"
 }
 
-# Zip all Maven modules (Kotlin/Java)
-echo "=== Maven Modules ==="
-zip_module "lpg-ehl-core"
-zip_module "lpg-ehl-service"
-zip_module "lpg-transport"
-zip_module "lpg-ehl-emulator"
-zip_module "lpg-ehl-serialport-sim"
-zip_module "lpg-ehl-webapp"
-zip_module "lpg-ehl-app-headless"
-zip_module "lpg-ehl-cli"
+# Zip the React frontend: only src/, config files, and README
+zip_react_frontend() {
+    local module_dir=$1
+    local module_name=$(basename "$module_dir")
+    local output_file="$OUTPUT_DIR/${module_name}-${TIMESTAMP}.zip"
 
+    if [ ! -d "$module_dir" ]; then
+        echo "   ⚠️  Skipping $module_name (not found)"
+        return
+    fi
+
+    echo "📦 Zipping $module_name..."
+
+    cd "$module_dir"
+    zip -q -r "$output_file" . \
+        -i "src/*" \
+        -i "public/*" \
+        -i "package.json" \
+        -i "tsconfig*.json" \
+        -i "vite.config.*" \
+        -i "index.html" \
+        -i "README.md" \
+        -i "*.yaml" \
+        -i "*.yml"
+    cd "$PROJECT_ROOT"
+
+    local size=$(du -h "$output_file" | cut -f1)
+    echo "   ✅ $(basename "$output_file") ($size)"
+}
+
+# --- Auto-discover and zip all Maven modules ---
+echo "=== Maven Modules ==="
+for pom in */pom.xml; do
+    module_dir="$(dirname "$pom")"
+    zip_maven_module "$module_dir"
+done
+
+# --- React frontend ---
+if [ -d "lpg-web" ]; then
+    echo ""
+    echo "=== React Frontend ==="
+    zip_react_frontend "lpg-web"
+fi
+
+# --- Root-level project files ---
 echo ""
-echo "=== React Frontend ==="
-zip_module "lpg-web"
+echo "=== Root Project ==="
+ROOT_ZIP="$OUTPUT_DIR/lpg-ehl-root-${TIMESTAMP}.zip"
+zip -q "$ROOT_ZIP" pom.xml README.md 2>/dev/null || true
+if [ -f "$ROOT_ZIP" ]; then
+    local_size=$(du -h "$ROOT_ZIP" | cut -f1)
+    echo "   ✅ $(basename "$ROOT_ZIP") ($local_size)"
+else
+    echo "   ⚠️  No root files found"
+fi
 
 echo ""
 echo "📋 Created archives:"
 ls -lh "$OUTPUT_DIR"/*-${TIMESTAMP}.zip 2>/dev/null | awk '{print "   " $9 " (" $5 ")"}' || echo "   No files created"
 
 echo ""
-echo "✅ Done! Module archives created in $OUTPUT_DIR:"
-echo ""
-echo "   Maven Modules (Kotlin):"
-echo "   • lpg-ehl-core          - EHL protocol (NO Spring dependencies)"
-echo "   • lpg-ehl-service       - Business logic + JPA + Liquibase migrations"
-echo "   • lpg-transport         - Serial/TCP transport layer"
-echo "   • lpg-ehl-emulator      - LAB mode dispenser simulator"
-echo "   • lpg-ehl-serialport-sim- Serial port simulator"
-echo "   • lpg-ehl-webapp        - Web API + React frontend (thin wrapper)"
-echo "   • lpg-ehl-app-headless  - Headless production (no web server)"
-echo "   • lpg-ehl-cli           - Spring Shell CLI"
-echo ""
-echo "   React Frontend (TypeScript):"
-echo "   • lpg-web               - Vite + React + TanStack Query"
-echo ""
-echo "⚡ Each contains only source code, configs, and docs - no build artifacts."
+echo "✅ Done! Archives in $OUTPUT_DIR"
+echo "⚡ Each contains only source code, configs, and README - no build artifacts."

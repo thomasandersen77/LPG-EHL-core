@@ -33,6 +33,7 @@ class TerminalController(
             VendorDllLoadable = true,
             TerminalOpen = stateManager.isOpen(),
             TerminalReady = stateManager.isReady(),
+            ConnectionState = stateManager.getConnectionState(),
             LastError = null,
             TerminalIdentity = if (stateManager.isOpen()) {
                 stateManager.getTerminalIdentity()
@@ -98,3 +99,4 @@ class TerminalController(
         }
     }
 }
+
