@@ -232,11 +232,9 @@ class TransportConfiguration {
             rs485DelayRtsAfterSendMs = rs485RtsAfterMs
         )
         
-        val manager = SerialPortManager(config)
-        manager.enableWatchdog()
-        logger.info("🐕 Hardware watchdog enabled")
-        
-        manager
+        // Keep transport simple: connect/disconnect + explicit manual reconnect when needed.
+        // Avoid enabling scheduled watchdog loops that can mask protocol-level issues.
+        SerialPortManager(config)
     }
     
     /**
