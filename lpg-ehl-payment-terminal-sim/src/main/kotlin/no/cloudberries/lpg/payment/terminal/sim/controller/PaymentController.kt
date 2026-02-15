@@ -15,6 +15,7 @@ import no.cloudberries.lpg.payment.terminal.sim.service.ReceiptGenerator
 import no.cloudberries.lpg.payment.terminal.sim.service.ReservationStore
 import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioManager
 import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioSelection
+import no.cloudberries.lpg.payment.terminal.sim.service.LastReceiptStore
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalEventPublisher
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalStateManager
 import org.slf4j.LoggerFactory
@@ -39,6 +40,7 @@ class PaymentController(
     private val receiptGenerator: ReceiptGenerator,
     private val eventPublisher: TerminalEventPublisher,
     private val reservationStore: ReservationStore,
+    private val lastReceiptStore: LastReceiptStore,
     private val config: SimulatorConfig
 ) {
     private val log = LoggerFactory.getLogger(PaymentController::class.java)
@@ -71,6 +73,48 @@ class PaymentController(
         scenarioManager.applyScenarioTerminalState(scenarioSelection)
         val scenario = scenarioManager.selectFieldRejection(scenarioSelection) ?: scenarioSelection.enumScenario
         log.debug("Selected scenario: {}", scenario)
+
+        // TIMEOUT scenario: wait for card (configurable seconds) then return operation_timeout
+        if (scenario == Scenario.TIMEOUT) {
+            val operationId = UUID.randomUUID().toString()
+            val startedAt = Instant.now()
+            stateManager.beginOperation(operationId)
+            try {
+                eventPublisher.publish(
+                    "OperationStarted",
+                    operationId,
+                    mapOf("OperationType" to "purchase", "AmountMinor" to request.amountMinor)
+                )
+                eventPublisher.publish("DisplayText", operationId, mapOf("text" to "VENTER PÅ KORTET"))
+                val timeoutSec = config.purchaseTimeoutSeconds.coerceAtLeast(1)
+                Thread.sleep(timeoutSec * 1000L)
+                val completedAt = Instant.now()
+                val durationMs = completedAt.toEpochMilli() - startedAt.toEpochMilli()
+                val timeoutReceipt = receiptGenerator.generateTimeoutReceipt(
+                    request.amountMinor, completedAt, operationId
+                )
+                lastReceiptStore.set(timeoutReceipt)
+                val response = OperationResponse.timeout(
+                    operationId, startedAt, completedAt, durationMs, timeoutReceipt
+                )
+                eventPublisher.publish("DisplayText", operationId, mapOf("text" to "Kortet ikke presentert"))
+                eventPublisher.publish("PrintText", operationId, mapOf("text" to timeoutReceipt))
+                eventPublisher.publish(
+                    "OperationTimeout",
+                    operationId,
+                    mapOf("OperationType" to "purchase", "AmountMinor" to request.amountMinor)
+                )
+                eventPublisher.publish(
+                    "OperationCompleted",
+                    operationId,
+                    mapOf("Success" to false, "OperationType" to "purchase", "AmountMinor" to request.amountMinor)
+                )
+                log.info("Purchase timeout: operationId={}, durationMs={}", operationId, durationMs)
+                return ResponseEntity.ok(response)
+            } finally {
+                stateManager.endOperation(operationId)
+            }
+        }
 
         // Execute operation
         val operationId = UUID.randomUUID().toString()
@@ -112,7 +156,7 @@ class PaymentController(
             )
             val responseWithReceipt = ensureReceipt(response, request.amountMinor, completedAt, operationId, "purchase")
             val finalResponse = applyRejectedError(responseWithReceipt)
-            val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
+            val status = HttpStatus.OK
 
             if (finalResponse.Success.not() && flow.none { it.displayTextId == 1001 }) {
                 eventPublisher.publish("DisplayText", operationId, mapOf("text" to "TA UT KORTET", "displayTextId" to 1001))
@@ -142,6 +186,9 @@ class PaymentController(
                     "AmountMinor" to request.amountMinor
                 )
             )
+
+            // Store as last receipt for admin last-receipt
+            finalResponse.PrintTextRaw?.let { lastReceiptStore.set(it) }
 
             // Cache for idempotency
             cacheResponse(request.clientRequestId, status, finalResponse)
@@ -208,10 +255,22 @@ class PaymentController(
 
             val responseWithReceipt = ensureReceipt(response, request.amountMinor, completedAt, operationId, "purchase")
             val finalResponse = applyRejectedError(responseWithReceipt)
-            val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
+            val status = HttpStatus.OK
 
             if (finalResponse.Success) {
                 reservationStore.put(operationId, request.amountMinor)
+                
+                // PART 1: Publish CARD_RESERVED event
+                eventPublisher.publish(
+                    eventType = "CARD_RESERVED",
+                    operationId = operationId,
+                    payload = mapOf(
+                        "reservationAmount" to (request.amountMinor / 100.0), // kr
+                        "currency" to "NOK",
+                        "operationId" to operationId,
+                        "timestamp" to Instant.now().toString()
+                    )
+                )
             }
 
             eventPublisher.publish(
@@ -372,7 +431,7 @@ class PaymentController(
             )
             val responseWithReceipt = ensureReceipt(response, request.amountMinor, completedAt, operationId, "refund")
             val finalResponse = applyRejectedError(responseWithReceipt)
-            val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
+            val status = HttpStatus.OK
 
             eventPublisher.publish("OperationCompleted", operationId, mapOf("Success" to finalResponse.Success))
 
@@ -427,7 +486,7 @@ class PaymentController(
             )
             val responseWithReceipt = ensureReceipt(response, totalAmount, completedAt, operationId, "purchase")
             val finalResponse = applyRejectedError(responseWithReceipt)
-            val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
+            val status = HttpStatus.OK
 
             eventPublisher.publish("OperationCompleted", operationId, mapOf("Success" to finalResponse.Success))
 

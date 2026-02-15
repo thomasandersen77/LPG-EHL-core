@@ -190,13 +190,7 @@ class WebSocketEventPublisher(
         val json = objectMapper.writeValueAsString(event)
         
         sessions.values.forEach { sessionInfo ->
-            try {
-                if (sessionInfo.session.isOpen) {
-                    sessionInfo.session.sendMessage(TextMessage(json))
-                }
-            } catch (e: Exception) {
-                logger.debug("Failed to send to session ${sessionInfo.session.id}: ${e.message}")
-            }
+            trySendMessage(sessionInfo.session) { json }
         }
     }
     
@@ -204,15 +198,9 @@ class WebSocketEventPublisher(
         val json = objectMapper.writeValueAsString(event)
         
         sessions.values.forEach { sessionInfo ->
-            try {
-                // Send to all if no specific subscription, or if channel matches
-                if (sessionInfo.subscribedChannels.isEmpty() || channel in sessionInfo.subscribedChannels) {
-                    if (sessionInfo.session.isOpen) {
-                        sessionInfo.session.sendMessage(TextMessage(json))
-                    }
-                }
-            } catch (e: Exception) {
-                logger.debug("Failed to send to session ${sessionInfo.session.id}: ${e.message}")
+            // Send to all if no specific subscription, or if channel matches
+            if (sessionInfo.subscribedChannels.isEmpty() || channel in sessionInfo.subscribedChannels) {
+                trySendMessage(sessionInfo.session) { json }
             }
         }
     }

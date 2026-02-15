@@ -22,7 +22,8 @@
 # Stop:
 #   Ctrl+C (dreper også eventuelle hengende pls-sim.jar prosesser)
 #═══════════════════════════════════════════════════════════════════════
-set -e
+set -euo pipefail
+IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -35,6 +36,8 @@ TERMINAL_GUI_JAR="$RELEASE_DIR/payment-terminal-gui.jar"
 DO_BUILD=false
 GUI_ENABLED=false
 TERMINAL_PORT=18080
+TERMINAL_WAIT_SECONDS=25
+SKIP_TERMINAL_HEALTHCHECK=false
 
 # PLS defaults
 DISPENSER_ADDRESS=1
@@ -94,6 +97,8 @@ Valgfrie parametre (utvalg, med defaults):
   --build                       Bygg simulator-JARs dersom de mangler
   --gui                         GUI for både terminal og PLS
   --terminal-port=<port>        Default: 18080
+  --terminal-wait-seconds=<sec> Default: 25 (venter på /health)
+  --skip-healthcheck            Hopp over health-sjekk av terminal ved oppstart
 
 PLS options (videresendes til pls-sim.jar):
   --address=<1-8>               Default: 1
@@ -126,6 +131,38 @@ EOF
   exit 0
 }
 
+is_integer() {
+  [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+wait_for_terminal_health() {
+  local port="$1"
+  local timeout_seconds="$2"
+  local started_at
+  started_at=$(date +%s)
+
+  while true; do
+    if ! kill -0 "$TERMINAL_PID" 2>/dev/null; then
+      echo -e "${RED}Terminal-prosessen stoppet før healthcheck ble grønn${NC}"
+      return 1
+    fi
+
+    if curl -fsS --max-time 1 "http://localhost:${port}/health" >/dev/null 2>&1; then
+      return 0
+    fi
+
+    local now elapsed
+    now=$(date +%s)
+    elapsed=$((now - started_at))
+    if (( elapsed >= timeout_seconds )); then
+      echo -e "${RED}Timeout etter ${timeout_seconds}s: /health svarte ikke på port ${port}${NC}"
+      return 1
+    fi
+
+    sleep 1
+  done
+}
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     help) show_help ;;
@@ -133,6 +170,8 @@ while [[ $# -gt 0 ]]; do
     --build) DO_BUILD=true; shift ;;
     --gui) GUI_ENABLED=true; shift ;;
     --terminal-port=*) TERMINAL_PORT="${1#*=}"; shift ;;
+    --terminal-wait-seconds=*) TERMINAL_WAIT_SECONDS="${1#*=}"; shift ;;
+    --skip-healthcheck) SKIP_TERMINAL_HEALTHCHECK=true; shift ;;
     --address=*) DISPENSER_ADDRESS="${1#*=}"; shift ;;
     --price=*) PRICE_CENTS="${1#*=}"; shift ;;
     --baud=*) BAUD_RATE="${1#*=}"; shift ;;
@@ -152,6 +191,16 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown option: $1"; show_help ;;
   esac
 done
+
+if ! is_integer "$TERMINAL_PORT"; then
+  echo -e "${RED}Invalid --terminal-port: $TERMINAL_PORT${NC}"
+  exit 1
+fi
+
+if ! is_integer "$TERMINAL_WAIT_SECONDS"; then
+  echo -e "${RED}Invalid --terminal-wait-seconds: $TERMINAL_WAIT_SECONDS${NC}"
+  exit 1
+fi
 
 cleanup() {
   echo ""
@@ -183,6 +232,11 @@ trap cleanup EXIT SIGINT SIGTERM
 
 if ! command -v socat &> /dev/null; then
   echo -e "${RED}socat ikke installert. Kjør: brew install socat${NC}"
+  exit 1
+fi
+
+if [[ "$SKIP_TERMINAL_HEALTHCHECK" == "false" ]] && ! command -v curl &> /dev/null; then
+  echo -e "${RED}curl ikke installert. Installer curl eller bruk --skip-healthcheck${NC}"
   exit 1
 fi
 
@@ -272,6 +326,15 @@ fi
 
 echo -e "${GREEN}      ✓ Terminal running (PID: $TERMINAL_PID)${NC}"
 echo -e "      ${GRAY}→ http://localhost:$TERMINAL_PORT${NC}"
+if [[ "$SKIP_TERMINAL_HEALTHCHECK" == "false" ]]; then
+  echo -e "      ${GRAY}↻ venter på terminal health (/health, timeout=${TERMINAL_WAIT_SECONDS}s)...${NC}"
+  if ! wait_for_terminal_health "$TERMINAL_PORT" "$TERMINAL_WAIT_SECONDS"; then
+    exit 1
+  fi
+  echo -e "      ${GREEN}✓ Terminal health OK${NC}"
+else
+  echo -e "      ${YELLOW}⚠ Healthcheck hoppet over (--skip-healthcheck)${NC}"
+fi
 
 # 3. PLS
 echo -e "${CYAN}[3/3] Starting PLS Simulator...${NC}"
@@ -320,6 +383,9 @@ echo -e "${BOLD}  ✅ Klar${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "  Webapp/IntelliJ (FIELD): ${BOLD}--ehl.serial.port=/tmp/vserial1${NC}"
+echo -e "  Terminal events polling: ${GRAY}curl http://localhost:${TERMINAL_PORT}/v1/events?since=0${NC}"
+echo -e "  Terminal SSE:            ${GRAY}curl -N http://localhost:${TERMINAL_PORT}/v1/events/stream?since=0${NC}"
+echo -e "  Terminal WS:             ${GRAY}wscat -c ws://localhost:${TERMINAL_PORT}/v1/events/ws${NC}"
 echo -e "  Stop alt: ${GRAY}Ctrl+C${NC}"
 
 echo ""

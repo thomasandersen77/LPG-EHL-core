@@ -34,6 +34,11 @@ payment-terminal-sim:
   # SSE heartbeat cadence (milliseconds)
   sse-heartbeat-ms: 5000
 
+  # Baxi TCP Server configuration
+  baxi:
+    enabled: true
+    port: 7200
+
   # Simulator profile: lab | field
   profile: lab
 

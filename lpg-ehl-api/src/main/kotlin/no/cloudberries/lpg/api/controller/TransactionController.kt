@@ -15,13 +15,24 @@ import no.cloudberries.lpg.service.dto.PageResponse
 import no.cloudberries.lpg.service.dto.TransactionResponse
 import no.cloudberries.lpg.service.transaction.Transaction
 import no.cloudberries.lpg.service.transaction.TransactionService
+import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.pdmodel.PDPage
+import org.apache.pdfbox.pdmodel.PDPageContentStream
+import org.apache.pdfbox.pdmodel.common.PDRectangle
+import org.apache.pdfbox.pdmodel.font.PDType1Font
 import java.math.BigDecimal
+import java.math.RoundingMode
+import java.io.ByteArrayOutputStream
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.ContentDisposition
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.*
 
 @RestController
@@ -61,7 +72,7 @@ class TransactionController(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
         to: LocalDateTime?,
 
-        @Parameter(description = "Filter by dispenser address")
+        @Parameter(description = "Filter by dispenser address (optional, defaults to all)")
         @RequestParam(required = false)
         dispenserAddress: Int?,
 
@@ -115,6 +126,37 @@ class TransactionController(
                 return ResponseEntity.notFound().build()
             }
         return ResponseEntity.ok(transaction)
+    }
+
+    @GetMapping("/{id}/receipt.pdf", produces = [MediaType.APPLICATION_PDF_VALUE])
+    @Operation(
+        summary = "Download transaction receipt PDF",
+        description = "Generate and download a PDF receipt for a transaction"
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "Receipt PDF generated"),
+            ApiResponse(responseCode = "404", description = "Transaction not found")
+        ]
+    )
+    fun downloadTransactionReceiptPdf(
+        @Parameter(description = "Transaction UUID")
+        @PathVariable id: UUID
+    ): ResponseEntity<ByteArray> {
+        val transaction = transactionService.getTransactionById(id)
+            ?: return ResponseEntity.notFound().build()
+
+        val pdfBytes = createReceiptPdf(transaction)
+        val fileName = "kvittering-$id.pdf"
+
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_PDF)
+            .header(
+                HttpHeaders.CONTENT_DISPOSITION,
+                ContentDisposition.attachment().filename(fileName).build().toString()
+            )
+            .contentLength(pdfBytes.size.toLong())
+            .body(pdfBytes)
     }
 
     @GetMapping("/unsynced")
@@ -251,5 +293,68 @@ class TransactionController(
         val saved = transactionService.saveTransaction(transaction)
         logger.info("✅ Transaction created: id=${saved.transactionId}")
         return ResponseEntity.status(201).body(TransactionResponse.from(saved))
+    }
+
+    private fun createReceiptPdf(transaction: TransactionResponse): ByteArray {
+        val timestamp = transaction.timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+        val volumeText = transaction.volumeLiters.setScale(2, RoundingMode.HALF_UP).toPlainString()
+        val amountText = transaction.amountKr.setScale(2, RoundingMode.HALF_UP).toPlainString()
+        val priceText = transaction.pricePerLiter?.setScale(2, RoundingMode.HALF_UP)?.toPlainString() ?: "-"
+        val paymentType = transaction.paymentType ?: "UNKNOWN"
+
+        val lines = listOf(
+            "Min LPG - Receipt",
+            "",
+            "Transaction ID: ${transaction.transactionId}",
+            "Timestamp: $timestamp",
+            "Dispenser: ${transaction.dispenserAddress}",
+            "Nozzle: ${transaction.nozzleNumber}",
+            "Product: ${transaction.productCode ?: "LPG"}",
+            "Volume (L): $volumeText",
+            "Amount (NOK): $amountText",
+            "Price per liter (NOK): $priceText",
+            "Payment type: $paymentType",
+            "Payment status: ${transaction.paymentStatus}",
+            "Road tax included: ${if (transaction.includesRoadTax) "YES" else "NO"}"
+        )
+
+        return ByteArrayOutputStream().use { output ->
+            PDDocument().use { document ->
+                val page = PDPage(PDRectangle.A4)
+                document.addPage(page)
+
+                PDPageContentStream(document, page).use { content ->
+                    var y = 790f
+                    lines.forEachIndexed { index, line ->
+                        if (line.isEmpty()) {
+                            y -= 10f
+                        } else {
+                            content.beginText()
+                            content.setFont(
+                                if (index == 0) PDType1Font.HELVETICA_BOLD else PDType1Font.HELVETICA,
+                                if (index == 0) 16f else 11f
+                            )
+                            content.newLineAtOffset(50f, y)
+                            content.showText(safePdfText(line))
+                            content.endText()
+                            y -= 18f
+                        }
+                    }
+                }
+
+                document.save(output)
+            }
+            output.toByteArray()
+        }
+    }
+
+    private fun safePdfText(text: String): String {
+        return text
+            .replace("æ", "ae")
+            .replace("Æ", "AE")
+            .replace("ø", "o")
+            .replace("Ø", "O")
+            .replace("å", "a")
+            .replace("Å", "A")
     }
 }

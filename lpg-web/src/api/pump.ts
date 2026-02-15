@@ -35,17 +35,43 @@ export const pumpApi = {
   /**
    * Get pump status
    */
-  getStatus: async (address: number = 1): Promise<PumpStatus> => {
-    const response = await api.get<PumpStatus>(`/api/v1/emulator/pump/${address}/status`);
-    return response.data;
+  getStatus: async (): Promise<PumpStatus> => {
+    try {
+      const response = await api.get<PumpStatus>('/api/v1/emulator/pump/status');
+      return response.data;
+    } catch (primaryError) {
+      try {
+        const fallback = await api.get<{
+          state: string;
+          volumeLiters?: number;
+          amountKr?: number;
+          pricePerLiter?: number;
+          isActive?: boolean;
+          message?: string;
+        }>('/api/v1/dispensers/status');
+
+        const fallbackState = fallback.data.state;
+        return {
+          state: fallbackState === 'DISPENSING' ? 'PUMPING' : fallbackState,
+          address: 0,
+          volumeLitres: fallback.data.volumeLiters ?? 0,
+          amountKr: fallback.data.amountKr ?? 0,
+          pricePerLitreKr: fallback.data.pricePerLiter ?? 0,
+          nozzleLifted: fallbackState === 'DISPENSING' || fallbackState === 'READY_TO_PUMP',
+          hasPendingTransaction: fallbackState === 'PAYMENT_PENDING' || fallbackState === 'FINISHED',
+        };
+      } catch {
+        throw primaryError;
+      }
+    }
   },
 
   /**
    * Simulate card swipe (step 1)
    * Creates an authorization and starts the 60-second countdown
    */
-  cardSwipe: async (address: number = 1, maxAmountKr: number = 2000): Promise<any> => {
-    const response = await api.post(`/api/v1/emulator/pump/${address}/card-swipe`, {
+  cardSwipe: async (maxAmountKr: number = 2000): Promise<any> => {
+    const response = await api.post('/api/v1/emulator/pump/card-swipe', {
       maxAmountKr,
       triggeredBy: 'STATION_OWNER_PAGE',
       paymentMethod: 'CARD'
@@ -57,8 +83,8 @@ export const pumpApi = {
    * Unblock pump (step 2 - "FRI DISPENSER")
    * Sends UNBLOCK command to physical dispenser
    */
-  unblock: async (address: number = 1): Promise<any> => {
-    const response = await api.post(`/api/v1/emulator/pump/${address}/unblock`);
+  unblock: async (): Promise<any> => {
+    const response = await api.post('/api/v1/emulator/pump/unblock');
     return response.data;
   },
 
@@ -66,16 +92,16 @@ export const pumpApi = {
    * Release dispenser (station manager flow)
    * Sends UNBLOCK command to physical dispenser without card authorization
    */
-  releaseDispenser: async (address: number = 1): Promise<any> => {
-    const response = await api.post(`/api/v1/emulator/pump/${address}/release`);
+  releaseDispenser: async (): Promise<any> => {
+    const response = await api.post('/api/v1/emulator/pump/release');
     return response.data;
   },
 
   /**
    * Start pumping simulation (for GUI testing)
    */
-  startPumping: async (address: number = 1): Promise<any> => {
-    const response = await api.post(`/api/v1/emulator/pump/${address}/start-pumping`);
+  startPumping: async (): Promise<any> => {
+    const response = await api.post('/api/v1/emulator/pump/start-pumping');
     return response.data;
   },
 
@@ -83,8 +109,8 @@ export const pumpApi = {
    * Block pump / stop pumping
    * Sends BLOCK command to physical dispenser
    */
-  block: async (address: number = 1): Promise<any> => {
-    const response = await api.post(`/api/v1/emulator/pump/${address}/block`);
+  block: async (): Promise<any> => {
+    const response = await api.post('/api/v1/emulator/pump/block');
     return response.data;
   },
 
@@ -92,8 +118,10 @@ export const pumpApi = {
    * Confirm payment after pumping
    * @param paymentMethod - Only CARD or CREDIT are valid
    */
-  confirmPayment: async (address: number = 1, paymentMethod: 'CARD' | 'CREDIT' = 'CARD'): Promise<any> => {
-    const response = await api.post(`/api/v1/emulator/settle/${address}?method=${paymentMethod}`);
+  confirmPayment: async (paymentMethod: 'CARD' | 'CREDIT' = 'CARD'): Promise<any> => {
+    const response = await api.post('/api/v1/emulator/pump/confirm-payment', {
+      paymentMethod
+    });
     return response.data;
   },
 

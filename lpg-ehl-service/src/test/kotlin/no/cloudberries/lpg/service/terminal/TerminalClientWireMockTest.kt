@@ -11,6 +11,7 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
@@ -22,9 +23,11 @@ class TerminalClientWireMockTest {
         .build()
     private lateinit var wireMockProcess: Process
     private lateinit var client: SimulatedTerminalClient
+    private var wireMockPort: Int = 0
 
     @BeforeEach
     fun setUp() {
+        wireMockPort = findFreePort()
         val wireMockJar = resolveWireMockJar()
         val rootDir = resolveWireMockRootDir()
         wireMockProcess = ProcessBuilder(
@@ -32,7 +35,7 @@ class TerminalClientWireMockTest {
             "-jar",
             wireMockJar.toString(),
             "--port",
-            "18080",
+            wireMockPort.toString(),
             "--root-dir",
             rootDir.toString()
         )
@@ -40,7 +43,7 @@ class TerminalClientWireMockTest {
             .redirectOutput(ProcessBuilder.Redirect.PIPE)
             .start()
         waitForWireMock()
-        client = SimulatedTerminalClient("http://localhost:18080")
+        client = SimulatedTerminalClient("http://localhost:$wireMockPort")
     }
 
     @AfterEach
@@ -109,7 +112,7 @@ class TerminalClientWireMockTest {
         while (System.currentTimeMillis() < deadline) {
             try {
                 val request = HttpRequest.newBuilder()
-                    .uri(URI.create("http://localhost:18080/__admin/mappings"))
+                    .uri(URI.create("http://localhost:$wireMockPort/__admin/mappings"))
                     .timeout(Duration.ofSeconds(2))
                     .GET()
                     .build()
@@ -151,7 +154,7 @@ class TerminalClientWireMockTest {
             }
         """.trimIndent()
         val request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:18080/__admin/mappings"))
+            .uri(URI.create("http://localhost:$wireMockPort/__admin/mappings"))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .timeout(Duration.ofSeconds(5))
@@ -161,7 +164,7 @@ class TerminalClientWireMockTest {
 
     private fun requestLogUrls(): List<String> {
         val request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:18080/__admin/requests"))
+            .uri(URI.create("http://localhost:$wireMockPort/__admin/requests"))
             .timeout(Duration.ofSeconds(5))
             .GET()
             .build()
@@ -169,5 +172,9 @@ class TerminalClientWireMockTest {
         val node = objectMapper.readTree(response.body())
         return node.path("requests")
             .mapNotNull { it.path("request").path("url").takeIf(JsonNode::isTextual)?.asText() }
+    }
+
+    private fun findFreePort(): Int {
+        ServerSocket(0).use { return it.localPort }
     }
 }

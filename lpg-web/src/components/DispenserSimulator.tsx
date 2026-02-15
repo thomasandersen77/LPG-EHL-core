@@ -7,8 +7,8 @@ const API_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || '';
 
 // Pump API
 const pumpApi = {
-  getStatus: async (address: number = 1) => {
-    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/${address}/status`);
+  getStatus: async () => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/emulator/pump/status`);
     return res.json();
   }
 };
@@ -18,7 +18,7 @@ export function DispenserSimulator() {
   // Poll pump status
   const { data: pumpStatus, isLoading, error } = useQuery({
     queryKey: ['pump-status-sim'],
-    queryFn: () => pumpApi.getStatus(1),
+    queryFn: () => pumpApi.getStatus(),
     refetchInterval: (query) => {
       const data = query.state.data;
       return data?.state === 'PUMPING' ? 500 : 2000;

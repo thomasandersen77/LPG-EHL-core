@@ -6,6 +6,8 @@ import no.cloudberries.lpg.payment.terminal.sim.model.request.AdminRequest
 import no.cloudberries.lpg.payment.terminal.sim.model.response.OperationResponse
 import no.cloudberries.lpg.payment.terminal.sim.service.ReceiptGenerator
 import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioManager
+import no.cloudberries.lpg.payment.terminal.sim.service.LastReceiptStore
+import no.cloudberries.lpg.payment.terminal.sim.service.ReportState
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalEventPublisher
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalStateManager
 import org.slf4j.LoggerFactory
@@ -26,7 +28,9 @@ class AdminController(
     private val stateManager: TerminalStateManager,
     private val scenarioManager: ScenarioManager,
     private val receiptGenerator: ReceiptGenerator,
-    private val eventPublisher: TerminalEventPublisher
+    private val eventPublisher: TerminalEventPublisher,
+    private val lastReceiptStore: LastReceiptStore,
+    private val reportState: ReportState
 ) {
     private val log = LoggerFactory.getLogger(AdminController::class.java)
 
@@ -89,9 +93,9 @@ class AdminController(
         val startedAt = Instant.now()
         val completedAt = Instant.now()
 
-        // Cancel is immediate (no state transition needed)
+        // Cancel is immediate; real terminal shows "Avbrutt"
         val response = OperationResponse.adminSuccess(
-            operationId, startedAt, completedAt, "AVBRUTT"
+            operationId, startedAt, completedAt, "Avbrutt"
         )
 
         log.info("Cancel completed: operationId={}", operationId)
@@ -101,7 +105,7 @@ class AdminController(
     /**
      * POST /v1/admin/reversal
      *
-     * Reverse last transaction.
+     * Reverse last transaction. Simulator returns Formatfeil (no txn to reverse) like real terminal.
      */
     @PostMapping("/reversal")
     fun reversal(
@@ -110,26 +114,21 @@ class AdminController(
     ): ResponseEntity<OperationResponse> {
         log.info("Reversal request: password={}", request.password)
 
-        val scenarioSelection = scenarioManager.selectScenario(httpRequest)
-        scenarioManager.applyScenarioTerminalState(scenarioSelection)
-
         val operationId = UUID.randomUUID().toString()
         val startedAt = Instant.now()
+        val completedAt = Instant.now()
 
         stateManager.beginOperation(operationId)
         try {
             eventPublisher.publish("OperationStarted", operationId, mapOf("type" to "reversal"))
-
-            Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection))
-
-            val completedAt = Instant.now()
-            val response = OperationResponse.adminSuccess(
-                operationId, startedAt, completedAt, "ANNULLERING OK"
+            val response = OperationResponse.adminFormatError(
+                operationId, startedAt, completedAt,
+                displayText = "Formatfeil",
+                rejectionReason = "4:6"
             )
-
-            eventPublisher.publish("OperationCompleted", operationId, mapOf("success" to response.Success))
-
-            log.info("Reversal completed: operationId={}", operationId)
+            eventPublisher.publish("DisplayText", operationId, mapOf("text" to "Formatfeil"))
+            eventPublisher.publish("OperationCompleted", operationId, mapOf("success" to false))
+            log.info("Reversal completed (no txn): operationId={}", operationId)
             return ResponseEntity.ok(response)
         } finally {
             stateManager.endOperation(operationId)
@@ -162,13 +161,26 @@ class AdminController(
 
             val completedAt = Instant.now()
             val receipt = receiptGenerator.generateZReport(completedAt)
+            val batchCount = 0
+            val batchAmount = "0,00"
+            val batchAmountMinor = 0
+            val zNum = "001"
+            val lastZTs = completedAt.toString()
 
             val response = OperationResponse.adminSuccess(
-                operationId, startedAt, completedAt, "Z-RAPPORT OK"
-            ).copy(
-                PrintTextRaw = receipt,
-                PrintTextSanitized = receipt
-            )
+                operationId, startedAt, completedAt, "Z-RAPPORT OK",
+                printTextRaw = receipt,
+                reportFields = mapOf(
+                    "reportType" to "z",
+                    "zReportNumber" to zNum,
+                    "zLastTotalTimestampLocal" to lastZTs,
+                    "batchTotalCount" to batchCount.toString(),
+                    "batchTotalAmount" to batchAmount,
+                    "batchTotalAmountMinor" to batchAmountMinor.toString(),
+                    "scheme_BankAxept_count" to batchCount.toString(),
+                    "scheme_BankAxept_amount" to batchAmount
+                )
+            ).copy(PrintTextRaw = receipt, PrintTextSanitized = receipt)
 
             eventPublisher.publish("OperationCompleted", operationId, mapOf("success" to response.Success))
 
@@ -182,7 +194,7 @@ class AdminController(
     /**
      * POST /v1/admin/last-receipt
      *
-     * Print/retrieve last receipt.
+     * Return last printed receipt (real terminal style).
      */
     @PostMapping("/last-receipt")
     fun lastReceipt(
@@ -195,12 +207,13 @@ class AdminController(
         val startedAt = Instant.now()
         val completedAt = Instant.now()
 
+        val lastReceiptText = lastReceiptStore.get()
+        val printText = lastReceiptText ?: "SISTE KVITTERING\n(ingen tidligere transaksjon)"
+
         val response = OperationResponse.adminSuccess(
-            operationId, startedAt, completedAt, "SISTE KVITTERING"
-        ).copy(
-            PrintTextRaw = "SISTE KVITTERING\n(mock data)",
-            PrintTextSanitized = "SISTE KVITTERING\n(mock data)"
-        )
+            operationId, startedAt, completedAt, "SISTE KVITTERING",
+            printTextRaw = printText
+        ).copy(PrintTextRaw = printText, PrintTextSanitized = printText)
 
         log.info("Last receipt completed: operationId={}", operationId)
         return ResponseEntity.ok(response)

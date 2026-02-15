@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import no.cloudberries.lpg.service.pump.PumpAuthorizationService
 import no.cloudberries.lpg.service.pump.PumpStateService
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -25,16 +26,17 @@ import java.util.UUID
 @RequestMapping("/api/v1/emulator")
 class PumpController(
     private val pumpStateService: PumpStateService,
-    private val authorizationService: PumpAuthorizationService
+    private val authorizationService: PumpAuthorizationService,
+    @Value("\${lpg.dispenser.address:1}") private val defaultAddress: Int
 ) {
     private val logger = LoggerFactory.getLogger(PumpController::class.java)
     
     /**
      * Get current pump status.
      */
-    @GetMapping("/pump/{address}/status")
-    fun getPumpStatus(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
-        val status = pumpStateService.getStatus(address)
+    @GetMapping("/pump/status")
+    fun getPumpStatus(): ResponseEntity<Map<String, Any>> {
+        val status = pumpStateService.getStatus(defaultAddress)
         return ResponseEntity.ok(mapOf(
             "state" to status.state,
             "address" to status.address,
@@ -49,11 +51,11 @@ class PumpController(
     /**
      * "Fri pumpe" - Unblock dispenser and start pumping.
      */
-    @PostMapping("/pump/{address}/unblock")
-    fun unblockPump(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
-        logger.info("🔓 FRI PUMPE: Unblock request for address $address")
+    @PostMapping("/pump/unblock")
+    fun unblockPump(): ResponseEntity<Map<String, Any>> {
+        logger.info("🔓 FRI PUMPE: Unblock request for address $defaultAddress")
         
-        val result = pumpStateService.unblock(address, withAuthorization = true)
+        val result = pumpStateService.unblock(defaultAddress, withAuthorization = true)
         
         return result.fold(
             onSuccess = { status ->
@@ -81,11 +83,11 @@ class PumpController(
     /**
      * Station manager release - unblock without card authorization.
      */
-    @PostMapping("/pump/{address}/release")
-    fun releasePump(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
-        logger.info("🔓 FRI PUMPE (MANAGER): Release request for address $address")
+    @PostMapping("/pump/release")
+    fun releasePump(): ResponseEntity<Map<String, Any>> {
+        logger.info("🔓 FRI PUMPE (MANAGER): Release request for address $defaultAddress")
 
-        val result = pumpStateService.unblock(address, withAuthorization = false)
+        val result = pumpStateService.releasePump(defaultAddress)
 
         return result.fold(
             onSuccess = { status ->
@@ -116,11 +118,11 @@ class PumpController(
      * I LAB MODE: Brukes av /control GUI for å simulere nozzle lift.
      * I FIELD MODE: Ikke brukt - pumping trigges av hardware state (0x06/0x07).
      */
-    @PostMapping("/pump/{address}/start-pumping")
-    fun startPumping(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
-        logger.info("⛽ START PUMPING: Request for address $address (GUI simulation)")
+    @PostMapping("/pump/start-pumping")
+    fun startPumping(): ResponseEntity<Map<String, Any>> {
+        logger.info("⛽ START PUMPING: Request for address $defaultAddress (GUI simulation)")
         
-        val result = pumpStateService.simulateStartPumping(address)
+        val result = pumpStateService.simulateStartPumping(defaultAddress)
         
         return result.fold(
             onSuccess = { status ->
@@ -148,11 +150,11 @@ class PumpController(
     /**
      * "Stopp pumpe" - Block dispenser and stop pumping.
      */
-    @PostMapping("/pump/{address}/block")
-    fun blockPump(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
-        logger.info("🛑 FRI PUMPE: Block request for address $address")
+    @PostMapping("/pump/block")
+    fun blockPump(): ResponseEntity<Map<String, Any>> {
+        logger.info("🛑 FRI PUMPE: Block request for address $defaultAddress")
         
-        val result = pumpStateService.block(address)
+        val result = pumpStateService.block(defaultAddress)
         
         return result.fold(
             onSuccess = { status ->
@@ -183,12 +185,11 @@ class PumpController(
     /**
      * Settle pending transaction and reset dispenser to IDLE.
      */
-    @PostMapping("/settle/{id}")
+    @PostMapping("/settle")
     fun settle(
-        @PathVariable id: Int,
         @RequestParam(defaultValue = "CARD") method: String
     ): ResponseEntity<Map<String, Any>> {
-        logger.info("💳 Settle payment request: dispenserId=$id, method=$method")
+        logger.info("💳 Settle payment request: dispenserId=$defaultAddress, method=$method")
         
         // Map frontend payment methods - only CARD and CREDIT are valid
         val emulatorMethod = when (method.uppercase()) {
@@ -203,7 +204,7 @@ class PumpController(
             }
         }
         
-        val settledTransaction = pumpStateService.settle(id, emulatorMethod)
+        val settledTransaction = pumpStateService.settle(defaultAddress, emulatorMethod)
         
         return if (settledTransaction != null) {
             logger.info("✅ Payment settled: ${settledTransaction.amountNok} NOK, ${settledTransaction.liters} L")
@@ -231,11 +232,11 @@ class PumpController(
     /**
      * Reset pump to IDLE state.
      */
-    @PostMapping("/pump/{address}/reset")
-    fun resetPump(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
-        logger.info("🔄 Reset pump request for address $address")
-        pumpStateService.reset(address)
-        val status = pumpStateService.getStatus(address)
+    @PostMapping("/pump/reset")
+    fun resetPump(): ResponseEntity<Map<String, Any>> {
+        logger.info("🔄 Reset pump request for address $defaultAddress")
+        pumpStateService.reset(defaultAddress)
+        val status = pumpStateService.getStatus(defaultAddress)
         return ResponseEntity.ok(mapOf(
             "success" to true,
             "message" to "Pumpe nullstilt",
@@ -251,24 +252,23 @@ class PumpController(
      * VIKTIG: Denne endepunktet sender ALDRI UNBLOCK til pumpen!
      * - Oppretter authorization med 60s timeout
      * - Pumpe-state settes til AUTHORIZED_WAITING
-     * - Bruker må trykke "FRI DISPENSER" (POST /pump/{address}/unblock) for å frigjøre pumpen
+     * - Bruker må trykke "FRI DISPENSER" (POST /pump/unblock) for å frigjøre pumpen
      * 
      * Request body:
      * - maxAmountKr: Maks beløp å reservere (default: 2000)
      * - triggeredBy: Hvem/hva som trigget (for logging)
      * - paymentMethod: CARD eller CREDIT
      */
-    @PostMapping("/pump/{address}/card-swipe")
+    @PostMapping("/pump/card-swipe")
     fun simulateCardSwipe(
-        @PathVariable address: Int,
         @RequestBody(required = false) request: CardSwipeRequest?
     ): ResponseEntity<Map<String, Any>> {
-        logger.info("💳 SIMULER KORTDRAGNING: Dispenser $address")
+        logger.info("💳 SIMULER KORTDRAGNING: Dispenser $defaultAddress")
         
         try {
             // Opprette authorization med 60s timeout - IKKE send UNBLOCK!
             val auth = authorizationService.simulateCardSwipe(
-                dispenserAddress = address,
+                dispenserAddress = defaultAddress,
                 maxAmountKr = request?.maxAmountKr ?: 2000.0,
                 triggeredBy = request?.triggeredBy ?: "WEBAPP_GUI",
                 paymentMethod = request?.paymentMethod ?: "CARD"
@@ -278,7 +278,7 @@ class PumpController(
             logger.info("⏱️ 60s nedtelling startet - venter på FRI DISPENSER")
             
             // Sett pump state til AUTHORIZED_WAITING (kort dratt, venter på FRI DISPENSER)
-            pumpStateService.setAuthorizedWaiting(address, auth.authorizationId)
+            pumpStateService.setAuthorizedWaiting(defaultAddress, auth.authorizationId)
             
             return ResponseEntity.ok(mapOf(
                 "success" to true,
@@ -314,9 +314,9 @@ class PumpController(
     /**
      * Hent status for gjeldende autorisasjon.
      */
-    @GetMapping("/pump/{address}/authorization")
-    fun getAuthorization(@PathVariable address: Int): ResponseEntity<Map<String, Any>> {
-        val auth = authorizationService.findActiveAuthorization(address)
+    @GetMapping("/pump/authorization")
+    fun getAuthorization(): ResponseEntity<Map<String, Any>> {
+        val auth = authorizationService.findActiveAuthorization(defaultAddress)
         
         return if (auth != null) {
             ResponseEntity.ok(mapOf(
@@ -349,20 +349,35 @@ class PumpController(
      * Kalles når pumping er ferdig og betaling er gjennomført.
      * Resetter pumpe til IDLE for neste kunde.
      */
-    @PostMapping("/pump/{address}/confirm-payment")
+    @PostMapping("/pump/confirm-payment")
     fun confirmPayment(
-        @PathVariable address: Int,
         @RequestBody(required = false) request: ConfirmPaymentRequest?
     ): ResponseEntity<Map<String, Any>> {
-        logger.info("💳 BEKREFT BETALING: Dispenser $address")
+        logger.info("💳 BEKREFT BETALING: Dispenser $defaultAddress")
         
-        val auth = authorizationService.findActiveAuthorization(address)
+        val auth = authorizationService.findActiveAuthorization(defaultAddress)
         
         if (auth == null) {
+            // Check if there's a pending transaction even without auth (e.g. manual release)
+            val status = pumpStateService.getStatus(defaultAddress)
+            if (status.hasPendingTransaction) {
+                logger.info("ℹ️ Settle pending transaction without active auth (manual release flow)")
+                val settled = pumpStateService.settle(defaultAddress, request?.paymentMethod ?: "CARD")
+                return if (settled != null) {
+                    ResponseEntity.ok(mapOf(
+                        "success" to true,
+                        "message" to "Betaling bekreftet (manuell flyt)",
+                        "transaction" to settled
+                    ))
+                } else {
+                    ResponseEntity.status(500).body(mapOf("success" to false, "message" to "Kunne ikke settle transaksjon"))
+                }
+            }
+
             return ResponseEntity.status(404).body(mapOf(
                 "success" to false,
                 "error" to "NO_ACTIVE_AUTHORIZATION",
-                "message" to "Ingen aktiv autorisasjon å avslutte"
+                "message" to "Ingen aktiv autorisasjon eller ventende transaksjon"
             ))
         }
         
@@ -377,9 +392,9 @@ class PumpController(
             logger.info("✅ Betaling bekreftet: ${completed.actualVolumeLiters} L = ${completed.actualAmountKr} kr")
             
             // VIKTIG: Kall settle() for å resette pumpe til IDLE for neste kunde
-            val settled = pumpStateService.settle(address, paymentMethod)
+            val settled = pumpStateService.settle(defaultAddress, paymentMethod)
             if (settled != null) {
-                logger.info("🚀 Pumpe $address frigitt for neste kunde")
+                logger.info("🚀 Pumpe $defaultAddress frigitt for neste kunde")
             }
             
             return ResponseEntity.ok(mapOf(
@@ -406,14 +421,13 @@ class PumpController(
     /**
      * Kanseller aktiv autorisasjon.
      */
-    @PostMapping("/pump/{address}/cancel-authorization")
+    @PostMapping("/pump/cancel-authorization")
     fun cancelAuthorization(
-        @PathVariable address: Int,
         @RequestBody(required = false) request: CancelRequest?
     ): ResponseEntity<Map<String, Any>> {
-        logger.info("❌ KANSELLER AUTORISASJON: Dispenser $address")
+        logger.info("❌ KANSELLER AUTORISASJON: Dispenser $defaultAddress")
         
-        val auth = authorizationService.findActiveAuthorization(address)
+        val auth = authorizationService.findActiveAuthorization(defaultAddress)
         
         if (auth == null) {
             return ResponseEntity.status(404).body(mapOf(

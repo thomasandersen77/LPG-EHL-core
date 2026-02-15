@@ -15,9 +15,16 @@ data class SimulatorConfig(
     val scenariosEnabled: Boolean = true,
     val scenariosPath: String? = null,
     val profile: String = "lab",
-    val responseCasing: String = "PascalCase",
+    val purchaseTimeoutSeconds: Int = 180,
+    val responseCasing: String = "camelCase",
+    val baxi: BaxiConfig = BaxiConfig(),
     val field: FieldModeConfig = FieldModeConfig(),
     val dirty: DirtyModeConfig = DirtyModeConfig()
+)
+
+data class BaxiConfig(
+    val enabled: Boolean = true,
+    val port: Int = 7200
 )
 
 data class DirtyModeConfig(

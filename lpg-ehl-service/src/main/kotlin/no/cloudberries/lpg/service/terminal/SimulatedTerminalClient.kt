@@ -16,10 +16,8 @@ import java.time.Duration
  * HTTP client for Payment Terminal Simulator.
  * Implements OPEN -> PURCHASE flow for station-owner operations.
  */
-@Component
-@ConditionalOnProperty(name = ["payment.terminal.enabled"], havingValue = "true")
 class SimulatedTerminalClient(
-    @Value("\${payment.terminal.base-url:http://localhost:18080}") private val baseUrl: String
+    private val baseUrl: String
 ) : TerminalClient {
 
     private val log = LoggerFactory.getLogger(javaClass)

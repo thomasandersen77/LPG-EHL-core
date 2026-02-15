@@ -9,31 +9,31 @@ export function EmulatorDebugPage() {
 
   const { data: status, isLoading } = useQuery({
     queryKey: ['emulator-status', dispenserAddress],
-    queryFn: () => getEmulatorStatus(dispenserAddress),
+    queryFn: () => getEmulatorStatus(),
     refetchInterval: 2000,
   });
 
   const scenarioMutation = useMutation({
-    mutationFn: ({ address, scenario }: { address: number; scenario: EmulatorScenario }) =>
-      setEmulatorScenario(address, scenario),
+    mutationFn: ({ scenario }: { scenario: EmulatorScenario }) =>
+      setEmulatorScenario(scenario),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emulator-status', dispenserAddress] });
     },
   });
 
   const resetMutation = useMutation({
-    mutationFn: (address: number) => resetEmulator(address),
+    mutationFn: () => resetEmulator(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emulator-status', dispenserAddress] });
     },
   });
 
   const handleScenarioChange = (scenario: EmulatorScenario) => {
-    scenarioMutation.mutate({ address: dispenserAddress, scenario });
+    scenarioMutation.mutate({ scenario });
   };
 
   const handleReset = () => {
-    resetMutation.mutate(dispenserAddress);
+    resetMutation.mutate();
   };
 
   return (

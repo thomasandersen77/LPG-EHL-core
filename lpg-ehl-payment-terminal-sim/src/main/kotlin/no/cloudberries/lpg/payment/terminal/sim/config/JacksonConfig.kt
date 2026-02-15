@@ -26,7 +26,7 @@ class JacksonConfig(
         }
         return Jackson2ObjectMapperBuilder()
             .propertyNamingStrategy(namingStrategy)
-            .serializationInclusion(JsonInclude.Include.NON_NULL)
+            .serializationInclusion(JsonInclude.Include.ALWAYS)
             .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
     }
 }

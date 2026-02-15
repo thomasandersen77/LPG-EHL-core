@@ -6,7 +6,10 @@ import { confirmPayment } from '../api/emulator';
 
 // API configuration
 // Both webapp frontend and API run on port 8080
-const EMULATOR_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || '';
+const EMULATOR_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_EMULATOR_BASE_URL ||
+  window.location.origin;
 const WS_BASE_URL = EMULATOR_BASE_URL.replace(/^http/, 'ws');
 
 // Types
@@ -30,21 +33,19 @@ interface LogEntry {
 
 type LogChannel = 'api' | 'service' | 'emulator' | 'protocol';
 
-// API functions
+// API functions – pump address from server config only (lpg.dispenser.address)
 const pumpApi = {
-  getStatus: async (address: number = 1): Promise<PumpStatus> => {
-    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/status`);
+  getStatus: async (): Promise<PumpStatus> => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/status`);
     return res.json();
   },
-  cardSwipe: async (address: number = 1, maxAmountKr: number = 2000) => {
-    // NOTE: immediate parameter removed - card-swipe should NEVER auto-unblock
-    // User must click "FRI DISPENSER" button to send UNBLOCK
-    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/card-swipe`, {
+  cardSwipe: async (maxAmountKr: number = 2000) => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/card-swipe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        maxAmountKr, 
-        triggeredBy: 'WEBAPP_GUI', 
+      body: JSON.stringify({
+        maxAmountKr,
+        triggeredBy: 'WEBAPP_GUI',
         paymentMethod: 'CARD'
       })
     });
@@ -56,26 +57,26 @@ const pumpApi = {
     });
     return res.json();
   },
-  startPumping: async (address: number = 1) => {
-    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/start-pumping`, {
+  startPumping: async () => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/start-pumping`, {
       method: 'POST'
     });
     return res.json();
   },
-  unblock: async (address: number = 1) => {
-    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/unblock`, {
+  unblock: async () => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/unblock`, {
       method: 'POST'
     });
     return res.json();
   },
-  block: async (address: number = 1) => {
-    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/${address}/block`, {
+  block: async () => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/block`, {
       method: 'POST'
     });
     return res.json();
   },
-  settle: async (address: number = 1, method: string = 'CARD') => {
-    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/settle/${address}?method=${method}`, {
+  settle: async (method: string = 'CARD') => {
+    const res = await fetch(`${EMULATOR_BASE_URL}/api/v1/emulator/settle?method=${method}`, {
       method: 'POST'
     });
     return res.json();
@@ -93,7 +94,7 @@ export function ControlPanel() {
   // Pump status
   const { data: pumpStatus, isLoading } = useQuery({
     queryKey: ['pump-status'],
-    queryFn: () => pumpApi.getStatus(1),
+    queryFn: () => pumpApi.getStatus(),
     refetchInterval: (query) => {
       const data = query.state.data;
       return data?.state === 'PUMPING' ? 500 : 2000;
@@ -102,7 +103,7 @@ export function ControlPanel() {
 
   // Card swipe mutation
   const cardSwipeMutation = useMutation({
-    mutationFn: () => pumpApi.cardSwipe(1, maxAmount),
+    mutationFn: () => pumpApi.cardSwipe(maxAmount),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pump-status'] });
       setErrorMessage(null);
@@ -114,7 +115,7 @@ export function ControlPanel() {
   
   // Start pumping mutation
   const startPumpingMutation = useMutation({
-    mutationFn: () => pumpApi.startPumping(1),
+    mutationFn: () => pumpApi.startPumping(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pump-status'] });
       setErrorMessage(null);
@@ -126,7 +127,7 @@ export function ControlPanel() {
 
   // Confirm payment mutation
   const confirmPaymentMutation = useMutation({
-    mutationFn: () => confirmPayment(1, 'CARD'),
+    mutationFn: () => confirmPayment('CARD'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pump-status'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -139,7 +140,7 @@ export function ControlPanel() {
 
   // Block/stop mutation
   const blockMutation = useMutation({
-    mutationFn: () => pumpApi.block(1),
+    mutationFn: () => pumpApi.block(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pump-status'] });
       queryClient.invalidateQueries({ queryKey: ['authorization'] });
@@ -148,7 +149,7 @@ export function ControlPanel() {
 
   // Unblock mutation (FRI DISPENSER - called AFTER card swipe)
   const unblockMutation = useMutation({
-    mutationFn: () => pumpApi.unblock(1),
+    mutationFn: () => pumpApi.unblock(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pump-status'] });
       setErrorMessage(null);
@@ -205,16 +206,19 @@ export function ControlPanel() {
         }
         
         // Handle pump_update - update cache directly for real-time display
-        if (data.type === 'pump_update') {
+        if (data.type === 'pump_update' || data.type === 'fueling_update' || data.eventType === 'FUELING_UPDATE') {
+          const volumeLitres = Number(data.volumeLitres ?? data.volumeLiters ?? 0);
+          const amountKr = Number(data.amountKr ?? data.amount ?? 0);
+          const pricePerLitreKr = Number(data.pricePerLitreKr ?? data.pricePerLiterKr ?? data.pricePerLiter ?? 0);
           queryClient.setQueryData(['pump-status'], (old: PumpStatus | undefined) => ({
             ...old,
-            state: data.state,
-            address: data.address,
-            volumeLitres: data.volumeLitres,
-            amountKr: data.amountKr,
-            pricePerLitreKr: data.pricePerLitreKr,
-            nozzleLifted: data.nozzleLifted,
-            hasPendingTransaction: data.hasPendingTransaction
+            state: data.state || old?.state,
+            address: data.address || old?.address,
+            volumeLitres,
+            amountKr,
+            pricePerLitreKr,
+            nozzleLifted: data.nozzleLifted ?? old?.nozzleLifted,
+            hasPendingTransaction: data.hasPendingTransaction ?? old?.hasPendingTransaction
           } as PumpStatus));
         }
         

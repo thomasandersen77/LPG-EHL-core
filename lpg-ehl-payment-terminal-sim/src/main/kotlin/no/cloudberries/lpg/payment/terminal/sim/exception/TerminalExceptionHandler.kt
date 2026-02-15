@@ -1,6 +1,7 @@
 package no.cloudberries.lpg.payment.terminal.sim.exception
 
 import no.cloudberries.lpg.payment.terminal.sim.model.response.ErrorResponse
+import no.cloudberries.lpg.payment.terminal.sim.model.response.OperationResponse
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -39,15 +40,13 @@ class TerminalExceptionHandler {
     }
 
     @ExceptionHandler(TerminalNotReadyException::class)
-    fun handleTerminalNotReady(ex: TerminalNotReadyException): ResponseEntity<ErrorResponse> {
+    fun handleTerminalNotReady(ex: TerminalNotReadyException): ResponseEntity<OperationResponse> {
         log.warn("Terminal not ready: {}", ex.message)
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
-            ErrorResponse(
-                Error = ex.message ?: "Terminal not ready",
-                ErrorCode = ex.errorCode,
-                Details = ex.details
-            )
+        val response = OperationResponse.error(
+            errorCode = ex.errorCode,
+            error = ex.message ?: "Terminal not ready"
         )
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response)
     }
 
     @ExceptionHandler(OperationTimeoutException::class)
@@ -63,15 +62,13 @@ class TerminalExceptionHandler {
     }
 
     @ExceptionHandler(OperationRejectedException::class)
-    fun handleOperationRejected(ex: OperationRejectedException): ResponseEntity<ErrorResponse> {
+    fun handleOperationRejected(ex: OperationRejectedException): ResponseEntity<OperationResponse> {
         log.warn("Operation rejected: {}", ex.message)
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
-            ErrorResponse(
-                Error = ex.message ?: "Operation rejected",
-                ErrorCode = ex.errorCode,
-                Details = ex.details
-            )
+        val response = OperationResponse.error(
+            errorCode = ex.errorCode,
+            error = ex.message ?: "Operation rejected"
         )
+        return ResponseEntity.ok(response)
     }
 
     @ExceptionHandler(VendorCallFailureException::class)

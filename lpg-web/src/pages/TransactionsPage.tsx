@@ -22,10 +22,10 @@ export function TransactionsPage() {
   });
 
   const settleMutation = useMutation({
-    mutationFn: ({ dispenserAddress, paymentMethod }: { dispenserAddress: number; paymentMethod: PaymentType }) => {
+    mutationFn: ({ paymentMethod }: { paymentMethod: PaymentType }) => {
       // Convert PaymentType to accepted payment method (exclude UNKNOWN)
       const method = paymentMethod === 'UNKNOWN' ? 'CARD' : paymentMethod;
-      return confirmPayment(dispenserAddress, method);
+      return confirmPayment(method);
     },
     onSuccess: () => {
       // Invalidate and refetch both transactions and pump status
@@ -131,14 +131,14 @@ export function TransactionsPage() {
                     {tx.paymentStatus === 'PENDING' ? (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => settleMutation.mutate({ dispenserAddress: tx.dispenserAddress, paymentMethod: 'CARD' })}
+                          onClick={() => settleMutation.mutate({ paymentMethod: 'CARD' })}
                           disabled={settleMutation.isPending}
                           className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-xs font-medium"
                         >
                           💳 Kort
                         </button>
                         <button
-                          onClick={() => settleMutation.mutate({ dispenserAddress: tx.dispenserAddress, paymentMethod: 'CREDIT' })}
+                          onClick={() => settleMutation.mutate({ paymentMethod: 'CREDIT' })}
                           disabled={settleMutation.isPending}
                           className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 text-xs font-medium"
                         >

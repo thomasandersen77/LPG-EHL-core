@@ -1,34 +1,57 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { pumpApi, type PumpStatus } from '../api/pump';
+import { useQuery } from '@tanstack/react-query';
+import { fetchPeriodSummary } from '../api/reports';
+import { fetchTransactions, type TransactionDto } from '../api/transactions';
+import axios from 'axios';
 import '../styles/DispenserControl.css';
 
-type ActivePanel = 'status' | 'reports' | 'history' | 'pricing';
-type ReportTab = 'omsetning' | 'veibruksavgift' | 'uttak' | 'kvitteringer';
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+const WS_BASE_URL = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_EMULATOR_BASE_URL || window.location.origin).replace(/^http/, 'ws');
+
+// View types for the dashboard
+type ActiveView = 'dashboard' | 'reports' | 'receipts' | 'price' | 'customers' | 'klippekort';
+type ReportType = 'omsetning' | 'veibruksavgift' | 'uttak';
+
+// Mock data for customers (will be replaced with real API later)
+const mockCustomers = [
+  { id: '1', name: 'Ola Nordmann', type: 'Privatkunde', email: 'ola@example.com', phone: '99887766', klippekort: 3, kreditt: null },
+  { id: '2', name: 'Norsk Transport AS', type: 'Bedrift', email: 'post@norsktransport.no', phone: '22334455', klippekort: null, kreditt: { limit: 50000, used: 12500 } },
+  { id: '3', name: 'Kari Hansen', type: 'Privatkunde', email: 'kari@example.com', phone: '91234567', klippekort: 5, kreditt: null },
+  { id: '4', name: 'Byggmester Bygg AS', type: 'Bedrift', email: 'faktura@byggmester.no', phone: '55667788', klippekort: null, kreditt: { limit: 100000, used: 45000 } },
+];
+
 
 export function StationOwnerPage() {
   const navigate = useNavigate();
-  const { isLoggedIn, stationName, logout } = useAuth();
+  const { isLoggedIn, logout } = useAuth();
 
   // State management
   const [pumpStatus, setPumpStatus] = useState<PumpStatus | null>(null);
-  const [activePanel, setActivePanel] = useState<ActivePanel>('status');
-  const [reportTab, setReportTab] = useState<ReportTab>('omsetning');
+  const [activeView, setActiveView] = useState<ActiveView>('dashboard');
+  const [reportType, setReportType] = useState<ReportType>('omsetning');
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date();
     d.setDate(1);
     return d.toISOString().slice(0, 10);
   });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [pricePerLiter, setPricePerLiter] = useState(17.99);
   const [withRoadTax, setWithRoadTax] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState<'CARD' | 'CREDIT'>('CARD');
-  const [amountInput, setAmountInput] = useState('');
-  const [litersInput, setLitersInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  
+  // Price state
+  const [priceWithTax, setPriceWithTax] = useState(17.99);
+  const [priceWithoutTax, setPriceWithoutTax] = useState(11.50);
+  const [showPriceModal, setShowPriceModal] = useState(false);
+  const [newPriceWithTax, setNewPriceWithTax] = useState('');
+  const [newPriceWithoutTax, setNewPriceWithoutTax] = useState('');
+  
+  // Klippekort state
+  const [klippekortSize, setKlippekortSize] = useState(6);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -41,10 +64,10 @@ export function StationOwnerPage() {
   useEffect(() => {
     const pollStatus = async () => {
       try {
-        const status = await pumpApi.getStatus(1);
+        const status = await pumpApi.getStatus();
         setPumpStatus(status);
         if (status.pricePerLitreKr > 0) {
-          setPricePerLiter(status.pricePerLitreKr);
+          setPriceWithTax(status.pricePerLitreKr);
         }
       } catch (err) {
         // Silently fail - don't spam errors
@@ -52,12 +75,67 @@ export function StationOwnerPage() {
     };
 
     pollStatus();
-    // Poll faster during pumping
     const interval = setInterval(pollStatus, 
-      pumpStatus?.state === 'PUMPING' ? 500 : 1000
+      pumpStatus?.state === 'PUMPING' ? 5000 : 10000 // Relax polling when WebSocket is used
     );
     return () => clearInterval(interval);
   }, [pumpStatus?.state]);
+
+  // WebSocket connection for real-time updates
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    const ws = new WebSocket(`${WS_BASE_URL}/ws/logs`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      // Subscribe to necessary channels
+      ws.send(JSON.stringify({
+        action: 'subscribe',
+        channels: ['api', 'service', 'protocol']
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Handle pump updates
+        if (data.type === 'pump_update' || data.type === 'fueling_update' || data.eventType === 'FUELING_UPDATE') {
+          const volumeLitres = Number(data.volumeLitres ?? data.volumeLiters ?? data.liters ?? 0);
+          const amountKr = Number(data.amountKr ?? data.amount ?? 0);
+          const pricePerLitreKr = Number(data.pricePerLitreKr ?? data.pricePerLiterKr ?? data.pricePerLiter ?? 0);
+          setPumpStatus(prev => ({
+            ...prev,
+            state: data.state || prev?.state,
+            address: data.address || prev?.address,
+            volumeLitres,
+            amountKr,
+            pricePerLitreKr,
+            nozzleLifted: data.nozzleLifted ?? prev?.nozzleLifted,
+            hasPendingTransaction: data.hasPendingTransaction ?? prev?.hasPendingTransaction
+          } as PumpStatus));
+          
+          if (pricePerLitreKr > 0) {
+            setPriceWithTax(pricePerLitreKr);
+          }
+        }
+        
+        // Handle price updates
+        if (data.type === 'price_update') {
+          if (data.pricePerLiterKr > 0) {
+            setPriceWithTax(data.pricePerLiterKr);
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing WebSocket message:', e);
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
 
   // 60-second countdown for READY_TO_PUMP
   useEffect(() => {
@@ -78,14 +156,36 @@ export function StationOwnerPage() {
     }
   }, [pumpStatus?.state]);
 
-  // Step 1: Release dispenser (FRI DISPENSER)
+  // Fetch period summary for reports
+  const { data: periodSummary, isLoading: isLoadingReport } = useQuery({
+    queryKey: ['period-summary', dateFrom, dateTo],
+    queryFn: () => fetchPeriodSummary(dateFrom, dateTo),
+    enabled: activeView === 'reports',
+  });
+  const {
+    data: receiptTransactions,
+    isFetching: isLoadingReceipts,
+    refetch: refetchReceipts,
+  } = useQuery({
+    queryKey: ['receipt-transactions', dateFrom, dateTo],
+    queryFn: () =>
+      fetchTransactions({
+        from: `${dateFrom}T00:00:00`,
+        to: `${dateTo}T23:59:59`,
+        page: 0,
+        size: 200,
+      }),
+    enabled: false,
+  });
+
+  // Pump control functions
   const handleReleaseDispenser = async () => {
     if (loading) return;
     setLoading(true);
     setError(null);
 
     try {
-      await pumpApi.releaseDispenser(1);
+      await pumpApi.releaseDispenser();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Ukjent feil';
       setError('Kunne ikke frigjøre pumpe: ' + message);
@@ -94,14 +194,13 @@ export function StationOwnerPage() {
     }
   };
 
-  // Step 3: Start pumping (for GUI simulation)
   const handleStartPumping = async () => {
     if (loading) return;
     setLoading(true);
     setError(null);
 
     try {
-      await pumpApi.startPumping(1);
+      await pumpApi.startPumping();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Ukjent feil';
       setError('Kunne ikke starte pumping: ' + message);
@@ -110,14 +209,13 @@ export function StationOwnerPage() {
     }
   };
 
-  // Step 4: Stop pumping
   const handleStop = async () => {
     if (loading) return;
     setLoading(true);
     setError(null);
 
     try {
-      await pumpApi.block(1);
+      await pumpApi.block();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Ukjent feil';
       setError('Kunne ikke stoppe fylling: ' + message);
@@ -126,33 +224,16 @@ export function StationOwnerPage() {
     }
   };
 
-  // Step 5: Confirm payment
   const handleConfirmPayment = async (method: 'CARD' | 'CREDIT') => {
     if (loading) return;
     setLoading(true);
     setError(null);
 
     try {
-      await pumpApi.confirmPayment(1, method);
+      await pumpApi.confirmPayment(method);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Ukjent feil';
       setError('Kunne ikke bekrefte betaling: ' + message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Admin: Full reset
-  const handleReset = async () => {
-    if (loading) return;
-    setLoading(true);
-    setError(null);
-
-    try {
-      await pumpApi.fullReset();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Ukjent feil';
-      setError('Kunne ikke nullstille: ' + message);
     } finally {
       setLoading(false);
     }
@@ -163,41 +244,90 @@ export function StationOwnerPage() {
     navigate('/');
   };
 
-  // Determine status based on pump state
+  const handleSavePrice = async () => {
+    const withTax = parseFloat(newPriceWithTax);
+    const withoutTax = parseFloat(newPriceWithoutTax);
+    
+    if (!isNaN(withTax) && withTax > 0) {
+      setPriceWithTax(withTax);
+    }
+    if (!isNaN(withoutTax) && withoutTax > 0) {
+      setPriceWithoutTax(withoutTax);
+    }
+    
+    // Call API to update price if available
+    try {
+      await axios.post(`${API_URL}/prices/update`, {
+        pricePerLiter: withTax || priceWithTax,
+      });
+      // PART 4: Backend will broadcast price_update, queryClient invalidation handled in WS listener
+    } catch (err) {
+      // Price API might not be available, that's ok
+    }
+    
+    setShowPriceModal(false);
+    setNewPriceWithTax('');
+    setNewPriceWithoutTax('');
+  };
+
+  const handleFetchReceipts = async () => {
+    setActiveView('receipts');
+    await refetchReceipts();
+  };
+
+  const getPaymentMethodLabel = (transaction: TransactionDto) => {
+    switch (transaction.paymentType) {
+      case 'CARD':
+        return 'Kort';
+      case 'CREDIT':
+        return 'Kreditt';
+      default:
+        return transaction.paymentType || 'Ukjent';
+    }
+  };
+
+  const formatReceiptDate = (timestamp: string) =>
+    new Date(timestamp).toLocaleDateString('nb-NO');
+
+  const formatReceiptTime = (timestamp: string) =>
+    new Date(timestamp).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
+
+  // Determine pump state
   const state = pumpStatus?.state || 'OFFLINE';
   const canRelease = (state === 'IDLE' || state === 'AUTHORIZED_WAITING') && !pumpStatus?.hasPendingTransaction;
   const isReadyToPump = state === 'READY_TO_PUMP';
   const isPumping = state === 'PUMPING';
   const isPaymentPending = state === 'PAYMENT_PENDING' && pumpStatus?.hasPendingTransaction;
-
-  // Connected = choices locked (tax, payment, amount/liters shown from pump)
   const isConnected = isReadyToPump || isPumping || isPaymentPending;
   const isOnline = pumpStatus != null && state !== 'OFFLINE';
 
-  // Format display values (when connected use live data, else use inputs or 0)
+  // Display values
   const displayAmount = isConnected
     ? (pumpStatus?.amountKr?.toFixed(2) ?? '0.00')
-    : (amountInput || '0,00').replace('.', ',');
+    : '0000,00';
   const displayVolume = isConnected
     ? (pumpStatus?.volumeLitres?.toFixed(2) ?? '0.00')
-    : (litersInput || '0,00').replace('.', ',');
-  const statusText = state;
+    : '0000,00';
+  const currentPrice = withRoadTax ? priceWithTax : priceWithoutTax;
 
   return (
     <div className="dispenser-control">
       {/* Header Bar */}
-      <div className="station-header">
-        <div className="station-info">
-          <span className="station-icon">⛽</span>
-          <span className="station-name">{stationName || 'Min Stasjon'}</span>
+      <div className="station-header-new">
+        <div className="station-info-new">
+          <div className="station-logo-icon">⛽</div>
+          <span className="station-logo-text">Min LPG</span>
         </div>
-        <div className="header-actions">
-          <Link to="/diagnose" className="diagnose-link">
-            🔧 Diagnose / Simulér
-          </Link>
-          <button onClick={handleLogout} className="logout-btn">
-            Logg ut
-          </button>
+        <div className="header-right">
+          <span className="header-section-label">Dispenserkontroll</span>
+          <div className="header-actions-new">
+            <Link to="/diagnose" className="diagnose-link-new">
+              🔧 Diagnose
+            </Link>
+            <button onClick={handleLogout} className="logout-btn-new">
+              Logg ut
+            </button>
+          </div>
         </div>
       </div>
 
@@ -209,434 +339,387 @@ export function StationOwnerPage() {
         </div>
       )}
 
-      <div className="control-container">
-        {/* Left Panel - Menu and Overview */}
-        <div className="left-panel">
-          {/* STATUS chip (ONLINE/OFFLINE) - matches dashboard image */}
-          <div className="left-panel-status-row">
-            <span className="left-panel-status-label">STATUS</span>
-            <span className={`left-panel-status-chip ${isOnline ? 'online' : 'offline'}`}>
+      <div className="control-container-v2">
+        {/* Left Panel - Overview, Reports, History */}
+        <div className="left-panel-v2">
+          {/* Status Section */}
+          <div className="status-row-v2">
+            <span className="status-label-v2">STATUS</span>
+            <span className={`status-badge-v2 ${isOnline ? 'online' : 'offline'}`}>
               {isOnline ? 'ONLINE' : 'OFFLINE'}
             </span>
           </div>
 
-          <div className="panel-header">
-            <h2>Oversikt, status og rapporter</h2>
-            <p className="panel-subtitle">
-              Bruk til statuskontroll, rapportering, historikk og kvitteringer, og prisadministrasjon
-            </p>
+          {/* RAPPORTER Section Box */}
+          <div className="rapporter-box-v2">
+            <div className="rapporter-header-v2">RAPPORTER</div>
+            <div className="rapporter-tabs-v2">
+              <button 
+                className={`rapporter-tab-v2 ${reportType === 'omsetning' ? 'active' : ''}`}
+                onClick={() => { setReportType('omsetning'); setActiveView('reports'); }}
+              >
+                Omsetningsrapport
+              </button>
+              <button 
+                className={`rapporter-tab-v2 ${reportType === 'veibruksavgift' ? 'active' : ''}`}
+                onClick={() => { setReportType('veibruksavgift'); setActiveView('reports'); }}
+              >
+                Veibruksavgift
+              </button>
+              <button 
+                className={`rapporter-tab-v2 ${reportType === 'uttak' ? 'active' : ''}`}
+                onClick={() => { setReportType('uttak'); setActiveView('reports'); }}
+              >
+                Uttaksrapport
+              </button>
+            </div>
           </div>
 
-          <nav className="control-menu">
-            <button
-              className={`menu-item ${activePanel === 'status' ? 'active' : ''}`}
-              onClick={() => setActivePanel('status')}
+          {/* Action Buttons - ENDRE PRIS / KVITTERINGER */}
+          <div className="action-row-v2">
+            <button 
+              className="action-btn-v2"
+              onClick={() => setShowPriceModal(true)}
             >
-              📊 Statuskontroll
+              ENDRE PRIS
             </button>
-            <button
-              className={`menu-item ${activePanel === 'reports' ? 'active' : ''}`}
-              onClick={() => setActivePanel('reports')}
+            <button 
+              className="action-btn-v2"
+              onClick={() => setActiveView('receipts')}
             >
-              📈 Rapportering
+              KVITTERINGER
             </button>
-            <button
-              className={`menu-item ${activePanel === 'history' ? 'active' : ''}`}
-              onClick={() => setActivePanel('history')}
-            >
-              📜 Historikk og kvitteringer
-            </button>
-            <button
-              className={`menu-item ${activePanel === 'pricing' ? 'active' : ''}`}
-              onClick={() => setActivePanel('pricing')}
-            >
-              💰 Prisadministrasjon
-            </button>
-            <Link to="/transactions" className="menu-item link">
-              💳 Transaksjoner
-            </Link>
-            <Link to="/credit" className="menu-item link">
-              🏪 Stasjonskreditt
-            </Link>
-          </nav>
-
-          <div className="panel-content">
-            {activePanel === 'status' && (
-              <div className="info-section">
-                <h3>Statuskontroll</h3>
-                <p>Gi sanntidsoversikt over dispenserstatus</p>
-                <ul>
-                  <li>Aktiv kommunikasjon med dispenser</li>
-                  <li>Fylling kan startes</li>
-                  <li>Sporbar og regelstyrt bruk</li>
-                </ul>
-                <div className="status-details">
-                  <div className="detail-row">
-                    <span>Tilstand:</span>
-                    <span className={`state-badge ${state.toLowerCase()}`}>
-                      {statusText}
-                    </span>
-                  </div>
-                  <div className="detail-row">
-                    <span>Dyse løftet:</span>
-                    <span>{pumpStatus?.nozzleLifted ? 'Ja' : 'Nei'}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span>Ventende betaling:</span>
-                    <span>{pumpStatus?.hasPendingTransaction ? 'Ja' : 'Nei'}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activePanel === 'reports' && (
-              <div className="info-section">
-                <h3>Rapporter</h3>
-                <div className="report-tabs">
-                  {(
-                    [
-                      ['omsetning', 'Omsetningsrapport'],
-                      ['veibruksavgift', 'Veibruksavgift'],
-                      ['uttak', 'Uttaksrapport'],
-                      ['kvitteringer', 'Kvitteringer'],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`report-tab ${reportTab === key ? 'active' : ''}`}
-                      onClick={() => setReportTab(key)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div className="report-date-range">
-                  <label className="report-date-label">
-                    FRA DATO
-                    <input
-                      type="date"
-                      className="report-date-input"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                    />
-                  </label>
-                  <label className="report-date-label">
-                    TIL DATO
-                    <input
-                      type="date"
-                      className="report-date-input"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                    />
-                  </label>
-                </div>
-                <Link
-                  to={reportTab === 'kvitteringer' ? `/transactions?from=${dateFrom}&to=${dateTo}` : '/reports'}
-                  className="secondary-btn report-fetch-btn"
-                >
-                  Hent rapporter
-                </Link>
-              </div>
-            )}
-
-            {activePanel === 'history' && (
-              <div className="info-section">
-                <h3>Historikk og kvitteringer</h3>
-                <p>Hent dokumentasjon for valgt periode. Denne delen er kun informativ.</p>
-                <div className="report-date-range">
-                  <label className="report-date-label">
-                    FRA DATO
-                    <input
-                      type="date"
-                      className="report-date-input"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                    />
-                  </label>
-                  <label className="report-date-label">
-                    TIL DATO
-                    <input
-                      type="date"
-                      className="report-date-input"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                    />
-                  </label>
-                </div>
-                <Link
-                  to={`/transactions?from=${dateFrom}&to=${dateTo}`}
-                  className="secondary-btn report-fetch-btn"
-                >
-                  Hent kvitteringer
-                </Link>
-              </div>
-            )}
-
-            {activePanel === 'pricing' && (
-              <div className="info-section">
-                <h3>Prisadministrasjon</h3>
-                <div className="price-control">
-                  <label>
-                    Pris per liter:
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={pricePerLiter}
-                      onChange={(e) => setPricePerLiter(parseFloat(e.target.value))}
-                      className="price-input"
-                    />
-                  </label>
-                </div>
-                <Link to="/price-admin" className="secondary-btn">
-                  💰 Åpne prisadministrasjon
-                </Link>
-              </div>
-            )}
           </div>
+
+          {/* Date Range */}
+          <div className="date-row-v2">
+            <div className="date-field-v2">
+              <label>FRA DATO</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="date-field-v2">
+              <label>TIL DATO</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Hent kvitteringer button */}
+          <button 
+            className="hent-kvitteringer-btn-v2"
+            onClick={() => void handleFetchReceipts()}
+          >
+            Hent kvitteringer
+          </button>
+
+          {/* Additional Navigation - Hidden on main view for cleaner UI */}
+          {activeView === 'dashboard' && (
+            <div className="extra-nav-v2">
+              <button 
+                className="extra-nav-btn-v2"
+                onClick={() => setActiveView('customers')}
+              >
+                👥 Mine kunder
+              </button>
+              <button 
+                className="extra-nav-btn-v2"
+                onClick={() => setActiveView('klippekort')}
+              >
+                🎫 Klippekort
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Right Panel - Active Dispenser Control */}
-        <div className="right-panel">
-          <div className="control-header">
-            <h2>Aktiv dispenserstyring</h2>
-            <p className="control-subtitle">
-              Brukes til valg av avgift, inntasting av beløp eller liter, start og stopp av dispenser
-            </p>
-          </div>
+        {/* Right Panel - Dispenser Control */}
+        <div className="right-panel-v2">
+          {/* Show different content based on activeView */}
+          {activeView === 'dashboard' && (
+            <>
+              {/* PRISVISNING Section */}
+              <div className="prisvisning-box-v2">
+                <div className="prisvisning-label-v2">PRISVISNING</div>
+                <div className="tax-options-v2">
+                  <label className="tax-radio-v2">
+                    <input
+                      type="radio"
+                      name="taxOption"
+                      checked={withRoadTax}
+                      onChange={() => setWithRoadTax(true)}
+                      disabled={isConnected}
+                    />
+                    <span>Med veibruksavgift</span>
+                  </label>
+                  <label className="tax-radio-v2">
+                    <input
+                      type="radio"
+                      name="taxOption"
+                      checked={!withRoadTax}
+                      onChange={() => setWithRoadTax(false)}
+                      disabled={isConnected}
+                    />
+                    <span>Uten avgift</span>
+                  </label>
+                </div>
 
-          {/* Status Indicator */}
-          <div className="status-section">
-            <div className="status-label">STATUS</div>
-            <div className={`status-indicator ${pumpStatus ? 'online' : 'offline'} ${state.toLowerCase()}`}>
-              <span className="status-dot"></span>
-              <span className="status-text">{statusText}</span>
-            </div>
-            {countdown !== null && countdown > 0 && (
-              <div className="countdown-display">
-                <span className="countdown-value">{countdown}s</span>
-                <span className="countdown-label">Tid igjen</span>
-              </div>
-            )}
-          </div>
+                <button className={`tax-btn-v2 ${withRoadTax ? 'with-tax' : 'without-tax'}`}>
+                  {withRoadTax ? 'MED VEIBRUKSAVGIFT' : 'UTEN VEIBRUKSAVGIFT'}
+                </button>
 
-          {/* Control Options */}
-          <div className="control-options">
-            <div className="option-group">
-              <label>Dispensergruppe</label>
-              <select className="option-select">
-                <option>Pumpe 1</option>
-              </select>
-            </div>
-
-            <div className="option-group">
-              <label>Produkt</label>
-              <select className="option-select">
-                <option>LPG Propan</option>
-              </select>
-            </div>
-          </div>
-
-          {/* PRISVISNING - tax, amount/liter, price (matches dashboard image) */}
-          <div className="prisvisning-section">
-            <h3 className="prisvisning-title">PRISVISNING</h3>
-            <div className="prisvisning-tax">
-              <label className="radio-label">
-                <input
-                  type="radio"
-                  name="roadTax"
-                  checked={withRoadTax}
-                  onChange={() => setWithRoadTax(true)}
-                  disabled={isConnected}
-                />
-                <span>Med veibruksavgift</span>
-              </label>
-              <label className="radio-label">
-                <input
-                  type="radio"
-                  name="roadTax"
-                  checked={!withRoadTax}
-                  onChange={() => setWithRoadTax(false)}
-                  disabled={isConnected}
-                />
-                <span>Uten avgift</span>
-              </label>
-            </div>
-            <div className="displays">
-              <div className="display-box">
-                <div className="display-label">Beløp å betale</div>
-                {isConnected ? (
-                  <div className="display-value">{displayAmount}</div>
-                ) : (
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="option-input display-input"
-                    placeholder="0000,00"
-                    value={amountInput}
-                    onChange={(e) => setAmountInput(e.target.value)}
-                  />
+                {!withRoadTax && (
+                  <div className="tax-warning-v2">
+                    DU HAR ÅPNET FOR AT TANKING SKJER UTEN VEIBRUKSAVGIFT. VED Å FORTSETTE AKSEPTERER DU LOVVERKET RUNDT DETTE. <a href="#" className="warning-link-v2">LES MER</a>
+                  </div>
                 )}
               </div>
-              <div className="display-box">
-                <div className="display-label">Antall liter</div>
-                {isConnected ? (
-                  <div className="display-value">{displayVolume}</div>
+
+              {/* Beløp å betale */}
+              <div className="display-field-v2">
+                <div className="display-label-v2">Beløp å betale, KR</div>
+                <div className="display-box-v2">
+                  {isConnected ? displayAmount.replace('.', ',') : '0000,00'}
+                </div>
+              </div>
+
+              {/* Antall liter */}
+              <div className="display-field-v2">
+                <div className="display-label-v2">Antall liter</div>
+                <div className="display-box-v2">
+                  {isConnected ? displayVolume.replace('.', ',') : '0000,00'}
+                </div>
+              </div>
+
+              {/* Pris, KR/L */}
+              <div className="display-field-v2">
+                <div className="display-label-v2">Pris, KR/L</div>
+                <div className="display-box-v2 price">
+                  {currentPrice.toFixed(2).replace('.', ',')}
+                </div>
+              </div>
+
+              {/* Control Buttons - Always show START and STOPP stacked */}
+              <div className="control-btns-v2">
+                <button
+                  className={`ctrl-btn-v2 start ${(!canRelease && !isReadyToPump) ? 'disabled' : ''}`}
+                  onClick={canRelease ? handleReleaseDispenser : (isReadyToPump ? handleStartPumping : undefined)}
+                  disabled={loading || (!canRelease && !isReadyToPump)}
+                >
+                  {loading && (canRelease || isReadyToPump) ? '⏳...' : 'START'}
+                </button>
+                <button
+                  className={`ctrl-btn-v2 stop ${!isPumping ? 'disabled' : ''}`}
+                  onClick={isPumping ? handleStop : undefined}
+                  disabled={loading || !isPumping}
+                >
+                  {loading && isPumping ? '⏳...' : 'STOPP'}
+                </button>
+              </div>
+
+              {/* Payment buttons when payment is pending */}
+              {isPaymentPending && (
+                <div className="payment-btns-v2">
+                  <button
+                    className="pay-btn-v2 card"
+                    onClick={() => handleConfirmPayment('CARD')}
+                    disabled={loading}
+                  >
+                    💳 BETAL MED KORT
+                  </button>
+                  <button
+                    className="pay-btn-v2 credit"
+                    onClick={() => handleConfirmPayment('CREDIT')}
+                    disabled={loading}
+                  >
+                    🏪 KREDITT
+                  </button>
+                </div>
+              )}
+
+              {/* Status Messages */}
+              {countdown !== null && countdown > 0 && (
+                <div className="status-msg-v2 countdown">
+                  Du har <strong>{countdown}</strong> sekunder på å starte fylling.
+                </div>
+              )}
+
+              {isPumping && (
+                <div className="status-msg-v2 pumping">
+                  ⛽ Fylling pågår...
+                </div>
+              )}
+
+              {isPaymentPending && (
+                <div className="status-msg-v2 payment">
+                  💰 Fylling fullført - bekreft betaling
+                </div>
+              )}
+            </>
+          )}
+
+          {activeView === 'reports' && (
+            <div className="subview-content-v2">
+              <h2>{reportType === 'omsetning' && 'Omsetningsrapport'}{reportType === 'veibruksavgift' && 'Veibruksavgift'}{reportType === 'uttak' && 'Uttaksrapport'}</h2>
+              <p className="subview-period">Periode: {dateFrom} - {dateTo}</p>
+              
+              {isLoadingReport ? (
+                <div className="loading-msg-v2">Laster rapport...</div>
+              ) : periodSummary ? (
+                <div className="report-stats-v2">
+                  {reportType === 'omsetning' && (
+                    <>
+                      <div className="stat-row-v2"><span>Totalt salg</span><span>{periodSummary.totalAmountKr.toFixed(2)} kr</span></div>
+                      <div className="stat-row-v2"><span>Antall transaksjoner</span><span>{periodSummary.totalTransactions}</span></div>
+                      <div className="stat-row-v2"><span>Totalt volum</span><span>{periodSummary.totalVolumeLiters.toFixed(2)} L</span></div>
+                    </>
+                  )}
+                  {reportType === 'veibruksavgift' && (
+                    <>
+                      <div className="stat-row-v2"><span>Avgiftspliktig volum</span><span>{periodSummary.totalVolumeLiters.toFixed(2)} L</span></div>
+                      <div className="stat-row-v2"><span>Estimert avgift</span><span>{(periodSummary.totalVolumeLiters * 2.0).toFixed(2)} kr</span></div>
+                    </>
+                  )}
+                  {reportType === 'uttak' && (
+                    <>
+                      <div className="stat-row-v2"><span>Totalt LPG-uttak</span><span>{periodSummary.totalVolumeLiters.toFixed(2)} L</span></div>
+                      <div className="stat-row-v2"><span>Antall fyllinger</span><span>{periodSummary.totalTransactions}</span></div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="no-data-v2">Ingen data for valgt periode</div>
+              )}
+              <button className="back-btn-v2" onClick={() => setActiveView('dashboard')}>← Tilbake</button>
+            </div>
+          )}
+
+          {activeView === 'receipts' && (
+            <div className="subview-content-v2">
+              <h2>Kvitteringer</h2>
+              <div className="date-row-v2" style={{marginBottom: '1rem'}}>
+                <div className="date-field-v2"><label>FRA DATO</label><input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></div>
+                <div className="date-field-v2"><label>TIL DATO</label><input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></div>
+              </div>
+              <button className="hent-kvitteringer-btn-v2" style={{marginBottom: '1rem'}} onClick={() => void handleFetchReceipts()}>
+                Hent kvitteringer
+              </button>
+              <div className="receipts-table-v2">
+                <div className="receipts-hdr-v2"><span>DATO</span><span>TID</span><span>BELØP</span><span>BETALING</span><span>KVITTERING</span></div>
+                {isLoadingReceipts ? (
+                  <div className="loading-msg-v2">Laster kvitteringer...</div>
+                ) : (receiptTransactions?.content.length ?? 0) === 0 ? (
+                  <div className="no-data-v2">Ingen transaksjoner i valgt periode</div>
                 ) : (
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="option-input display-input"
-                    placeholder="0000,00"
-                    value={litersInput}
-                    onChange={(e) => setLitersInput(e.target.value)}
-                  />
+                  receiptTransactions?.content.map((transaction) => (
+                    <div key={transaction.transactionId} className="receipts-row-v2">
+                      <span>{formatReceiptDate(transaction.timestamp)}</span>
+                      <span>{formatReceiptTime(transaction.timestamp)}</span>
+                      <span>{transaction.amountKr.toFixed(2)} kr</span>
+                      <span>{getPaymentMethodLabel(transaction)}</span>
+                      <a
+                        href={`${API_URL}/transactions/${transaction.transactionId}/receipt.pdf`}
+                        className="pdf-link-v2"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Last ned (PDF)
+                      </a>
+                    </div>
+                  ))
                 )}
               </div>
+              <p className="note-v2">Kvitteringer hentes fra transaksjoner i valgt periode.</p>
+              <button className="back-btn-v2" onClick={() => setActiveView('dashboard')}>← Tilbake</button>
             </div>
-            <div className="price-display">
-              <div className="price-label">PRIS (kr/l)</div>
-              <div className="price-value">{pricePerLiter.toFixed(2)}</div>
-            </div>
-            {/* Velg betaling - kredittavtale / bankterminal */}
-            <div className="payment-choice-section">
-              <span className="payment-choice-label">Velg betaling:</span>
-              <div className="payment-choice-radios">
-                <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    checked={paymentMethod === 'CREDIT'}
-                    onChange={() => setPaymentMethod('CREDIT')}
-                    disabled={isConnected}
-                  />
-                  <span>Kredittavtale</span>
-                </label>
-                <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    checked={paymentMethod === 'CARD'}
-                    onChange={() => setPaymentMethod('CARD')}
-                    disabled={isConnected}
-                  />
-                  <span>Bankterminal</span>
-                </label>
+          )}
+
+          {activeView === 'customers' && (
+            <div className="subview-content-v2">
+              <h2>Mine kunder</h2>
+              <p className="note-v2">Oversikt over alle kunder knyttet til stasjonen.</p>
+              <div className="customers-tbl-v2">
+                <div className="customers-hdr-v2"><span>NAVN</span><span>TYPE</span><span>KONTAKT</span><span>KLIPPEKORT</span><span>KREDITT</span></div>
+                {mockCustomers.map((c) => (
+                  <div key={c.id} className="customers-row-v2">
+                    <span>{c.name}</span>
+                    <span className={c.type === 'Bedrift' ? 'type-business' : 'type-private'}>{c.type}</span>
+                    <span>{c.email}</span>
+                    <span>{c.klippekort !== null ? `${c.klippekort}/${klippekortSize}` : '-'}</span>
+                    <span>{c.kreditt ? `${c.kreditt.used.toLocaleString()}/${c.kreditt.limit.toLocaleString()} kr` : '-'}</span>
+                  </div>
+                ))}
               </div>
-            </div>
-            {isConnected && (
-              <p className="prisvisning-lock-msg">
-                Avgiftsvalg, pris og betalingsmåte låses når kunden kobler til dispenser.
-              </p>
-            )}
-          </div>
-
-          {!isConnected && (
-            <p className="instruction-hint">
-              Avgiftsvalg, pris og betalingsmåte låses når kunden kobler til dispenser.
-            </p>
-          )}
-
-          {/* Koble til dispenser / START / STOPP */}
-          <div className="control-buttons">
-            {/* IDLE/VENTER: Koble til dispenser (same as FRI DISPENSER) */}
-            {canRelease && (
-              <button
-                className="control-btn start-btn"
-                onClick={handleReleaseDispenser}
-                disabled={loading}
-                title="Koble til dispenser – aktiverer betalingsflyt og reserverer dispenser"
-              >
-                {loading ? '⏳...' : 'Koble til dispenser'}
-              </button>
-            )}
-
-            {/* READY_TO_PUMP: START - start fylling innen gyldighetstiden */}
-            {isReadyToPump && (
-              <button
-                className="control-btn start-btn"
-                onClick={handleStartPumping}
-                disabled={loading || countdown === 0}
-              >
-                {loading ? '⏳...' : 'START'}
-              </button>
-            )}
-
-            {/* PUMPING: STOPP */}
-            {isPumping && (
-              <button
-                className="control-btn stop-btn"
-                onClick={handleStop}
-                disabled={loading}
-              >
-                {loading ? '⏳ Stopper...' : 'STOPP'}
-              </button>
-            )}
-
-            {/* PAYMENT_PENDING: Betaling */}
-            {isPaymentPending && (
-              <>
-                <button
-                  className="control-btn start-btn"
-                  onClick={() => handleConfirmPayment('CARD')}
-                  disabled={loading}
-                >
-                  {loading ? '⏳...' : '💳 BETAL'}
-                </button>
-                <button
-                  className="control-btn credit-btn"
-                  onClick={() => handleConfirmPayment('CREDIT')}
-                  disabled={loading}
-                >
-                  {loading ? '⏳...' : '🏪 KREDITT'}
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Instruksjoner: START/STOPP skjer fysisk på dispenseren */}
-          <div className="control-instructions">
-            {isReadyToPump && countdown !== null && countdown > 0 && (
-              <p className="instruction-time">
-                Du har <strong>{countdown}</strong> sekunder på å starte fylling. Hvis fylling ikke startes innen tiden, frigjøres dispenser automatisk.
-              </p>
-            )}
-            <p className="instruction-main">
-              Hold START inne for å fylle. Slipp START for å stoppe. START/STOPP styres fysisk på dispenseren.
-            </p>
-          </div>
-
-          {/* Reset Button (for errors or stuck states) */}
-          {(state === 'ERROR' || pumpStatus?.hasPendingTransaction) && !isPaymentPending && (
-            <button
-              className="action-btn reset-btn"
-              onClick={handleReset}
-              disabled={loading}
-            >
-              🔄 Nullstill system
-            </button>
-          )}
-
-          {/* Status Messages */}
-          {isReadyToPump && (
-            <div className="info-status">
-              ✅ Pumpe frigjort - kunden kan starte fylling
+              <button className="back-btn-v2" onClick={() => setActiveView('dashboard')}>← Tilbake</button>
             </div>
           )}
 
-          {isPumping && (
-            <div className="filling-status">
-              ⛽ Fylling pågår...
-            </div>
-          )}
-
-          {isPaymentPending && (
-            <div className="finished-status">
-              💰 Fylling fullført - bekreft betaling
+          {activeView === 'klippekort' && (
+            <div className="subview-content-v2">
+              <h2>Klippekort</h2>
+              <p className="note-v2">Stasjonsbasert lojalitetsfunksjon for propanflasker.</p>
+              <div className="info-box-v2">Klippekort gjelder kun kjøp/fylling av propanflasker og kan ikke benyttes ved LPG-dispenserfylling.</div>
+              <div className="setting-row-v2">
+                <label>Antall fyllinger for gratis:</label>
+                <input type="number" min="3" max="10" value={klippekortSize} onChange={(e) => setKlippekortSize(parseInt(e.target.value) || 6)} />
+                <button className="save-btn-v2">Lagre</button>
+              </div>
+              <div className="rule-box-v2"><strong>Gjeldende regel:</strong> {klippekortSize} kjøp → 1 gratis propanflaske</div>
+              <button className="back-btn-v2" onClick={() => setActiveView('dashboard')}>← Tilbake</button>
             </div>
           )}
         </div>
       </div>
+
+      {/* Price Modal */}
+      {showPriceModal && (
+        <div className="modal-overlay" onClick={() => setShowPriceModal(false)}>
+          <div className="price-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Endre pris</h3>
+            <p className="modal-description">
+              Sett ny pris for denne dispenseren. Når API-et er koblet til vil disse verdiene sendes videre.
+            </p>
+            
+            <div className="price-input-group">
+              <label>MED VEIBRUKSAVGIFT (KR/L)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={newPriceWithTax}
+                onChange={(e) => setNewPriceWithTax(e.target.value)}
+                placeholder={priceWithTax.toString()}
+                className="price-modal-input"
+              />
+            </div>
+            
+            <div className="price-input-group">
+              <label>UTEN VEIBRUKSAVGIFT (KR/L)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={newPriceWithoutTax}
+                onChange={(e) => setNewPriceWithoutTax(e.target.value)}
+                placeholder={priceWithoutTax.toString()}
+                className="price-modal-input"
+              />
+            </div>
+            
+            <div className="modal-buttons">
+              <button className="modal-btn save" onClick={handleSavePrice}>
+                Lagre
+              </button>
+              <button className="modal-btn cancel" onClick={() => setShowPriceModal(false)}>
+                Avbryt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

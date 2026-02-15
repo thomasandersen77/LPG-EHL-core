@@ -222,14 +222,15 @@
                 </executions>
                 <configuration>
                     <jvmTarget>${maven.compiler.target}</jvmTarget>
-                    <languageVersion>1.9</languageVersion>
-                    <apiVersion>1.9</apiVersion>
+                    <languageVersion>2.1</languageVersion>
+                    <apiVersion>2.1</apiVersion>
                     <!-- Use in-process compilation to avoid Kotlin daemon issues -->
                     <compilerPlugins>
                         <plugin>spring</plugin>
                     </compilerPlugins>
                     <args>
                         <arg>-Xjvm-default=all</arg>
+                        <arg>-Xskip-metadata-version-check</arg>
                     </args>
                 </configuration>
                 <dependencies>

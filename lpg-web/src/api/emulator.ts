@@ -12,21 +12,20 @@ export interface EmulatorStatus {
   connected: boolean;
 }
 
-export async function setEmulatorScenario(address: number, scenario: EmulatorScenario): Promise<EmulatorStatus> {
+export async function setEmulatorScenario(scenario: EmulatorScenario): Promise<EmulatorStatus> {
   const res = await axios.post<EmulatorStatus>(`${EMULATOR_URL}/emulator/scenario`, {
-    dispenserAddress: address,
     scenario
   });
   return res.data;
 }
 
-export async function resetEmulator(address: number): Promise<EmulatorStatus> {
-  const res = await axios.post<EmulatorStatus>(`${EMULATOR_URL}/emulator/reset/${address}`);
+export async function resetEmulator(): Promise<EmulatorStatus> {
+  const res = await axios.post<EmulatorStatus>(`${EMULATOR_URL}/emulator/reset`);
   return res.data;
 }
 
-export async function getEmulatorStatus(address: number): Promise<EmulatorStatus> {
-  const res = await axios.get<EmulatorStatus>(`${EMULATOR_URL}/emulator/status/${address}`);
+export async function getEmulatorStatus(): Promise<EmulatorStatus> {
+  const res = await axios.get<EmulatorStatus>(`${EMULATOR_URL}/emulator/status`);
   return res.data;
 }
 
@@ -45,9 +44,9 @@ export interface SettlementResponse {
   message?: string;
 }
 
-export async function settlePayment(dispenserId: number, method: 'CARD' | 'CREDIT' = 'CARD'): Promise<SettlementResponse> {
+export async function settlePayment(method: 'CARD' | 'CREDIT' = 'CARD'): Promise<SettlementResponse> {
   const res = await axios.post<SettlementResponse>(
-    `${EMULATOR_URL}/emulator/settle/${dispenserId}`,
+    `${EMULATOR_URL}/emulator/settle`,
     null,
     { params: { method } }
   );
@@ -68,11 +67,10 @@ export interface ConfirmPaymentResponse {
 }
 
 export async function confirmPayment(
-  address: number, 
   paymentMethod: 'CARD' | 'CREDIT' = 'CARD'
 ): Promise<ConfirmPaymentResponse> {
   const res = await axios.post<ConfirmPaymentResponse>(
-    `${EMULATOR_URL}/emulator/pump/${address}/confirm-payment`,
+    `${EMULATOR_URL}/emulator/pump/confirm-payment`,
     { paymentMethod },
     { headers: { 'Content-Type': 'application/json' } }
   );

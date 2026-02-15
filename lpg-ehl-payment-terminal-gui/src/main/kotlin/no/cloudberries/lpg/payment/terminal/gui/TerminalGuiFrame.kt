@@ -65,9 +65,9 @@ class TerminalGuiFrame(
     fun show(stage: Stage) {
         this.stage = stage
         stage.title = "Payment Terminal Simulator — :$port"
-        stage.scene = Scene(buildUI(), 520.0, 640.0)
+        stage.scene = Scene(buildUI(), 520.0, 720.0)
         stage.minWidth = 500.0
-        stage.minHeight = 600.0
+        stage.minHeight = 680.0
 
         stage.setOnCloseRequest {
             eventStore.removeListener(this)

@@ -75,7 +75,6 @@ class TerminalStateManager(
                 TerminalState.CLOSED -> {
                     log.info("Opening terminal...")
                     currentState = TerminalState.OPEN
-                    // Auto-transition to READY
                     Thread.sleep(100) // Simulate initialization
                     currentState = TerminalState.READY
                     log.info("Terminal ready")
@@ -170,8 +169,7 @@ class TerminalStateManager(
      */
     fun getTerminalIdentity(): Map<String, String> {
         return mapOf(
-            "TerminalID" to config.terminalId,
-            "MerchantId" to config.merchantId
+            "terminalID" to config.terminalId
         )
     }
 }

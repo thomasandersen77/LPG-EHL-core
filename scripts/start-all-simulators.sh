@@ -32,6 +32,7 @@ FIELD_MODE=false
 GUI_ENABLED=false
 TERMINAL_PORT=18080
 TERMINAL_HEADLESS=false
+START_TERMINAL_SIM=false
 
 show_help() {
   cat <<'EOF'
@@ -62,14 +63,14 @@ Valgfrie parametre:
   --help, -h             Vis denne hjelpen
   --build                Bygg JARs først
   --field                ARK/edge-modus: kun socat + PLS (ingen terminal sim)
-  --gui                  Aktiver GUI for PLS simulator
+  --gui                  Aktiver GUI (PLS + terminal når --field brukes)
   --terminal-port=PORT   Terminal sim port (default: 18080)
   --terminal-headless    Headless terminal sim (ingen GUI)
 
 Eksempler:
   ./scripts/start-all-simulators.sh                  # Alt (lokal dev)
   ./scripts/start-all-simulators.sh --field           # ARK/edge
-  ./scripts/start-all-simulators.sh --field --gui     # ARK/edge med PLS GUI
+  ./scripts/start-all-simulators.sh --field --gui     # ARK/edge med PLS + terminal GUI
   ./scripts/start-all-simulators.sh --build           # Bygg + start alt
   ./scripts/start-all-simulators.sh --terminal-headless
 
@@ -91,8 +92,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Step count
-TOTAL_STEPS=3
+START_TERMINAL_SIM=true
 if [[ "$FIELD_MODE" == "true" ]]; then
+    START_TERMINAL_SIM=false
+    if [[ "$GUI_ENABLED" == "true" || "$TERMINAL_HEADLESS" == "true" ]]; then
+        START_TERMINAL_SIM=true
+    fi
+fi
+
+TOTAL_STEPS=3
+if [[ "$START_TERMINAL_SIM" != "true" ]]; then
     TOTAL_STEPS=2
 fi
 
@@ -255,6 +264,9 @@ PLS_CMD=(java -Xms64m -Xmx64m -XX:+UseSerialGC
     --port="$PTY0"
     --address=1
     --mode=ehl)
+if [[ "$FIELD_MODE" == "true" ]]; then
+    PLS_CMD+=(--profile=field)
+fi
 if [[ "$GUI_ENABLED" == "true" ]]; then
     PLS_CMD+=(--gui)
 fi
@@ -269,8 +281,8 @@ fi
 echo -e "${GREEN}      ✓ PLS Simulator running (PID: $PLS_PID)${NC}"
 echo ""
 
-# 3. Payment Terminal Simulator (only in default mode, skipped in --field)
-if [[ "$FIELD_MODE" != "true" ]]; then
+# 3. Payment Terminal Simulator (optional in --field)
+if [[ "$START_TERMINAL_SIM" == "true" ]]; then
     terminal_jar="$PAYMENT_TERMINAL_GUI_JAR"
     terminal_mode="GUI"
     if [[ "$TERMINAL_HEADLESS" == "true" ]]; then
@@ -305,9 +317,12 @@ echo -e "${CYAN}═════════════════════�
 echo ""
 if [[ "$FIELD_MODE" == "true" ]]; then
     echo -e "  ${BOLD}Field mode – start webapp separat:${NC}"
-    echo -e "  java -jar release/lpg-ehl-webapp.jar \\"
-    echo -e "      --spring.profiles.active=field \\"
+    echo -e "  java -jar release/lpg-ehl-webapp.jar \\" 
+    echo -e "      --spring.profiles.active=field \\" 
     echo -e "      --ehl.serial.port=/tmp/vserial1"
+    if [[ "$START_TERMINAL_SIM" == "true" ]]; then
+        echo -e "      ${GRAY}PAYMENT_TERMINAL_BASE_URL=http://localhost:${TERMINAL_PORT}${NC}"
+    fi
     echo ""
     echo -e "  PLS: /tmp/vserial0  →  socat  →  /tmp/vserial1 (webapp)"
 else

@@ -1,3 +1,4 @@
+export PAYMENT_TERMINAL_BASE_URL=${PAYMENT_TERMINAL_BASE_URL:-http://localhost:18080}
 java -Xms512m -Xmx512m \
   -XX:+UseG1GC -XX:MaxGCPauseMillis=100 \
   -Dspring.config.additional-location=file:release/config/ \
