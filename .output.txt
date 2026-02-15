@@ -1,0 +1,203 @@
+package no.cloudberries.norgesgass.baxi.statemachine
+import java.io.Closeable
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import no.cloudberries.norgesgass.baxi.errors.MethodReject
+import no.cloudberries.norgesgass.baxi.errors.VendorError
+import no.cloudberries.norgesgass.baxi.protocol.Dfs13Message
+import no.cloudberries.norgesgass.baxi.protocol.Dfs13Parser
+import no.cloudberries.norgesgass.baxi.protocol.SendDataCodes
+import no.cloudberries.norgesgass.baxi.protocol.TldParser
+import no.cloudberries.norgesgass.baxi.transport.TcpClientTransport
+/**
+ * Minimal controller state machine:
+ * - Owns ongoingAction + terminalReady + busy-after-admin window
+ * - Receives frames from link-layer (transport read thread) via queue
+ * - Emits user events via EventDispatcher (separate thread) so user handlers cannot stall controller
+ */
+internal class Dfs13ControllerSm(
+    private val transport: TcpClientTransport,
+    private val dispatcher: EventDispatcher,
+    private val queueCapacity: Int = 2000,
+) : Closeable {
+    private val running = AtomicBoolean(false)
+    private val q = ArrayBlockingQueue<ControllerMsg>(queueCapacity)
+    private var thread: Thread? = null
+    @Volatile private var state: ControllerState = ControllerState.OPEN
+    @Volatile private var ongoingAction: Boolean = false
+    private val lastAdminAtMillis = AtomicLong(0)
+    @Volatile var busyAfterAdminMillis: Long = 0
+    @Volatile private var terminalReady: Boolean = false
+    fun start() {
+        check(!running.get())
+        running.set(true)
+        thread = Thread(
+            {
+                while (running.get()) {
+                    val msg = q.poll(100, TimeUnit.MILLISECONDS) ?: continue
+                    when (msg) {
+                        is ControllerMsg.IncomingFrame -> handleIncoming(msg.frame)
+                        is ControllerMsg.TransportError -> {
+                            dispatcher.offer { it.onError(-1, msg.throwable.message) }
+                        }
+                        is ControllerMsg.CommandRequest -> {
+                            try {
+                                val r = msg.action()
+                                msg.future.complete(r)
+                            } catch (t: Throwable) {
+                                msg.future.complete(no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.UNABLE_TO_PROCESS, methodRejectInfo = t.message))
+                            }
+                        }
+                        ControllerMsg.Stop -> break
+                    }
+                }
+            },
+            "baxi-controller",
+        ).also { it.isDaemon = true; it.start() }
+    }
+    fun offerIncomingFrame(frame: ByteArray) {
+        q.offer(ControllerMsg.IncomingFrame(frame))
+    }
+    fun offerTransportError(t: Throwable) {
+        q.offer(ControllerMsg.TransportError(t))
+    }
+    fun submitCommand(timeoutMs: Long, fn: () -> no.cloudberries.norgesgass.baxi.client.CallAcceptResult): no.cloudberries.norgesgass.baxi.client.CallAcceptResult {
+        val future = CompletableFuture<no.cloudberries.norgesgass.baxi.client.CallAcceptResult>()
+        val ok = q.offer(ControllerMsg.CommandRequest(action = fn, future = future))
+        if (!ok) return no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.UNABLE_TO_PROCESS)
+        return try {
+            future.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.UNABLE_TO_PROCESS, methodRejectInfo = "Controller command timeout")
+        } catch (_: ExecutionException) {
+            no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.UNABLE_TO_PROCESS)
+        }
+    }
+    fun isReady(): Boolean = terminalReady
+    fun isOngoingAction(): Boolean = ongoingAction
+    fun markAdminSent() {
+        lastAdminAtMillis.set(System.currentTimeMillis())
+    }
+    fun requestTransferAmount(frame: ByteArray): no.cloudberries.norgesgass.baxi.client.CallAcceptResult =
+        submitCommand(timeoutMs = 500) {
+            if (state == ControllerState.CLOSED) {
+                return@submitCommand no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.NOT_ACTIVE)
+            }
+            if (ongoingAction) {
+                return@submitCommand no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.PROCESSING_PREVIOUS_COMMAND)
+            }
+            val lastAdmin = lastAdminAtMillis.get()
+            if (lastAdmin != 0L && busyAfterAdminMillis > 0) {
+                val now = System.currentTimeMillis()
+                if (now - lastAdmin < busyAfterAdminMillis) {
+                    return@submitCommand no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.TERMINAL_BUSY_ADM)
+                }
+            }
+            transport.send(frame)
+            ongoingAction = true
+            no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 1)
+        }
+    fun requestAdministration(frame: ByteArray): no.cloudberries.norgesgass.baxi.client.CallAcceptResult =
+        submitCommand(timeoutMs = 500) {
+            if (state == ControllerState.CLOSED) {
+                return@submitCommand no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.NOT_ACTIVE)
+            }
+            if (ongoingAction) {
+                return@submitCommand no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.PROCESSING_PREVIOUS_COMMAND)
+            }
+            transport.send(frame)
+            ongoingAction = true
+            lastAdminAtMillis.set(System.currentTimeMillis())
+            no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 1)
+        }
+    fun requestSendData(frame: ByteArray): no.cloudberries.norgesgass.baxi.client.CallAcceptResult =
+        submitCommand(timeoutMs = 500) {
+            if (state == ControllerState.CLOSED) {
+                return@submitCommand no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.NOT_ACTIVE)
+            }
+            if (ongoingAction) {
+                return@submitCommand no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 0, methodRejectCode = MethodReject.PROCESSING_PREVIOUS_COMMAND)
+            }
+            transport.send(frame)
+            // do NOT mark ongoingAction for diagnostics; completion events may not arrive.
+            no.cloudberries.norgesgass.baxi.client.CallAcceptResult(callResult = 1)
+        }
+    private fun handleIncoming(frame: ByteArray) {
+        val msg = Dfs13Parser.parse(frame)
+        when (msg) {
+            is Dfs13Message.DisplayText -> dispatcher.offer { it.onDisplayText(msg.text, msg.sourceId, msg.textId) }
+            is Dfs13Message.PrintText -> dispatcher.offer { it.onPrintText(msg.text) }
+            is Dfs13Message.LocalMode -> {
+                ongoingAction = false
+                dispatcher.offer { it.onLocalMode(toLocalModeEvent(msg)) }
+            }
+            is Dfs13Message.LastFinancialResult -> {
+                ongoingAction = false
+                dispatcher.offer { it.onLastFinancialResult(no.cloudberries.norgesgass.baxi.events.LastFinancialResultEvent(result = null, resultData = msg.dataString)) }
+            }
+            is Dfs13Message.SendData -> handleSendData(msg)
+            is Dfs13Message.StatusRequestResponseTld -> {
+                // Future: parse and expose identity fields.
+            }
+            is Dfs13Message.Unknown -> {
+                // ignore
+            }
+        }
+    }
+    private fun handleSendData(msg: Dfs13Message.SendData) {
+        if (msg.code == SendDataCodes.TERMINAL_READY) {
+            if (!terminalReady) {
+                terminalReady = true
+                state = ControllerState.READY
+                dispatcher.offer { it.onTerminalReady() }
+            }
+            return
+        }
+        if (msg.code == SendDataCodes.JSON_RESPONSE_FROM_ITU_TO_ECR && msg.dataField != null) {
+            val json = String(msg.dataField, Charsets.US_ASCII)
+            dispatcher.offer { it.onJsonReceived(json) }
+        }
+        if ((msg.code == SendDataCodes.TLD_RESPONSE_FROM_ITU_TO_ECR || msg.code == SendDataCodes.TLD_TERM_STAT_FROM_ITU_TO_ECR) && msg.dataField != null) {
+            dispatcher.offer { it.onTldReceived(msg.code, msg.dataField) }
+        }
+        if (msg.code == SendDataCodes.TLD_TERM_STAT_FROM_ITU_TO_ECR && msg.dataField != null) {
+            val rebootTag = byteArrayOf('1'.code.toByte(), '0'.code.toByte(), '1'.code.toByte(), '6'.code.toByte()) // 1016
+            val found = TldParser.getTldTag(rebootTag, msg.dataField) != null
+            if (found) {
+                dispatcher.offer { it.onError(VendorError.ERR_TERMINAL_REBOOT_DETECTED, "ERR_TERMINAL_REBOOT_DETECTED") }
+            }
+        }
+    }
+    private fun toLocalModeEvent(msg: Dfs13Message.LocalMode): no.cloudberries.norgesgass.baxi.events.LocalModeEvent {
+        fun el(i: Int): String? = msg.tokens.getOrNull(i)?.takeIf { it.isNotEmpty() }
+        val fields = linkedMapOf<String, String>()
+        el(1)?.let { fields["Timestamp"] = it }
+        el(2)?.let { fields["VerificationMethod"] = it }
+        el(3)?.let { fields["SessionNumber"] = it }
+        el(4)?.let { fields["StanAuth"] = it }
+        el(5)?.let { fields["SequenceNumber"] = it }
+        el(6)?.let { fields["TotalAmount"] = it }
+        el(7)?.let { fields["RejectionSource"] = it }
+        el(8)?.let { fields["RejectionReason"] = it }
+        el(11)?.let { fields["TerminalID"] = it }
+        el(12)?.let { fields["AcquirerMerchantID"] = it }
+        el(14)?.let { fields["ResponseCode"] = it }
+        return no.cloudberries.norgesgass.baxi.events.LocalModeEvent(
+            result = null,
+            responseCode = el(14),
+            rejectionSource = el(7),
+            rejectionReason = el(8),
+            localModeResultData = msg.dataString,
+            fields = fields,
+        )
+    }
+    override fun close() {
+        running.set(false)
+        q.offer(ControllerMsg.Stop)
+    }
+}

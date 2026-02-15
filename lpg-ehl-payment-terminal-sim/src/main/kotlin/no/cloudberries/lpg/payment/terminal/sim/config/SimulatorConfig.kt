@@ -11,12 +11,25 @@ data class SimulatorConfig(
     val merchantId: String = "12345678901234",
     val allowScenarioHeader: Boolean = true,
     val eventBufferSize: Int = 1000,
+    val sseHeartbeatMs: Long = 5000,
     val scenariosEnabled: Boolean = true,
     val scenariosPath: String? = null,
     val profile: String = "lab",
     val responseCasing: String = "PascalCase",
-    val field: FieldModeConfig = FieldModeConfig()
+    val field: FieldModeConfig = FieldModeConfig(),
+    val dirty: DirtyModeConfig = DirtyModeConfig()
 )
+
+data class DirtyModeConfig(
+    val enabled: Boolean = false,
+    val latencyMs: Long = 0,
+    val duplicateEventProbability: Double = 0.0,
+    val outOfOrder: Boolean = false
+) {
+    fun latencyEnabled(): Boolean = enabled && latencyMs > 0
+    fun duplicatesEnabled(): Boolean = enabled && duplicateEventProbability > 0.0
+    fun outOfOrderEnabled(): Boolean = enabled && outOfOrder
+}
 
 data class FieldModeConfig(
     val operationDelayMinMs: Long = 2000,

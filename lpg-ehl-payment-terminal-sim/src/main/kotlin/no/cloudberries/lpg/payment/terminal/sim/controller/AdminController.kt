@@ -1,13 +1,12 @@
 package no.cloudberries.lpg.payment.terminal.sim.controller
 
 import jakarta.servlet.http.HttpServletRequest
-import no.cloudberries.lpg.payment.terminal.sim.config.SimulatorConfig
 import no.cloudberries.lpg.payment.terminal.sim.model.request.AdminCodeRequest
 import no.cloudberries.lpg.payment.terminal.sim.model.request.AdminRequest
 import no.cloudberries.lpg.payment.terminal.sim.model.response.OperationResponse
-import no.cloudberries.lpg.payment.terminal.sim.service.EventStore
 import no.cloudberries.lpg.payment.terminal.sim.service.ReceiptGenerator
 import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioManager
+import no.cloudberries.lpg.payment.terminal.sim.service.TerminalEventPublisher
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalStateManager
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -27,8 +26,7 @@ class AdminController(
     private val stateManager: TerminalStateManager,
     private val scenarioManager: ScenarioManager,
     private val receiptGenerator: ReceiptGenerator,
-    private val eventStore: EventStore,
-    private val config: SimulatorConfig
+    private val eventPublisher: TerminalEventPublisher
 ) {
     private val log = LoggerFactory.getLogger(AdminController::class.java)
 
@@ -52,7 +50,7 @@ class AdminController(
 
         stateManager.beginOperation(operationId)
         try {
-            eventStore.publishEvent("OperationStarted", operationId, mapOf("type" to "avstemming"))
+            eventPublisher.publish("OperationStarted", operationId, mapOf("type" to "avstemming"))
 
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection))
 
@@ -66,7 +64,7 @@ class AdminController(
                 PrintTextSanitized = receipt
             )
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("success" to response.Success))
+            eventPublisher.publish("OperationCompleted", operationId, mapOf("success" to response.Success))
 
             log.info("Avstemming completed: operationId={}", operationId)
             return ResponseEntity.ok(response)
@@ -120,7 +118,7 @@ class AdminController(
 
         stateManager.beginOperation(operationId)
         try {
-            eventStore.publishEvent("OperationStarted", operationId, mapOf("type" to "reversal"))
+            eventPublisher.publish("OperationStarted", operationId, mapOf("type" to "reversal"))
 
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection))
 
@@ -129,7 +127,7 @@ class AdminController(
                 operationId, startedAt, completedAt, "ANNULLERING OK"
             )
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("success" to response.Success))
+            eventPublisher.publish("OperationCompleted", operationId, mapOf("success" to response.Success))
 
             log.info("Reversal completed: operationId={}", operationId)
             return ResponseEntity.ok(response)
@@ -158,7 +156,7 @@ class AdminController(
 
         stateManager.beginOperation(operationId)
         try {
-            eventStore.publishEvent("OperationStarted", operationId, mapOf("type" to "z-report"))
+            eventPublisher.publish("OperationStarted", operationId, mapOf("type" to "z-report"))
 
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection))
 
@@ -172,7 +170,7 @@ class AdminController(
                 PrintTextSanitized = receipt
             )
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("success" to response.Success))
+            eventPublisher.publish("OperationCompleted", operationId, mapOf("success" to response.Success))
 
             log.info("Z-report completed: operationId={}", operationId)
             return ResponseEntity.ok(response)
@@ -228,7 +226,7 @@ class AdminController(
 
         stateManager.beginOperation(operationId)
         try {
-            eventStore.publishEvent("OperationStarted", operationId, mapOf("type" to "software"))
+            eventPublisher.publish("OperationStarted", operationId, mapOf("type" to "software"))
 
             // Software download takes longer
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection) * 2)
@@ -238,7 +236,7 @@ class AdminController(
                 operationId, startedAt, completedAt, "SW NEDLASTNING OK"
             )
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("success" to response.Success))
+            eventPublisher.publish("OperationCompleted", operationId, mapOf("success" to response.Success))
 
             log.info("Software download completed: operationId={}", operationId)
             return ResponseEntity.ok(response)
@@ -267,7 +265,7 @@ class AdminController(
 
         stateManager.beginOperation(operationId)
         try {
-            eventStore.publishEvent("OperationStarted", operationId, mapOf("type" to "dataset"))
+            eventPublisher.publish("OperationStarted", operationId, mapOf("type" to "dataset"))
 
             // Dataset download takes longer
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection) * 2)
@@ -277,7 +275,7 @@ class AdminController(
                 operationId, startedAt, completedAt, "DATASET NEDLASTNING OK"
             )
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("success" to response.Success))
+            eventPublisher.publish("OperationCompleted", operationId, mapOf("success" to response.Success))
 
             log.info("Dataset download completed: operationId={}", operationId)
             return ResponseEntity.ok(response)
@@ -306,7 +304,7 @@ class AdminController(
 
         stateManager.beginOperation(operationId)
         try {
-            eventStore.publishEvent("OperationStarted", operationId,
+            eventPublisher.publish("OperationStarted", operationId,
                 mapOf("type" to "admin-code", "code" to request.code))
 
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection))
@@ -316,7 +314,7 @@ class AdminController(
                 operationId, startedAt, completedAt, "ADMIN KMD OK (${request.code})"
             )
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("success" to response.Success))
+            eventPublisher.publish("OperationCompleted", operationId, mapOf("success" to response.Success))
 
             log.info("Generic admin code completed: operationId={}, code={}", operationId, request.code)
             return ResponseEntity.ok(response)

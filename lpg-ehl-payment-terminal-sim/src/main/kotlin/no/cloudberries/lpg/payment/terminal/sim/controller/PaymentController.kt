@@ -11,11 +11,11 @@ import no.cloudberries.lpg.payment.terminal.sim.model.request.ReservationRequest
 import no.cloudberries.lpg.payment.terminal.sim.model.response.OperationResponse
 import no.cloudberries.lpg.payment.terminal.sim.model.scenario.ScenarioDefinition
 import no.cloudberries.lpg.payment.terminal.sim.model.scenario.ScenarioFlowEvent
-import no.cloudberries.lpg.payment.terminal.sim.service.EventStore
 import no.cloudberries.lpg.payment.terminal.sim.service.ReceiptGenerator
 import no.cloudberries.lpg.payment.terminal.sim.service.ReservationStore
 import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioManager
 import no.cloudberries.lpg.payment.terminal.sim.service.ScenarioSelection
+import no.cloudberries.lpg.payment.terminal.sim.service.TerminalEventPublisher
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalStateManager
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -37,7 +37,7 @@ class PaymentController(
     private val stateManager: TerminalStateManager,
     private val scenarioManager: ScenarioManager,
     private val receiptGenerator: ReceiptGenerator,
-    private val eventStore: EventStore,
+    private val eventPublisher: TerminalEventPublisher,
     private val reservationStore: ReservationStore,
     private val config: SimulatorConfig
 ) {
@@ -79,7 +79,7 @@ class PaymentController(
         stateManager.beginOperation(operationId)
         try {
             // Publish operation started event
-            eventStore.publishEvent(
+            eventPublisher.publish(
                 eventType = "OperationStarted",
                 operationId = operationId,
                 payload = mapOf(
@@ -115,25 +115,25 @@ class PaymentController(
             val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
 
             if (finalResponse.Success.not() && flow.none { it.displayTextId == 1001 }) {
-                eventStore.publishEvent("DisplayText", operationId, mapOf("text" to "TA UT KORTET", "displayTextId" to 1001))
+                eventPublisher.publish("DisplayText", operationId, mapOf("text" to "TA UT KORTET", "displayTextId" to 1001))
             }
 
             // Publish events
-            eventStore.publishEvent(
+            eventPublisher.publish(
                 eventType = "DisplayText",
                 operationId = operationId,
                 payload = mapOf("text" to (finalResponse.LastDisplayText ?: ""))
             )
 
             finalResponse.PrintTextRaw?.let {
-                eventStore.publishEvent(
+                eventPublisher.publish(
                     eventType = "PrintText",
                     operationId = operationId,
                     payload = mapOf("text" to it)
                 )
             }
 
-            eventStore.publishEvent(
+            eventPublisher.publish(
                 eventType = "OperationCompleted",
                 operationId = operationId,
                 payload = mapOf(
@@ -178,7 +178,7 @@ class PaymentController(
 
         stateManager.beginOperation(operationId)
         try {
-            eventStore.publishEvent(
+            eventPublisher.publish(
                 eventType = "OperationStarted",
                 operationId = operationId,
                 payload = mapOf(
@@ -214,7 +214,7 @@ class PaymentController(
                 reservationStore.put(operationId, request.amountMinor)
             }
 
-            eventStore.publishEvent(
+            eventPublisher.publish(
                 eventType = "OperationCompleted",
                 operationId = operationId,
                 payload = mapOf(
@@ -306,15 +306,15 @@ class PaymentController(
 
             reservationStore.remove(operationId)
 
-            eventStore.publishEvent(
+            eventPublisher.publish(
                 eventType = "DisplayText",
                 operationId = operationId,
                 payload = mapOf("text" to "GODKJENT", "amountMinor" to request.amountMinor)
             )
             response.PrintTextRaw?.let {
-                eventStore.publishEvent("PrintText", operationId, mapOf("text" to it))
+                eventPublisher.publish("PrintText", operationId, mapOf("text" to it))
             }
-            eventStore.publishEvent(
+            eventPublisher.publish(
                 eventType = "OperationCompleted",
                 operationId = operationId,
                 payload = mapOf(
@@ -355,7 +355,7 @@ class PaymentController(
 
         stateManager.beginOperation(operationId)
         try {
-            eventStore.publishEvent("OperationStarted", operationId,
+            eventPublisher.publish("OperationStarted", operationId,
                 mapOf("OperationType" to "refund", "AmountMinor" to request.amountMinor))
 
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection))
@@ -374,7 +374,7 @@ class PaymentController(
             val finalResponse = applyRejectedError(responseWithReceipt)
             val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("Success" to finalResponse.Success))
+            eventPublisher.publish("OperationCompleted", operationId, mapOf("Success" to finalResponse.Success))
 
             cacheResponse(request.clientRequestId, status, finalResponse)
 
@@ -409,7 +409,7 @@ class PaymentController(
 
         stateManager.beginOperation(operationId)
         try {
-            eventStore.publishEvent("OperationStarted", operationId,
+            eventPublisher.publish("OperationStarted", operationId,
                 mapOf("OperationType" to "cashback", "PurchaseMinor" to request.purchaseMinor, "CashbackMinor" to request.cashbackMinor))
 
             Thread.sleep(scenarioManager.getOperationDelay(scenarioSelection))
@@ -429,7 +429,7 @@ class PaymentController(
             val finalResponse = applyRejectedError(responseWithReceipt)
             val status = if (finalResponse.Success) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
 
-            eventStore.publishEvent("OperationCompleted", operationId, mapOf("Success" to finalResponse.Success))
+            eventPublisher.publish("OperationCompleted", operationId, mapOf("Success" to finalResponse.Success))
 
             cacheResponse(request.clientRequestId, status, finalResponse)
 
@@ -457,7 +457,7 @@ class PaymentController(
         val fallbackDelay = if (flow.isNotEmpty()) defaultDelay / flow.size else defaultDelay
         flow.forEach { event ->
             if (event.event.equals("DisplayText", ignoreCase = true)) {
-                eventStore.publishEvent(
+                eventPublisher.publish(
                     "DisplayText",
                     operationId,
                     mapOf(

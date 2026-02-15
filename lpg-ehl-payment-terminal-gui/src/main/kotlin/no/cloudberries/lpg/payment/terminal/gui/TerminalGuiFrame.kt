@@ -16,8 +16,8 @@ import javafx.util.Duration
 import no.cloudberries.lpg.payment.terminal.sim.config.SimulatorConfig
 import no.cloudberries.lpg.payment.terminal.sim.model.domain.Scenario
 import no.cloudberries.lpg.payment.terminal.sim.model.response.EventEnvelope
-import no.cloudberries.lpg.payment.terminal.sim.service.EventStore
 import no.cloudberries.lpg.payment.terminal.sim.service.EventStoreListener
+import no.cloudberries.lpg.payment.terminal.sim.service.TerminalEventStore
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalStateManager
 import org.slf4j.LoggerFactory
 import java.net.URI
@@ -34,7 +34,7 @@ import java.time.format.DateTimeFormatter
  * scenario selection, terminal controls, and an event log.
  */
 class TerminalGuiFrame(
-    private val eventStore: EventStore,
+    private val eventStore: TerminalEventStore,
     private val stateManager: TerminalStateManager,
     private val config: SimulatorConfig,
     private val port: Int
@@ -183,7 +183,7 @@ class TerminalGuiFrame(
     }
 
     /**
-     * Called by EventStore when a new event is published (may be on any thread).
+     * Called by TerminalEventStore when a new event is published (may be on any thread).
      */
     override fun onEvent(event: EventEnvelope) {
         Platform.runLater {
