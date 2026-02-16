@@ -61,15 +61,23 @@ class PumpPaymentOrchestrator(
 
         val purchaseResponse = performPurchaseWithRetry(purchaseRequest)
 
-        if (purchaseResponse.success && !purchaseResponse.operationId.isNullOrBlank()) {
-            startPumpingAfterPayment(
-                amountCents = amountMinor.toLong(),
-                pumpId = pumpId,
-                productId = productId,
-                operationId = purchaseResponse.operationId
-            )
-        } else {
-            log.error("Purchase failed: {}", purchaseResponse.error ?: purchaseResponse.errorCode)
+        purchaseResponse.operationId?.let { opId ->
+            if (purchaseResponse.success) {
+                startPumpingAfterPayment(
+                    amountCents = amountMinor.toLong(),
+                    pumpId = pumpId,
+                    productId = productId,
+                    operationId = opId
+                )
+            } else {
+                log.error("Purchase failed: {}", purchaseResponse.error ?: purchaseResponse.errorCode)
+            }
+        } ?: run {
+            if (purchaseResponse.success) {
+                log.warn("Purchase succeeded but no operationId returned")
+            } else {
+                log.error("Purchase failed: {}", purchaseResponse.error ?: purchaseResponse.errorCode)
+            }
         }
 
         return purchaseResponse

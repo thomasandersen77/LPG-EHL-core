@@ -35,6 +35,13 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Nets Cloud Connect -->
+        <dependency>
+            <groupId>no.cloudberries.lpg</groupId>
+            <artifactId>lpg-nets-cloud-connect</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
