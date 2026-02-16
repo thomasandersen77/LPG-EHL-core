@@ -16,6 +16,7 @@
 
     <modules>
         <module>lpg-ehl-core</module>
+        <module>kotlin-scripts/serial-port-tests</module>
         <module>lpg-ehl-emulator</module>
         <module>lpg-ehl-api</module>
         <module>lpg-ehl-webapp</module>
