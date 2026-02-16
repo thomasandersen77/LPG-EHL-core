@@ -6,7 +6,7 @@ Vi vil kunne teste (og utvikle) Kotlin-kode som integrerer mot PaymentTerminalMo
 * OpenAPI-kontrakten ligger i `openapi-payment-terminal.yaml` og definerer bl.a. `/health` (lowercase keys) og `/v1/*`-endepunkter med PascalCase responser (f.eks. `Success`, `OperationId`, `ErrorCode`).
 * Dokumentasjon fra Alejandro i `instructions/Terminal_API_Contract.md` og `instructions/Terminal_documentation_2026.md` beskriver samme API og viktige regler: single in-flight operation, idempotency via `ClientRequestId`, og standard feilsituasjoner (`terminal_busy`, `terminal_not_ready`, `operation_timeout`, `vendor_call_failure`).
 * `lpg-ehl-webapp/pom.xml` har allerede WireMock som test dependency (`org.wiremock:wiremock-standalone:3.3.1`), men eksisterende integration tests i `lpg-ehl-webapp/src/test/...` bruker Testcontainers + RestAssured og ikke WireMock.
-* Det finnes tidligere WireMock-testmønster i arkivert kode (`_archived/rest-api-attempt/NetsCloudClientTest.kt`) som viser hvordan WireMockExtension + scenarier kan brukes.
+* Det finnes tidligere WireMock-testmønster i arkivert kode (`legacy/archived/rest-api-attempt/NetsCloudClientTest.kt`) som viser hvordan WireMockExtension + scenarier kan brukes.
 * I nåværende aktive kodebase finnes det ikke en produksjonsklar klient mot PaymentTerminalMonoServer (dvs. en Kotlin-HTTP-klient som kaller `/v1/payments/purchase` osv.).
 # Proposed approach (high level)
 Vi innfører en eksplisitt Kotlin-klient/adapter for PaymentTerminalMonoServer ("payment-terminal-client") og dekker den med WireMock-tester. I tillegg lager vi en liten mock-server som kan kjøres manuelt i dev/CI for end-to-end testing av andre komponenter.

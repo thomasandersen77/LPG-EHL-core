@@ -311,7 +311,7 @@ class BaxiClient(
 
 - **Port-scan:** Skann porter (f.eks. 3000–3010, 6001 for Cloud) for å bekrefte åpen port før integrasjon.
 - **Timeout:** Sett connectTimeout (f.eks. 10 s) og readTimeout (f.eks. 30 s for betaling).
-- **Framing:** Bruk length-prefix (2 byte big-endian) for TCP når terminal/Nets forventer det; STX/ETX/LRC for serial (se [TCP_ETHERNET_FRAMING.md](../_archived/baxi-protocol/TCP_ETHERNET_FRAMING.md)).
+- **Framing:** Bruk length-prefix (2 byte big-endian) for TCP når terminal/Nets forventer det; STX/ETX/LRC for serial (se [TCP_ETHERNET_FRAMING.md](../legacy/archived/baxi-protocol/TCP_ETHERNET_FRAMING.md)).
 - **SSL:** For Nets Cloud bruk eksisterende [CloudTerminalClient](../lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/payment/CloudTerminalClient.kt) (TLS 1.2/1.3 mot 3.33.230.243:6001).
 
 ### Eksisterende kode i prosjektet

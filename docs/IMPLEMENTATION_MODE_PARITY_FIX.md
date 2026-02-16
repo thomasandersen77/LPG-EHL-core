@@ -146,7 +146,7 @@ lpg:
 
 ```bash
 # Python test (baseline)
-cd python-test
+cd projects/python-test
 python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1 --debug
 
 # Forventet: RX frames med gyldige DATA bytes
@@ -212,7 +212,7 @@ java -jar webapp.jar \
 **Før produksjonsdeploy:**
 ```bash
 # Test kommunikasjon med Python først
-python3 python-test/01_probe_readonly.py \
+python3 projects/python-test/01_probe_readonly.py \
     --port /dev/ttyS0 \
     --addr 1 \
     --debug
@@ -282,7 +282,7 @@ fun serialHealth(): Map<String, Any> {
 - [Python Integration Analysis](PYTHON_INTEGRATION_ANALYSIS.md)
 - [Serial Contract](SERIAL_CONTRACT.md)
 - [Transport Configuration](../lpg-ehl-webapp/src/main/kotlin/no/cloudberries/lpg/api/config/TransportConfiguration.kt)
-- [Python Test Scripts](../python-test/README.md)
+- [Python Test Scripts](../projects/python-test/README.md)
 
 ---
 

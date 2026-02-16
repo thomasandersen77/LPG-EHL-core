@@ -99,6 +99,10 @@ local-data/
 .env.local
 !.env.example
 
+# Local config (often contains secrets)
+server.json
+**/server.json
+
 # Database files (H2, SQLite, etc.)
 *.db
 *.db-shm

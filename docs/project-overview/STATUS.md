@@ -35,7 +35,7 @@ mvn clean install
 
 ### 🗑️ Archived Code
 
-Moved to `_archived/` for clean separation:
+Moved to `legacy/archived/` for clean separation:
 - `baxi-protocol/` - Old direct TCP/ECR implementation
 - `rest-api-attempt/` - Incorrect REST approach (Nets Cloud is socket-based)
 

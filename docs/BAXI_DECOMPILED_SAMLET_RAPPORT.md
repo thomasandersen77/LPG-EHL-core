@@ -257,7 +257,7 @@ Appen (Kotlin eller Python) er **TCP-klient**; terminalen eller Nets Cloud er **
 
 ### Framing
 
-- **TCP:** Anbefaling: **length-prefix (2 byte big-endian)** + payload, som i [TCP_ETHERNET_FRAMING.md](../_archived/baxi-protocol/TCP_ETHERNET_FRAMING.md) og [ecr_server_v3_handshake.py](../scripts/python/ecr-testing/ecr_server_v3_handshake.py).
+- **TCP:** Anbefaling: **length-prefix (2 byte big-endian)** + payload, som i [TCP_ETHERNET_FRAMING.md](../legacy/archived/baxi-protocol/TCP_ETHERNET_FRAMING.md) og [ecr_server_v3_handshake.py](../scripts/python/ecr-testing/ecr_server_v3_handshake.py).
 - **Serial:** STX (0x02) + payload + ETX (0x03) + LRC (XOR over payload+ETX).
 
 ### Timeout og feilhåndtering

@@ -19,7 +19,7 @@ Denne katalogen inneholder dokumentasjon om legacy-kode og migrering til moderne
 ## Legacy Code Generasjoner
 
 ### 1. Visual Basic 6 (Original)
-**Lokasjon:** `norgesgass_legacy/`
+**Lokasjon:** `legacy/norgesgass_legacy/`
 
 Original Windows-basert Dispenserkontroll fra ARC-maskiner:
 - `pumpekontroll.frm` - Hovedvindu og logikk (~2000 linjer)
@@ -34,7 +34,7 @@ Original Windows-basert Dispenserkontroll fra ARC-maskiner:
 - Global state og ingen type-safety
 
 ### 2. Python (Eksperimentell Re-implementering)
-**Lokasjon:** `more_legacy/Gammenl kode Python/`
+**Lokasjon:** `legacy/more_legacy/Gammenl kode Python/`
 
 Proof-of-concept for å bevise at protokollen kan re-implementeres:
 - `protocol.py` - EHL framing og encoding
@@ -95,7 +95,7 @@ Production-ready, type-safe implementasjon:
 
 ## Referanser
 
-- Original VB6 kode: `norgesgass_legacy/`
-- Python PoC: `more_legacy/Gammenl kode Python/`
+- Original VB6 kode: `legacy/norgesgass_legacy/`
+- Python PoC: `legacy/more_legacy/Gammenl kode Python/`
 - Moderne implementasjon: `lpg-ehl-core/`
 - Test rapport: [VB6_COMPATIBILITY_TEST.md](../implementation/VB6_COMPATIBILITY_TEST.md)

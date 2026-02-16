@@ -494,7 +494,7 @@ End Sub
 - **Kotlin Implementation:** `docs/BAXI_PROTOCOL_KOTLIN_IMPLEMENTATION.md`
 - **Python Implementation:** `docs/BAXI_PROTOCOL_PYTHON_IMPLEMENTATION.md`
 - **Comprehensive Analysis:** `docs/BAXI_PROTOCOL_COMPREHENSIVE_ANALYSIS.md`
-- **Legacy VB6 Code:** `legacy-curated/pumpekontroll/pumpekontroll.frm`
+- **Legacy VB6 Code:** `legacy/legacy-curated/pumpekontroll/pumpekontroll.frm`
 
 ---
 

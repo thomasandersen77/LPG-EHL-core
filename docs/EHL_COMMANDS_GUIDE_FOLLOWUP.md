@@ -83,7 +83,7 @@ The manual describes configurable addresses for RS‑485 network operation:
   - L/R “sides” (two addresses for one physical dispenser) rather than two different dispensers.
 
 **Concrete next step (if you want to verify in field):**
-- On real hardware, set/confirm Fn‑19 / Fn‑41 / Fn‑42 and then run `python-test/02_scan_addresses.py` to see if responders shift accordingly.
+- On real hardware, set/confirm Fn‑19 / Fn‑41 / Fn‑42 and then run `projects/python-test/02_scan_addresses.py` to see if responders shift accordingly.
 
 ### B) `VOLUME` response digit count is configurable: **5 or 6 bytes**
 

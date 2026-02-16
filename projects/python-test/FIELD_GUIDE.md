@@ -17,10 +17,10 @@ This guide is optimized for **SSH-only** operation and for producing **actionabl
 ## 0) Go to the scripts directory
 
 ```bash
-cd /home/cloudberries/LPG-EHL-core/python-test
+cd /home/cloudberries/LPG-EHL-core/projects/python-test
 ```
 
-If your repo path differs, `cd` to the repo’s `python-test/` directory.
+If your repo path differs, `cd` to the repo’s `projects/python-test/` directory.
 
 ---
 

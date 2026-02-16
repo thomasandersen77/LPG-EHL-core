@@ -650,14 +650,14 @@ sudo systemctl status lpg-ehl
 
 ### Python Test Scripts
 
-**Location**: `python-test/`
+**Location**: `projects/python-test/`
 
 **Purpose**: Simple test scripts for **manual protocol testing** without running the full application.
 
 #### Key Scripts
 
 ```
-python-test/
+projects/python-test/
 ├── 01_probe_readonly.py      # Read-only state queries
 ├── 02_unblock_block.py        # Test pump control
 ├── 03_full_transaction.py    # Simulate complete transaction
@@ -668,7 +668,7 @@ python-test/
 #### Example Usage
 
 ```bash
-cd python-test
+cd projects/python-test
 python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1
 ```
 

@@ -133,7 +133,7 @@ lpg:
 
 ### Python Baseline Test
 ```bash
-cd python-test
+cd projects/python-test
 python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1 --debug
 
 # Forventet: RX frames med STATE response
@@ -176,7 +176,7 @@ python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1 --debug
 
 3. **Test med Python:**
    ```bash
-   cd python-test
+   cd projects/python-test
    python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1
    ```
 

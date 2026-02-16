@@ -423,6 +423,6 @@ For å støtte eksisterende kode som bruker gammel mapping:
 
 ## Referanser
 
-- **VB6 Fasit:** `/Users/tandersen/git/NorgesGass/lpg-ehl/legacy-curated/pumpekontroll/pumpekontroll.frm`
-- **Python Port:** `/Users/tandersen/git/NorgesGass/lpg-ehl/legacy-curated/Python/ehl_pumpekontroll_clone/ehl/protocol.py`
+- **VB6 Fasit:** `/Users/tandersen/git/NorgesGass/lpg-ehl/legacy/legacy-curated/pumpekontroll/pumpekontroll.frm`
+- **Python Port:** `/Users/tandersen/git/NorgesGass/lpg-ehl/legacy/legacy-curated/Python/ehl_pumpekontroll_clone/ehl/protocol.py`
 - **Kotlin Core:** `/Users/tandersen/git/NorgesGass/lpg-ehl/lpg-ehl-core/`

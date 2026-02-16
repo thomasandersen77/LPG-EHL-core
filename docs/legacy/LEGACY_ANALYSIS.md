@@ -40,7 +40,7 @@ Legacy-koden finnes i to mapper (nå også kopiert til Google Drive for deling):
 
 ```
 /Users/tandersen/git/NorgesGass/lpg-ehl/
-├── norgesgass_legacy/          # Original VB6 kode
+├── legacy/norgesgass_legacy/   # Original VB6 kode
 │   ├── fra_dispenser.bas       # EHL protokoll-implementasjon
 │   ├── defs.bas                # Konstantdefinisjoner
 │   ├── pumpekontroll.frm       # Hovedvindu og logikk
@@ -49,7 +49,7 @@ Legacy-koden finnes i to mapper (nå også kopiert til Google Drive for deling):
 │   ├── Dispenserkontroll.exe   # Kompilert executable
 │   └── EHL4x/                  # EHL 4.x protokoll-versjon
 │
-└── more_legacy/                # Python re-implementasjon
+└── legacy/more_legacy/         # Python re-implementasjon
     └── Gammenl kode Python/
         ├── pumpekontroll_src/
         │   ├── defs.bas        # VB6 definisjoner

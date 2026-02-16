@@ -43,8 +43,8 @@ echo -e "${BOLD}  🔨 Build webapp${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 
 # Step 1: Build React
-FRONTEND_DIR="$PROJECT_ROOT/lpg-web"
-WEBAPP_STATIC="$PROJECT_ROOT/lpg-ehl-webapp/src/main/resources/static"
+FRONTEND_DIR="$PROJECT_ROOT/projects/lpg-ehl/lpg-web"
+WEBAPP_STATIC="$PROJECT_ROOT/projects/lpg-ehl/lpg-ehl-webapp/src/main/resources/static"
 
 if [ ! -d "$FRONTEND_DIR" ]; then
   echo -e "${RED}Missing frontend dir: $FRONTEND_DIR${NC}"
@@ -69,7 +69,7 @@ echo -e "${GREEN}✓${NC} Copied static files (${STATIC_FILES})"
 echo ""
 echo -e "${GRAY}[2/2]${NC} Packaging lpg-ehl-webapp..."
 
-MVN_ARGS=(clean package -pl lpg-ehl-webapp -am)
+MVN_ARGS=(clean package -pl projects/lpg-ehl/lpg-ehl-webapp -am)
 if [[ "$SKIP_TESTS" == "true" ]]; then
   MVN_ARGS+=(-DskipTests)
 fi
@@ -79,9 +79,9 @@ fi
 
 ./mvnw "${MVN_ARGS[@]}"
 
-WEBAPP_JAR=$(find "$PROJECT_ROOT/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
+WEBAPP_JAR=$(find "$PROJECT_ROOT/projects/lpg-ehl/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
 if [ -z "$WEBAPP_JAR" ] || [ ! -f "$WEBAPP_JAR" ]; then
-  echo -e "${RED}✗ Could not find WebApp JAR in lpg-ehl-webapp/target${NC}"
+  echo -e "${RED}✗ Could not find WebApp JAR in projects/lpg-ehl/lpg-ehl-webapp/target${NC}"
   exit 1
 fi
 

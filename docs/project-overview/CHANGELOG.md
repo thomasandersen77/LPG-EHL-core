@@ -33,14 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Actions Taken:**
 
-1. **Archived REST Implementation** → `_archived/rest-api-attempt/`
+1. **Archived REST Implementation** → `legacy/archived/rest-api-attempt/`
    - `NetsCloudClient.kt` (REST client)
    - `NetsCloudConfig.kt` (Spring config)
    - `NetsCloudPaymentGateway.kt` (polling gateway)
    - All REST-based test files
    - `.env.local.example`
 
-2. **Restored Baxi Protocol** from `_archived/baxi-protocol/`
+2. **Restored Baxi Protocol** from `legacy/archived/baxi-protocol/`
    - `NetsBaxProtocol.kt` → Back to active code in `lpg-ehl-core`
    - Full 559-line implementation with TCP/Serial framing
    - All protocol command/response handling
@@ -80,17 +80,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Files Added:**
 - `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/payment/CloudTerminalClient.kt` (358 lines)
-- `_archived/rest-api-attempt/README.md` (explanation of mistake)
+- `legacy/archived/rest-api-attempt/README.md` (explanation of mistake)
 
 **Files Restored:**
 - `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/payment/NetsBaxProtocol.kt` (from archive)
 
 **Files Archived (REST attempt):**
-- `_archived/rest-api-attempt/NetsCloudClient.kt`
-- `_archived/rest-api-attempt/NetsCloudConfig.kt`
-- `_archived/rest-api-attempt/NetsCloudPaymentGateway.kt`
-- `_archived/rest-api-attempt/NetsCloudClientTest.kt`
-- `_archived/rest-api-attempt/NetsCloudPaymentGatewayTest.kt`
+- `legacy/archived/rest-api-attempt/NetsCloudClient.kt`
+- `legacy/archived/rest-api-attempt/NetsCloudConfig.kt`
+- `legacy/archived/rest-api-attempt/NetsCloudPaymentGateway.kt`
+- `legacy/archived/rest-api-attempt/NetsCloudClientTest.kt`
+- `legacy/archived/rest-api-attempt/NetsCloudPaymentGatewayTest.kt`
 
 **Lesson Learned:**
 
@@ -114,7 +114,7 @@ Major architectural shift from direct TCP/ECR protocol to modern REST-based Clou
 
 **What Changed:**
 
-1. **Archived Legacy Code** → `_archived/baxi-protocol/`
+1. **Archived Legacy Code** → `legacy/archived/baxi-protocol/`
    - `NetsBaxProtocol.kt` (559 lines of TCP/hex protocol)
    - `BaxProtocolAnalyzer.kt`, `PaymentTerminal.kt`, `PaymentTerminalClient.kt`
    - All Baxi test files and related documentation
@@ -179,7 +179,7 @@ nets:
 - Production: Enable Cloud Connect and configure terminal
 
 **Migration Path:**
-- Old Baxi code preserved in `_archived/baxi-protocol/` for 6 months
+- Old Baxi code preserved in `legacy/archived/baxi-protocol/` for 6 months
 - Can be restored if needed (rollback plan)
 - EHL pump protocol (core) unaffected - only payment changed
 
@@ -191,12 +191,12 @@ nets:
 - `docs/NETS_CLOUD_CONNECT.md`
 
 **Files Moved to Archive:**
-- `_archived/baxi-protocol/NetsBaxProtocol.kt`
-- `_archived/baxi-protocol/BaxProtocolAnalyzer.kt`
-- `_archived/baxi-protocol/PaymentTerminal*.kt`
-- `_archived/baxi-protocol/Terminal/` (entire directory)
-- `_archived/baxi-protocol/TCP_ETHERNET_FRAMING.md`
-- `_archived/baxi-protocol/BAX_TERMINAL_INTEGRATION_REPORT.md`
+- `legacy/archived/baxi-protocol/NetsBaxProtocol.kt`
+- `legacy/archived/baxi-protocol/BaxProtocolAnalyzer.kt`
+- `legacy/archived/baxi-protocol/PaymentTerminal*.kt`
+- `legacy/archived/baxi-protocol/Terminal/` (entire directory)
+- `legacy/archived/baxi-protocol/TCP_ETHERNET_FRAMING.md`
+- `legacy/archived/baxi-protocol/BAX_TERMINAL_INTEGRATION_REPORT.md`
 
 **Next Steps:**
 1. ⏳ Receive Nets Cloud Connect credentials
@@ -330,7 +330,7 @@ mvn test
 - Issue: ECR Timeout with Ingenico Self/4000
 - Analysis: `docs/ecr-integration/ECR_INTEGRATION_REPORT.md`
 - Implementation: Based on Gemini AI analysis and Python PoC findings
-- Legacy code: `norgesgass_legacy/` (VB6 RS232 reference)
+- Legacy code: `legacy/norgesgass_legacy/` (VB6 RS232 reference)
 
 **Contributors:**
 

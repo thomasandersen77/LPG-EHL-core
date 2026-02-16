@@ -5,7 +5,7 @@ Date: 2026-01-12
 ## Scope
 This document verifies the Kotlin Core EHL implementation against:
 - VB6 original (pumpekontroll.frm, fra_dispenser.bas)
-- Python legacy port (legacy-curated/Python/ehl_pumpekontroll_clone)
+- Python legacy port (legacy/legacy-curated/Python/ehl_pumpekontroll_clone)
 
 It covers framing (STX/LEN/CHK/ETX), command set, and payload encodings (PRICE, VOLUME, STATE).
 
@@ -63,7 +63,7 @@ No remaining protocol-level mismatches were found.
 
 ## References
 - VB6: `.../01-VB6-Original-Source/fra_dispenser.bas` (checksum and reply constructors using &H20 STX)
-- Python: `legacy-curated/Python/ehl_pumpekontroll_clone/ehl/protocol.py`
+- Python: `legacy/legacy-curated/Python/ehl_pumpekontroll_clone/ehl/protocol.py`
 - Core: `lpg-ehl-core/protocol/EhlCodec.kt`, `EhlProtocolConfig.kt`, `EhlPacketFormatter.kt`
 
 ---

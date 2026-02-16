@@ -7,7 +7,7 @@ This is **not** a customer UI. It is a field/server tool:
 - logs every frame it sends / receives
 - ignores payment entirely (you decide when to call UNBLOCK/BLOCK)
 
-Everything in this folder is self-contained; it imports the existing `python-test/` protocol helpers.
+Everything in this folder is self-contained; it imports protocol helpers from `projects/python-test/`.
 
 ---
 
@@ -16,7 +16,7 @@ Everything in this folder is self-contained; it imports the existing `python-tes
 From the repo root:
 
 ```bash
-cd python-test/python-server
+cd projects/python-test/python-server
 python3 server.py
 ```
 
@@ -77,5 +77,5 @@ curl -s -X POST http://localhost:8080/flow/stop  | jq .
 
 ## Logs
 
-The server writes logs to `python-test/python-server/logs/` with a timestamped filename.
+The server writes logs to `projects/python-test/python-server/logs/` with a timestamped filename.
 

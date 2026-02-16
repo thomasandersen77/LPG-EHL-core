@@ -280,7 +280,7 @@ Se [INTELLIJ_DEBUG_GUIDE.md](docs/INTELLIJ_DEBUG_GUIDE.md) for detaljert guide.
 Test kommunikasjon med Python først (baseline):
 
 ```bash
-cd python-test
+cd projects/python-test
 
 # Test mot simulator
 python3 01_probe_readonly.py \
@@ -627,7 +627,7 @@ kill <PID>
 1. Er pumpen på og tilkoblet?
 2. Test med Python script først:
    ```bash
-   cd python-test
+   cd projects/python-test
    python3 01_probe_readonly.py --port /dev/ttyS0 --addr 1 --debug
    ```
 3. Prøv smart scan via REST API

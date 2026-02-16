@@ -133,7 +133,7 @@ BaxiExperiments/
 │   └── baxi.net_1.11.3.0-Docs/Nets-Baxi.NetProgrammersGuide_v1.11.3.0.pdf
 │
 ├── legacy-vb6-code-for-reference-read-only/
-│   └── norgesgass_legacy/              # 2196 filer, inkl. pumpekontroll.frm
+│   └── legacy/norgesgass_legacy/       # 2196 filer, inkl. pumpekontroll.frm
 │
 └── Docs/
     └── MASTER_PAYMENT_TERMINAL_GUIDE.md  # <-- DENNE FILEN

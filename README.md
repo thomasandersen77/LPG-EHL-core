@@ -49,8 +49,8 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 
 ### 🔧 Development
 - **[Multi-Station Setup](docs/development/MULTI-STATION-SETUP.md)** - Run 3 Edge stations + Cloud simultaneously
-- **[API Documentation](lpg-ehl-api/README.md)** - REST API endpoints and configuration
-- **[Frontend Documentation](lpg-web/README.md)** - React frontend setup and usage
+- **[API Documentation](projects/lpg-ehl/lpg-ehl-api/README.md)** - REST API endpoints and configuration
+- **[Frontend Documentation](projects/lpg-ehl/lpg-web/README.md)** - React frontend setup and usage
 
 ### 📜 Legacy & History
 - **[Legacy Analysis](docs/legacy/LEGACY_ANALYSIS.md)** - VB6/Python legacy code analysis
@@ -66,10 +66,13 @@ LPG-EHL-core/
 ├── init-db.sql                      # Database schema (used by Liquibase)
 ├── release/
 │   └── lpg-ehl-monolith.jar         # Monolith output from build_monolith.sh
-├── lpg-ehl-core/                    # Core protocol implementation
-├── lpg-ehl-emulator/                # Emulator for testing without hardware
-├── lpg-ehl-api/                     # Spring Boot REST API + Azure queue sync
-└── lpg-web/                         # React frontend (bundled into the monolith)
+├── projects/lpg-ehl/                # Main server project (modules + frontend)
+│   ├── lpg-ehl-core/                # Core protocol implementation
+│   ├── lpg-ehl-emulator/            # Emulator for testing without hardware
+│   ├── lpg-ehl-api/                 # Spring Boot REST API + Azure queue sync
+│   └── lpg-web/                     # React frontend (bundled into the webapp jar)
+├── projects/                        # Separate non-core projects (tools, reference implementations)
+└── legacy/                          # Archived/legacy code and historical field artifacts
 ```
 
 ## 🚀 Quick Start
@@ -180,7 +183,7 @@ The **Cloud Admin System (MinLPG)** lives in a separate repo and can be run sepa
 
 3. **Run the monolith**
 
-   This uses the `local` profile by default (see `lpg-ehl-api/src/main/resources/application.yaml`).
+   This uses the `local` profile by default (see `projects/lpg-ehl/lpg-ehl-api/src/main/resources/application.yaml`).
 
    ```bash
    java -jar release/lpg-ehl-monolith.jar
@@ -249,26 +252,26 @@ For AI analysis (Claude, ChatGPT, Gemini), you can create focused ZIP archives o
 
 **Core module (EHL protocol):**
 ```bash
-zip -r lpg-ehl-core-for-ai.zip lpg-ehl-core/src \
-    lpg-ehl-core/pom.xml \
-    lpg-ehl-core/README.md \
+zip -r lpg-ehl-core-for-ai.zip projects/lpg-ehl/lpg-ehl-core/src \
+    projects/lpg-ehl/lpg-ehl-core/pom.xml \
+    projects/lpg-ehl/lpg-ehl-core/README.md \
     -x "*/target/*" "*/.idea/*" "*/node_modules/*"
 ```
 
 **API module (Spring Boot REST API + Nets Cloud Connect):**
 ```bash
-zip -r lpg-ehl-api-for-ai.zip lpg-ehl-api/src \
-    lpg-ehl-api/pom.xml \
-    lpg-ehl-api/README.md \
-    lpg-ehl-api/.env.local.example \
+zip -r lpg-ehl-api-for-ai.zip projects/lpg-ehl/lpg-ehl-api/src \
+    projects/lpg-ehl/lpg-ehl-api/pom.xml \
+    projects/lpg-ehl/lpg-ehl-api/README.md \
+    projects/lpg-ehl/lpg-ehl-api/.env.local.example \
     -x "*/target/*" "*/.idea/*" "*/node_modules/*"
 ```
 
 **Emulator module:**
 ```bash
-zip -r lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src \
-    lpg-ehl-emulator/pom.xml \
-    lpg-ehl-emulator/README.md \
+zip -r lpg-ehl-emulator-for-ai.zip projects/lpg-ehl/lpg-ehl-emulator/src \
+    projects/lpg-ehl/lpg-ehl-emulator/pom.xml \
+    projects/lpg-ehl/lpg-ehl-emulator/README.md \
     -x "*/target/*" "*/.idea/*"
 ```
 
@@ -276,13 +279,13 @@ zip -r lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src \
 
 **VB6 Legacy Code (Original Dispenserkontroll):**
 ```bash
-zip -r norgesgass-legacy-for-ai.zip norgesgass_legacy/ \
+zip -r norgesgass-legacy-for-ai.zip legacy/norgesgass_legacy/ \
     -x "*/bin/*" "*/obj/*" "*/.vs/*"
 ```
 
 **Python PoC (Proof-of-Concept re-implementation):**
 ```bash
-zip -r python-legacy-for-ai.zip more_legacy/ehl_pumpekontroll_clone/ \
+zip -r python-legacy-for-ai.zip legacy/more_legacy/ehl_pumpekontroll_clone/ \
     -x "*/__pycache__/*" "*/.pytest_cache/*" "*/venv/*"
 ```
 
@@ -296,7 +299,7 @@ zip -r docs-for-ai.zip docs/ WARP.md README.md CHANGELOG.md \
 
 **Archived Baxi protocol (for historical analysis):**
 ```bash
-zip -r archived-baxi-for-ai.zip _archived/baxi-protocol/ \
+zip -r archived-baxi-for-ai.zip legacy/archived/baxi-protocol/ \
     -x "*/Terminal/images/*"
 ```
 
@@ -309,25 +312,25 @@ Create all archives at once:
 
 echo "Creating AI analysis archives..."
 
-zip -r lpg-ehl-core-for-ai.zip lpg-ehl-core/src lpg-ehl-core/pom.xml lpg-ehl-core/README.md -x "*/target/*" "*/.idea/*"
+zip -r lpg-ehl-core-for-ai.zip projects/lpg-ehl/lpg-ehl-core/src projects/lpg-ehl/lpg-ehl-core/pom.xml projects/lpg-ehl/lpg-ehl-core/README.md -x "*/target/*" "*/.idea/*"
 echo "✓ Core module zipped"
 
-zip -r lpg-ehl-api-for-ai.zip lpg-ehl-api/src lpg-ehl-api/pom.xml lpg-ehl-api/README.md lpg-ehl-api/.env.local.example -x "*/target/*" "*/.idea/*"
+zip -r lpg-ehl-api-for-ai.zip projects/lpg-ehl/lpg-ehl-api/src projects/lpg-ehl/lpg-ehl-api/pom.xml projects/lpg-ehl/lpg-ehl-api/README.md projects/lpg-ehl/lpg-ehl-api/.env.local.example -x "*/target/*" "*/.idea/*"
 echo "✓ API module zipped"
 
-zip -r lpg-ehl-emulator-for-ai.zip lpg-ehl-emulator/src lpg-ehl-emulator/pom.xml lpg-ehl-emulator/README.md -x "*/target/*" "*/.idea/*"
+zip -r lpg-ehl-emulator-for-ai.zip projects/lpg-ehl/lpg-ehl-emulator/src projects/lpg-ehl/lpg-ehl-emulator/pom.xml projects/lpg-ehl/lpg-ehl-emulator/README.md -x "*/target/*" "*/.idea/*"
 echo "✓ Emulator module zipped"
 
-zip -r norgesgass-legacy-for-ai.zip norgesgass_legacy/ -x "*/bin/*" "*/obj/*" "*/.vs/*"
+zip -r norgesgass-legacy-for-ai.zip legacy/norgesgass_legacy/ -x "*/bin/*" "*/obj/*" "*/.vs/*"
 echo "✓ VB6 legacy zipped"
 
-zip -r python-legacy-for-ai.zip more_legacy/ehl_pumpekontroll_clone/ -x "*/__pycache__/*" "*/.pytest_cache/*" "*/venv/*"
+zip -r python-legacy-for-ai.zip legacy/more_legacy/ehl_pumpekontroll_clone/ -x "*/__pycache__/*" "*/.pytest_cache/*" "*/venv/*"
 echo "✓ Python PoC zipped"
 
 zip -r docs-for-ai.zip docs/ WARP.md README.md CHANGELOG.md LEGACY_ANALYSIS.md IMPLEMENTATION_ROADMAP.md
 echo "✓ Documentation zipped"
 
-zip -r archived-baxi-for-ai.zip _archived/baxi-protocol/ -x "*/Terminal/images/*"
+zip -r archived-baxi-for-ai.zip legacy/archived/baxi-protocol/ -x "*/Terminal/images/*"
 echo "✓ Archived Baxi protocol zipped"
 
 echo ""
@@ -480,7 +483,7 @@ Core implementation of the EHL protocol with:
 - Transaction state machine for fuel delivery management
 - 38 unit tests
 
-See [lpg-ehl-core/README.md](lpg-ehl-core/README.md) for detailed documentation.
+See [lpg-ehl-core/README.md](projects/lpg-ehl/lpg-ehl-core/README.md) for detailed documentation.
 
 ### lpg-ehl-emulator
 
@@ -665,7 +668,7 @@ STX (0x20) | Length | Address | Command | Data (0-n) | Checksum (XOR) | ETX (0x3
 | STATE | 75 | Give/take calculator state |
 | UNBLOCK | 119 | Start delivery mode |
 
-See [lpg-ehl-core/README.md](lpg-ehl-core/README.md) for complete protocol reference.
+See [lpg-ehl-core/README.md](projects/lpg-ehl/lpg-ehl-core/README.md) for complete protocol reference.
 
 ## 🗺️ Roadmap
 
@@ -688,8 +691,8 @@ See [lpg-ehl-core/README.md](lpg-ehl-core/README.md) for complete protocol refer
 
 ## 📄 Documentation
 
-- [Core Module Documentation](lpg-ehl-core/README.md)
-- [Implementation Guide](lpg-ehl-core/IMPLEMENTATION_GUIDE.md)
+- [Core Module Documentation](projects/lpg-ehl/lpg-ehl-core/README.md)
+- [Implementation Guide](projects/lpg-ehl/lpg-ehl-core/IMPLEMENTATION_GUIDE.md)
 - [Emulator Instructions](emulator-instructions.md)
 
 ## 🤝 Contributing
@@ -702,7 +705,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgments
 
-- Re-implements and modernizes the original VB6 codebase (see `norgesgass_legacy/` for original source)
+- Re-implements and modernizes the original VB6 codebase (see `legacy/norgesgass_legacy/` for original source)
 - EHL protocol specification from fuel dispenser manufacturers
 - Built with Kotlin and modern JVM best practices
 

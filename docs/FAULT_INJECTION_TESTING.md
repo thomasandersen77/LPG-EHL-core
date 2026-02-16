@@ -78,7 +78,7 @@ java -jar release/pls-sim.jar \
     --disconnectAfterSeconds=5
 
 # Terminal 2: Run test
-cd python-test
+cd projects/python-test
 python3 06_test_fault_injection.py --port /tmp/vserial1 --addr 1 --test disconnect
 ```
 
@@ -92,7 +92,7 @@ java -jar release/pls-sim.jar \
     --badChecksumRate=0.5
 
 # Terminal 2: Run test
-cd python-test
+cd projects/python-test
 python3 06_test_fault_injection.py --port /tmp/vserial1 --addr 1 --test checksum
 ```
 
@@ -106,7 +106,7 @@ java -jar release/pls-sim.jar \
     --powerfaultAfterSeconds=5
 
 # Terminal 2: Run test
-cd python-test
+cd projects/python-test
 python3 06_test_fault_injection.py --port /tmp/vserial1 --addr 1 --test powerfault
 ```
 
@@ -180,4 +180,4 @@ This creates a realistic scenario:
 - Simulator CLI: `lpg-ehl-serialport-sim/src/main/kotlin/no/cloudberries/lpg/pls/sim/CliArgs.kt`
 - State Machine: `lpg-ehl-serialport-sim/src/main/kotlin/no/cloudberries/lpg/pls/sim/PlsState.kt`
 - Serial Handler: `lpg-ehl-serialport-sim/src/main/kotlin/no/cloudberries/lpg/pls/sim/SerialPortHandler.kt`
-- Test Script: `python-test/06_test_fault_injection.py`
+- Test Script: `projects/python-test/06_test_fault_injection.py`

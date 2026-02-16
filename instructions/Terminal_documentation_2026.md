@@ -6,7 +6,7 @@ Scope: **how to reproduce the VB6 “call patterns” and flows** using the HTTP
 References:
 - `PaymentTerminalMonoServer/API_CONTRACT.md`
 - `agent-os/specs/2026-02-09-payment-terminal-mono-server/spec.md`
-- Legacy VB6 reference: `legacy-vb6-code-for-reference-read-only/norgesgass_legacy/pumpekontroll.frm` + `administration.frm`
+- Legacy VB6 reference: `legacy-vb6-code-for-reference-read-only/legacy/norgesgass_legacy/pumpekontroll.frm` + `administration.frm`
 
 ---
 

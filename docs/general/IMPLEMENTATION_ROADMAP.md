@@ -285,7 +285,7 @@ Endre nåværende "landing page" i App.tsx til HomePage.tsx og legg til navigasj
 - OpenAPI spec: `lpg-ehl-api/src/main/resources/openapi.yaml`
 - Detaljert backend-kode: Se `add_more_functions.md` linje 366-675
 - Frontend-komponenter: Se `add_more_functions.md` linje 682-1092
-- Legacy VB6-kode: `/Users/tandersen/git/NorgesGass/lpg-ehl/norgesgass_legacy/`
+- Legacy VB6-kode: `/Users/tandersen/git/NorgesGass/lpg-ehl/legacy/norgesgass_legacy/`
 
 ## Testing
 

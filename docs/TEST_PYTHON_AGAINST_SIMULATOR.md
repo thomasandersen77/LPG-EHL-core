@@ -1,6 +1,6 @@
 # Python test scripts vs PLS simulator via socat
 
-This document describes running the **`python-test/`** scripts against the **PLS serial-port simulator** (`release/pls-sim.jar`) using **virtual serial ports** created by **socat**.
+This document describes running the **`projects/python-test/`** scripts against the **PLS serial-port simulator** (`release/pls-sim.jar`) using **virtual serial ports** created by **socat**.
 
 It covers:
 - how `./scripts/sim-pls.sh` wires socat + the simulator together (especially on macOS)
@@ -21,7 +21,7 @@ This verifies the same “serial line contract” that the Kotlin/Java stack use
 ### Components
 - **socat**: creates a linked PTY pair (virtual serial cable)
 - **`release/pls-sim.jar`**: standalone simulator that responds to EHL frames
-- **Python scripts in `python-test/`**: send/parse/verify EHL frames and state changes
+- **Python scripts in `projects/python-test/`**: send/parse/verify EHL frames and state changes
 
 ## 2) How the socat + simulator setup works
 
@@ -138,15 +138,15 @@ All scripts were run against:
 ## 4) Observed results
 
 ### 4.1 Per-script logs (Python)
-The scripts write timestamped logs under `python-test/logs/`.
+The scripts write timestamped logs under `projects/python-test/logs/`.
 
 Latest logs from the run:
-- `python-test/logs/ehl_scan_20260209_004630_tmp_vserial1_range1_8.log`
-- `python-test/logs/ehl_probe_20260209_004633_tmp_vserial1_addr1.log`
-- `python-test/logs/ehl_control_unblock_20260209_004633_tmp_vserial1_addr1.log`
-- `python-test/logs/ehl_control_block_20260209_004635_tmp_vserial1_addr1.log`
-- `python-test/logs/ehl_unlock_20260209_004636_tmp_vserial1_addr1.log`
-- `python-test/logs/ehl_listen_20260209_004700_tmp_vserial1.log`
+- `projects/python-test/logs/ehl_scan_20260209_004630_tmp_vserial1_range1_8.log`
+- `projects/python-test/logs/ehl_probe_20260209_004633_tmp_vserial1_addr1.log`
+- `projects/python-test/logs/ehl_control_unblock_20260209_004633_tmp_vserial1_addr1.log`
+- `projects/python-test/logs/ehl_control_block_20260209_004635_tmp_vserial1_addr1.log`
+- `projects/python-test/logs/ehl_unlock_20260209_004636_tmp_vserial1_addr1.log`
+- `projects/python-test/logs/ehl_listen_20260209_004700_tmp_vserial1.log`
 
 ### 4.2 Normal behavior tests: PASS
 From the run:
@@ -194,7 +194,7 @@ This should show:
 ### 5.2 Run the normal python scripts
 
 ```bash
-cd python-test
+cd projects/python-test
 
 python3 02_scan_addresses.py --port /tmp/vserial1 --addr-range 1-8
 python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1
@@ -231,7 +231,7 @@ Power fault after 5s:
 
 Then run:
 ```bash
-cd python-test
+cd projects/python-test
 python3 06_test_fault_injection.py --port /tmp/vserial1 --addr 1 --test disconnect
 python3 06_test_fault_injection.py --port /tmp/vserial1 --addr 1 --test checksum
 python3 06_test_fault_injection.py --port /tmp/vserial1 --addr 1 --test powerfault
@@ -239,7 +239,7 @@ python3 06_test_fault_injection.py --port /tmp/vserial1 --addr 1 --test powerfau
 
 ## 6) Recommended improvement (optional)
 
-Update `python-test/06_test_fault_injection.py` so that disconnect/powerfault tests pass when:
+Update `projects/python-test/06_test_fault_injection.py` so that disconnect/powerfault tests pass when:
 1) it successfully receives responses at the start, and then
 2) after the configured fault time, it observes a sustained period of no valid responses
 

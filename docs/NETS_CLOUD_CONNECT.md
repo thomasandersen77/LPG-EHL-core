@@ -324,7 +324,7 @@ mvn spring-boot:run
 **Why it was wrong:**
 - Incorrectly assumed Cloud Connect was a REST API
 - Implemented HTTP client with polling
-- Archived to `_archived/rest-api-attempt/`
+- Archived to `legacy/archived/rest-api-attempt/`
 
 **Lesson learned:**
 - "Cloud Connect" is a marketing term for SSL tunnel service
@@ -335,7 +335,7 @@ mvn spring-boot:run
 **Original implementation:**
 - Direct TCP socket to terminal IP:8009
 - Baxi protocol with STX/ETX/LRC framing
-- Archived to `_archived/baxi-protocol/`
+- Archived to `legacy/archived/baxi-protocol/`
 
 **Why it changed:**
 - Required static IP configuration

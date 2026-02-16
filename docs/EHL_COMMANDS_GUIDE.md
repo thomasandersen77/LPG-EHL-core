@@ -397,7 +397,7 @@ What you **cannot** do (or at least this repo shows no evidence you can):
 
 ### ERROR_QUERY (`0x4C`)
 - **Purpose**: fetch error main/sub code
-- **Additional info (Q5)**: yes — you can get structured error codes and map them to VB6’s message table (see `python-test/ehl_protocol.py` mapping and VB6 `logdisp_err`).
+- **Additional info (Q5)**: yes — you can get structured error codes and map them to VB6’s message table (see `projects/python-test/ehl_protocol.py` mapping and VB6 `logdisp_err`).
 
 ### TANK (`0xC5`)
 - **Purpose**: fetch transaction flags
@@ -450,7 +450,7 @@ What you **cannot** do (or at least this repo shows no evidence you can):
 - Framing + payload parsing: `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/protocol/EhlCodec.kt`, `EhlPacket.kt`
 - State mapping: `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/protocol/DispenserStatus.kt`, `DispenserStateMapper.kt`
 - Tank status parsing: `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/protocol/TankStatusMapper.kt`
-- Field tools: `python-test/ehl_protocol.py`, `python-test/FIELD_GUIDE.md`
+- Field tools: `projects/python-test/ehl_protocol.py`, `projects/python-test/FIELD_GUIDE.md`
 - Legacy semantics & ACK expectations: `norgesgass_legacy/pumpekontroll.frm`
 - Practical protocol notes: `docs/RS485_PUMP_COMMUNICATION_GUIDE.md`
 

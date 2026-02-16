@@ -76,8 +76,8 @@ echo ""
 
 # Step 1: Build React Frontend
 echo -n -e "  ${GRAY}[1/4]${NC} Building React frontend... "
-FRONTEND_DIR="$SCRIPT_DIR/lpg-web"
-WEBAPP_STATIC="$SCRIPT_DIR/lpg-ehl-webapp/src/main/resources/static"
+FRONTEND_DIR="$SCRIPT_DIR/projects/lpg-ehl/lpg-web"
+WEBAPP_STATIC="$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-webapp/src/main/resources/static"
 
 if [ -d "$FRONTEND_DIR" ]; then
     cd "$FRONTEND_DIR"
@@ -107,11 +107,11 @@ echo -n -e "  ${GRAY}[3/4]${NC} Packaging JAR files... "
 
 PKG_ARGS="-DskipTests -q"
 
-run_maven "WebApp package" package -pl lpg-ehl-webapp -am $PKG_ARGS
-run_maven "Headless package" package -pl lpg-ehl-app-headless -am $PKG_ARGS
-run_maven "PLS Sim package" package -pl lpg-ehl-serialport-sim -am $PKG_ARGS
-run_maven "Payment Terminal Sim package" package -pl lpg-ehl-payment-terminal-sim -am $PKG_ARGS
-run_maven "Payment Terminal GUI package" package -pl lpg-ehl-payment-terminal-gui -am $PKG_ARGS
+run_maven "WebApp package" package -pl projects/lpg-ehl/lpg-ehl-webapp -am $PKG_ARGS
+run_maven "Headless package" package -pl projects/lpg-ehl/lpg-ehl-app-headless -am $PKG_ARGS
+run_maven "PLS Sim package" package -pl projects/lpg-ehl/lpg-ehl-serialport-sim -am $PKG_ARGS
+run_maven "Payment Terminal Sim package" package -pl projects/lpg-ehl/lpg-ehl-payment-terminal-sim -am $PKG_ARGS
+run_maven "Payment Terminal GUI package" package -pl projects/lpg-ehl/lpg-ehl-payment-terminal-gui -am $PKG_ARGS
 
 echo -e "${GREEN}✓${NC}"
 
@@ -122,37 +122,37 @@ RELEASE_DIR="release"
 mkdir -p "$RELEASE_DIR"
 
 # Find and copy JARs
-WEBAPP_JAR=$(find "$SCRIPT_DIR/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
-HEADLESS_JAR=$(find "$SCRIPT_DIR/lpg-ehl-app-headless/target" -name "lpg-ehl-app-headless-*.jar" -not -name "*-plain.jar" | head -1)
-PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "pls-sim.jar" | head -1)
+WEBAPP_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
+HEADLESS_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-app-headless/target" -name "lpg-ehl-app-headless-*.jar" -not -name "*-plain.jar" | head -1)
+PLS_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-serialport-sim/target" -name "pls-sim.jar" | head -1)
 if [ -z "$PLS_SIM_JAR" ]; then
     # Fallback if naming changes in the future
-    PLS_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
+    PLS_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
-PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim-exec.jar" | head -1)
+PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim-exec.jar" | head -1)
 if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
-    PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim.jar" | head -1)
+    PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim.jar" | head -1)
 fi
 if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
-    PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-sim/target" -name "lpg-ehl-payment-terminal-sim-*.jar" -not -name "*-plain.jar" | head -1)
+    PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target" -name "lpg-ehl-payment-terminal-sim-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
-PAYMENT_TERMINAL_GUI_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-gui/target" -name "payment-terminal-gui.jar" | head -1)
+PAYMENT_TERMINAL_GUI_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-gui/target" -name "payment-terminal-gui.jar" | head -1)
 if [ -z "$PAYMENT_TERMINAL_GUI_JAR" ]; then
-    PAYMENT_TERMINAL_GUI_JAR=$(find "$SCRIPT_DIR/lpg-ehl-payment-terminal-gui/target" -name "lpg-ehl-payment-terminal-gui-*.jar" -not -name "*-plain.jar" | head -1)
+    PAYMENT_TERMINAL_GUI_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-gui/target" -name "lpg-ehl-payment-terminal-gui-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
 # Require main artifacts
 if [ -z "$WEBAPP_JAR" ] || [ ! -f "$WEBAPP_JAR" ]; then
     echo ""
-    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find WebApp JAR in lpg-ehl-webapp/target"
+    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find WebApp JAR in projects/lpg-ehl/lpg-ehl-webapp/target"
     exit 1
 fi
 
 if [ -z "$HEADLESS_JAR" ] || [ ! -f "$HEADLESS_JAR" ]; then
     echo ""
-    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find Headless JAR in lpg-ehl-app-headless/target"
+    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find Headless JAR in projects/lpg-ehl/lpg-ehl-app-headless/target"
     exit 1
 fi
 

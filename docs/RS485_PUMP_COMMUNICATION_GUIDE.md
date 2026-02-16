@@ -15,7 +15,7 @@ Authoritative references in repo:
 - `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/protocol/*` (codec + protocol config)
 - `lpg-transport/src/main/kotlin/no/cloudberries/lpg/communication/EhlCommunicator.kt` (buffering + RX recovery)
 - `lpg-transport/src/main/kotlin/no/cloudberries/lpg/communication/SerialPortManager.kt` (real serial I/O + watchdog)
-- `python-test/ehl_protocol.py` (minimal framing + parser used for probes)
+- `projects/python-test/ehl_protocol.py` (minimal framing + parser used for probes)
 
 ## 1) Physical layer (RS‑485)
 
@@ -53,7 +53,7 @@ Permissions: typically require `dialout` group membership.
 ### RS‑485 driver direction control (DE/RE)
 
 Many adapters auto-switch direction. Some require RS‑485 mode or RTS‑toggling:
-- The Python tools support Linux RS‑485 ioctls (`TIOCSRS485`) in `python-test/serial_linux.py`.
+- The Python tools support Linux RS‑485 ioctls (`TIOCSRS485`) in `projects/python-test/serial_linux.py`.
 - In the Java stack we rely on the adapter/driver behavior (jSerialComm); inter-command delay also helps on slow direction switching.
 
 ## 3) Protocol variant and framing
@@ -92,7 +92,7 @@ Minimum frame length is 6 bytes (no DATA):
 Checksum is **XOR of every byte from STX through the last DATA byte**, i.e. **all bytes except CHK and ETX**.
 
 This is implemented consistently in:
-- `python-test/ehl_protocol.py` (`xor_checksum`)
+- `projects/python-test/ehl_protocol.py` (`xor_checksum`)
 - `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/protocol/EhlPacket.calculateChecksum()`
 - `lpg-ehl-service/src/main/kotlin/no/cloudberries/lpg/service/service/WireTraceService.kt` (validation helper)
 
@@ -165,7 +165,7 @@ Example: `WireTraceService` clears RX before a compliance test to avoid confusin
 
 ## 6) Command set (what we actually send)
 
-Command codes are one byte. The Python probes list names in `python-test/ehl_protocol.py` and Kotlin defines `EhlCommand`.
+Command codes are one byte. The Python probes list names in `projects/python-test/ehl_protocol.py` and Kotlin defines `EhlCommand`.
 
 High-impact control commands:
 - **UNBLOCK** (`0x77`): allow delivery / enable pumping
@@ -217,7 +217,7 @@ Loop:
 - Send **BLOCK** (`0x69`) to stop/block delivery
 
 Safety: the Python tool requires explicit acknowledgement before writing:
-`python-test/03_control_unblock_block.py --i-understand-this-can-affect-real-hardware`
+`projects/python-test/03_control_unblock_block.py --i-understand-this-can-affect-real-hardware`
 
 ### Flow D: Read metering (VOLUME)
 
@@ -276,5 +276,5 @@ Note on parity in simulation:
 - **Wire format / checksum / variant**: `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/protocol/EhlCodec.kt`, `EhlProtocolConfig.kt`
 - **Command sequencing / RX recovery**: `lpg-transport/src/main/kotlin/no/cloudberries/lpg/communication/EhlCommunicator.kt`
 - **Serial port settings / watchdog**: `lpg-transport/src/main/kotlin/no/cloudberries/lpg/communication/SerialPortManager.kt`
-- **Field probing tools**: `python-test/*.py`
+- **Field probing tools**: `projects/python-test/*.py`
 

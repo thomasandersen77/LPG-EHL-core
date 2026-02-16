@@ -56,7 +56,7 @@
 ### 📂 Filstruktur
 
 ```
-python-test/
+projects/python-test/
 ├── README.md                    # Brukerdokumentasjon
 ├── logging_utils.py             # Enkel logging (stdout)
 ├── serial_linux.py              # Low-level serial I/O (termios)
@@ -277,7 +277,7 @@ port.parity = SerialPort.NO_PARITY  // ✅ 8N1!
 ./scripts/start-socat-sim.sh
 
 # Terminal 2
-python3 python-test/01_probe_readonly.py --port /tmp/vserial1 --addr 1 --debug
+python3 projects/python-test/01_probe_readonly.py --port /tmp/vserial1 --addr 1 --debug
 ```
 
 **Forventet Resultat:**
@@ -378,7 +378,7 @@ python3 01_probe_readonly.py --port /dev/ttyS0 --addr 1
 ./scripts/start-socat-sim.sh
 
 # 2. Test med Python
-cd python-test
+cd projects/python-test
 python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1 --debug
 
 # 3. Test med Webapp
@@ -510,7 +510,7 @@ private val parity: Int = SerialPort.EVEN_PARITY
   run: |
     ./scripts/start-socat-sim.sh &
     sleep 2
-    python3 python-test/01_probe_readonly.py \
+    python3 projects/python-test/01_probe_readonly.py \
       --port /tmp/vserial1 --addr 1 --timeout-ms 2000
 ```
 
@@ -581,10 +581,10 @@ if (config.rs485Mode) {
 ### Filer Analysert
 
 **Python:**
-- `python-test/serial_linux.py` - 198 linjer
-- `python-test/ehl_protocol.py` - 174 linjer
-- `python-test/01_probe_readonly.py` - 117 linjer
-- `python-test/logging_utils.py` - 38 linjer
+- `projects/python-test/serial_linux.py` - 198 linjer
+- `projects/python-test/ehl_protocol.py` - 174 linjer
+- `projects/python-test/01_probe_readonly.py` - 117 linjer
+- `projects/python-test/logging_utils.py` - 38 linjer
 
 **Kotlin:**
 - `lpg-ehl-core/src/main/kotlin/no/cloudberries/lpg/protocol/EhlCodec.kt`
@@ -596,13 +596,13 @@ if (config.rs485Mode) {
 - `README.md` - Prosjekt oversikt
 - `docs/ARCHITECTURE.md` - System design
 - `docs/SERIAL_CONTRACT.md` - Transport layer spec
-- `python-test/README.md` - Python brukerdokumentasjon
+- `projects/python-test/README.md` - Python brukerdokumentasjon
 
 ---
 
 **Rapport Avsluttet: 2026-01-29**
 
 For spørsmål eller oppfølging, se:
-- [Python Test Scripts README](../python-test/README.md)
+- [Python Test Scripts README](../projects/python-test/README.md)
 - [Serial Contract](SERIAL_CONTRACT.md)
 - [Architecture Overview](ARCHITECTURE.md)

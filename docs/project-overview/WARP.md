@@ -46,11 +46,11 @@ lpg-ehl/
 │
 ├── lpg-web/                # React frontend source (builds to webapp)
 │
-├── _archived/              # Archived implementations
+├── legacy/archived/        # Archived implementations
 │
-├── norgesgass_legacy/      # VB6 legacy code (reference only)
+├── legacy/norgesgass_legacy/ # VB6 legacy code (reference only)
 │
-└── more_legacy/            # Python re-implementation (reference)
+└── legacy/more_legacy/     # Python re-implementation (reference)
 ```
 
 ### Module Dependencies
@@ -223,11 +223,11 @@ mvn exec:java -Dexec.mainClass="no.cloudberries.lpg.MainKt" -Dexec.args="--cloud
 
 **2025-01-02:** REST API Attempt (ARCHIVED)
 - Incorrectly assumed Cloud Connect was REST API
-- Archived to `_archived/rest-api-attempt/`
+- Archived to `legacy/archived/rest-api-attempt/`
 
 **Pre-2025:** Direct TCP/ECR (ARCHIVED)
 - Direct TCP socket to terminal
-- Archived to `_archived/baxi-protocol/`
+- Archived to `legacy/archived/baxi-protocol/`
 
 ## ✅ Current Build Status (2025-01-03)
 

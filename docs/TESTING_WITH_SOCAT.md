@@ -69,7 +69,7 @@ Leave this terminal running.
 ### Terminal 2: Run Python tests
 
 ```bash
-cd python-test
+cd projects/python-test
 python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1
 ```
 
@@ -101,7 +101,7 @@ Connecting to /tmp/vserial0...
    Waiting for EHL commands on /tmp/vserial0...
 
 Test with Alejandro's Python script:
-  python3 python-test/01_probe_readonly.py --port /tmp/vserial1 --addr 1
+  python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1
 
 Press Ctrl+C to stop
 ```
@@ -109,7 +109,7 @@ Press Ctrl+C to stop
 ### Terminal 3: Run Python Tests
 
 ```bash
-cd python-test
+cd projects/python-test
 
 # Basic read-only test (STATE, ERROR_QUERY, VOLUME, TANKBIT)
 python3 01_probe_readonly.py --port /tmp/vserial1 --addr 1
