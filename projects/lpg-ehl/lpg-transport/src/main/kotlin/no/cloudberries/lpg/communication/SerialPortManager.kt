@@ -53,9 +53,39 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
             }
 
             logger.info("Opening serial port: ${config.portName}")
-            
-            val port = SerialPort.getCommPort(config.portName)
-            
+
+            val port = try {
+                SerialPort.getCommPort(config.portName)
+            } catch (e: Exception) {
+                // Catch invalid port descriptor exceptions
+                val availablePorts = try {
+                    SerialPort.getCommPorts().map { it.systemPortName }
+                } catch (ex: Exception) {
+                    emptyList()
+                }
+
+                val errorMsg = buildString {
+                    appendLine("Invalid serial port descriptor: ${config.portName}")
+                    appendLine("Error: ${e.message}")
+                    appendLine()
+                    appendLine("Possible causes:")
+                    appendLine("  1. Port does not exist or is a dead symlink")
+                    appendLine("  2. Device path is incorrect")
+                    appendLine("  3. Virtual port (like socat) not yet created")
+                    appendLine()
+                    appendLine("Available serial ports detected by jSerialComm:")
+                    if (availablePorts.isEmpty()) {
+                        appendLine("  (none detected)")
+                    } else {
+                        availablePorts.forEach { appendLine("  - $it") }
+                    }
+                    appendLine()
+                    appendLine("Tip: For socat virtual ports, run ./scripts/start-socat-sim.sh first")
+                }
+                logger.error(errorMsg)
+                return false  // Return false instead of throwing
+            }
+
             // Open the port FIRST (must be done before configuring parameters)
             if (!port.openPort()) {
                 // Provide detailed diagnostics
@@ -80,7 +110,7 @@ open class  SerialPortManager(private val config: SerialPortConfig) : SerialTran
                     appendLine("device has correct permissions (crw-rw-rw-).")
                 }
                 logger.error(errorMsg)
-                throw IOException("Failed to open serial port ${config.portName}")
+                return false  // Return false instead of throwing
             }
             
             // Configure port settings AFTER opening

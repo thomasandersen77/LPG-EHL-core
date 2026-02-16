@@ -223,17 +223,37 @@ class TransportConfiguration {
             enableRawLogging = rawLoggingEnabled,
             retryConfig = retryConfig
         )
-        
+
         if (!transport.isConnected) {
             val connected = transport.connect()
             if (connected) {
                 logger.info("✅ Transport connected successfully")
             } else {
-                logger.error("❌ Failed to connect transport")
-                throw IllegalStateException("Failed to connect serial transport")
+                // Log prominent warning but allow application to start
+                val redColor = "\u001B[31m"
+                val boldRed = "\u001B[1;31m"
+                val reset = "\u001B[0m"
+
+                logger.error("")
+                logger.error("$boldRed╔═══════════════════════════════════════════════════════════╗$reset")
+                logger.error("$boldRed║                                                           ║$reset")
+                logger.error("$boldRed║  ⚠️  SERIAL PORT CONNECTION FAILED                        ║$reset")
+                logger.error("$boldRed║                                                           ║$reset")
+                logger.error("$boldRed╠═══════════════════════════════════════════════════════════╣$reset")
+                logger.error("$redColor║                                                           ║$reset")
+                logger.error("$redColor║  The application is starting but serial communication    ║$reset")
+                logger.error("$redColor║  is NOT AVAILABLE. EHL commands will fail.               ║$reset")
+                logger.error("$redColor║                                                           ║$reset")
+                logger.error("$redColor║  To fix:                                                  ║$reset")
+                logger.error("$redColor║  1. Check serial port configuration in config files      ║$reset")
+                logger.error("$redColor║  2. For virtual ports: run ./scripts/start-socat-sim.sh  ║$reset")
+                logger.error("$redColor║  3. For hardware: verify device path and permissions     ║$reset")
+                logger.error("$redColor║                                                           ║$reset")
+                logger.error("$boldRed╚═══════════════════════════════════════════════════════════╝$reset")
+                logger.error("")
             }
         }
-        
+
         return communicator
     }
     
