@@ -151,8 +151,8 @@ class EhlDispenserEmulator(
                 statusByte = 0x00
             }
             DispenserState.AUTHORIZED -> {
-                // Start switch active, nozzle NOT lifted = AUTHORIZED
-                statusByte = 0x01  // START_SWITCH_ACTIVE
+                // Start switch active + open for delivery = AUTHORIZED
+                statusByte = 0x01 or 0x02  // START_SWITCH_ACTIVE + OPEN_FOR_DELIVERY
             }
             DispenserState.PUMPING -> {
                 // Start switch + nozzle lifted + delivery active = PUMPING

@@ -8,19 +8,25 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder
 
 /**
- * Jackson configuration for PascalCase JSON responses.
+ * Jackson configuration for JSON response casing.
  *
  * NOTE: /health endpoint returns lowercase keys manually.
- * All other endpoints use PascalCase as per OpenAPI spec.
  */
 @Configuration
-class JacksonConfig {
+class JacksonConfig(
+    private val simulatorConfig: SimulatorConfig
+) {
 
     @Bean
     fun jacksonBuilder(): Jackson2ObjectMapperBuilder {
+        val namingStrategy = if (simulatorConfig.responseCasing.equals("camelCase", ignoreCase = true)) {
+            PropertyNamingStrategies.LOWER_CAMEL_CASE
+        } else {
+            PropertyNamingStrategies.UPPER_CAMEL_CASE
+        }
         return Jackson2ObjectMapperBuilder()
-            .propertyNamingStrategy(PropertyNamingStrategies.UPPER_CAMEL_CASE)
-            .serializationInclusion(JsonInclude.Include.NON_NULL)
+            .propertyNamingStrategy(namingStrategy)
+            .serializationInclusion(JsonInclude.Include.ALWAYS)
             .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
     }
 }

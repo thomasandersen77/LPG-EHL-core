@@ -2,7 +2,6 @@ package no.cloudberries.lpg.service.system
 
 import no.cloudberries.lpg.communication.HardwareWatchdogCapable
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import java.util.concurrent.atomic.AtomicInteger
@@ -24,17 +23,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 @Service
 class HardwareWatchdogService(
-    private val watchdogCapable: HardwareWatchdogCapable? = null,
-    /**
-     * When false (default), the scheduled watchdog loop is disabled.
-     *
-     * Rationale: In RS-485 request/response protocols, lack of RX is normal unless we
-     * are actively issuing commands. Automatic periodic reconnects tend to mask real
-     * protocol/hardware issues and add churn. We keep manual reconnect + I/O-error
-     * reconnect paths, and allow enabling the scheduled loop explicitly if needed.
-     */
-    @Value("\${ehl.watchdog.scheduled.enabled:false}")
-    private val scheduledEnabled: Boolean = false
+    private val watchdogCapable: HardwareWatchdogCapable? = null
 ) {
     private val logger = LoggerFactory.getLogger(HardwareWatchdogService::class.java)
     
@@ -63,9 +52,6 @@ class HardwareWatchdogService(
      */
     @Scheduled(fixedDelay = 30_000, initialDelay = 60_000)  // Check every 30s, start after 1 min
     fun performHealthCheck() {
-        if (!scheduledEnabled) {
-            return
-        }
         if (watchdogCapable == null) {
             // No watchdog capable component configured (local dev mode)
             return

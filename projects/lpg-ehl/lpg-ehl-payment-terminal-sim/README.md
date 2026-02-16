@@ -6,8 +6,10 @@ This Spring Boot application simulates the PaymentTerminalMonoServer API, provid
 
 ## Features
 
-- ✅ **Full API Coverage**: All 17 endpoints from OpenAPI spec
+- ✅ **Full API Coverage**: All 17 REST endpoints from OpenAPI spec
 - ✅ **SSE Event Stream**: Real-time events via `/v1/events/stream`
+- ✅ **WebSocket Event Stream**: Real-time events via `/v1/events/ws` (supports `?since=` backlog)
+- ✅ **REST Polling Events**: Cursor/timestamp polling via `/v1/events?since=...`
 - ✅ **Scenario Testing**: Simulate APPROVED, DECLINED, WRONG_PIN, USER_CANCEL, TIMEOUT, BUSY, NOT_READY
 - ✅ **Idempotency**: `ClientRequestId` support with response caching
 - ✅ **Terminal State Machine**: CLOSED → OPEN → READY → BUSY lifecycle
@@ -172,6 +174,12 @@ The simulator selects **one scenario per request** based on the header or defaul
 | GET | `/v1/events/stream` | SSE event stream |
 | GET | `/v1/events?since=X` | Poll events (cursor or timestamp) |
 
+### WebSocket
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| WS | `/v1/events/ws` | WebSocket event stream (same EventEnvelope JSON as SSE/poll) |
+
 ## Usage Examples
 
 ### 1. Terminal Lifecycle
@@ -275,7 +283,30 @@ curl http://localhost:18080/v1/events?since=5
 curl http://localhost:18080/v1/events?since=2026-02-10T12:00:00Z
 ```
 
-### 6. Admin Operations
+### 6. WebSocket Event Stream
+
+```bash
+# with wscat (npm i -g wscat)
+wscat -c ws://localhost:18080/v1/events/ws
+
+# backlog + live stream from cursor 10
+wscat -c "ws://localhost:18080/v1/events/ws?since=10"
+```
+
+Example message payload (same EventEnvelope as polling/SSE data):
+```json
+{
+  "Cursor": 123,
+  "EventType": "OperationCompleted",
+  "Timestamp": "2026-02-13T18:30:00Z",
+  "Payload": {
+    "Success": true,
+    "OperationId": "..."
+  }
+}
+```
+
+### 7. Admin Operations
 
 ```bash
 # Avstemming (reconciliation)
@@ -322,6 +353,9 @@ payment-terminal-sim:
   # Event buffer size (for SSE)
   event-buffer-size: 1000
 
+  # SSE heartbeat cadence
+  sse-heartbeat-ms: 5000
+
   # Simulator profile: lab | field
   profile: lab
 
@@ -332,6 +366,13 @@ payment-terminal-sim:
     not-ready-probability: 0.05
     rejection-probability: 0.1
     rejection-wrong-pin-probability: 0.5
+
+  # Dirty mode scaffolding (OFF by default)
+  dirty:
+    enabled: false
+    latency-ms: 0
+    duplicate-event-probability: 0.0
+    out-of-order: false
 ```
 
 ## Scenarios
@@ -452,11 +493,11 @@ curl -X POST http://localhost:18080/v1/payments/purchase \
   -d '{"AmountMinor": 10000}'
 ```
 
-### 4. Test Event Stream with WebSocat
+### 5. Test Event Stream with WebSocat
 
 ```bash
 # Install websocat: brew install websocat
-websocat ws://localhost:18080/v1/events/stream?since=0
+websocat ws://localhost:18080/v1/events/ws?since=0
 ```
 
 ## Logging
@@ -488,11 +529,16 @@ Controller Layer
 ├── AdminController         (Admin operations)
 └── EventController         (SSE + polling)
 
+WebSocket Layer
+└── TerminalEventsWebSocketHandler (WS /v1/events/ws)
+
 Service Layer
 ├── TerminalStateManager    (State machine: CLOSED/OPEN/READY/BUSY)
 ├── ScenarioManager         (Scenario selection + delays)
 ├── ReceiptGenerator        (Mock receipt text)
-└── EventStore              (In-memory event buffer)
+├── TerminalEventStore      (SSOT in-memory event buffer)
+├── TerminalEventPublisher  (Broadcast to SSE + WS)
+└── TerminalEventStreamRegistry (Active SSE/WS subscribers)
 
 Configuration
 ├── SimulatorConfig         (@ConfigurationProperties)

@@ -31,6 +31,14 @@ payment-terminal-sim:
   # Event store size (for SSE)
   event-buffer-size: 1000
 
+  # SSE heartbeat cadence (milliseconds)
+  sse-heartbeat-ms: 5000
+
+  # Baxi TCP Server configuration
+  baxi:
+    enabled: true
+    port: 7200
+
   # Simulator profile: lab | field
   profile: lab
 
@@ -41,6 +49,13 @@ payment-terminal-sim:
     not-ready-probability: 0.05
     rejection-probability: 0.1
     rejection-wrong-pin-probability: 0.5
+
+  # Dirty mode scaffolding (OFF by default)
+  dirty:
+    enabled: false
+    latency-ms: 0
+    duplicate-event-probability: 0.0
+    out-of-order: false
 
 logging:
   level:

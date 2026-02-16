@@ -8,36 +8,33 @@ import org.junit.jupiter.api.DisplayName
 class EhlDataParserTest {
     
     @Test
-    @DisplayName("Parse VOLUME data correctly")
-    fun testParseVolumeData() {
-        // Volume: 150 deciliters (15.0 liters) = 0x0096
-        // Amount: 1500 øre (15.00 kr) = 0x05DC
-        val data = byteArrayOf(0x00, 0x96.toByte(), 0x05, 0xDC.toByte())
+    @DisplayName("Parse VOLUME data correctly - VB6 format")
+    fun testParseVolumeDataVb6() {
+        // Volume: 45.50 liters -> "04550" -> bytes ['0','5','5','4','0'] (LSB first)
+        val data = byteArrayOf('0'.code.toByte(), '5'.code.toByte(), '5'.code.toByte(), '4'.code.toByte(), '0'.code.toByte())
         
-        val (volumeLitres, amountCents) = EhlDataParser.parseVolumeData(data)
+        val volumeLitres = EhlDataParser.parseVolumeDataVb6(data)
         
-        assertEquals(15.0, volumeLitres, 0.01)
-        assertEquals(1500, amountCents)
+        assertEquals(45.50, volumeLitres, 0.01)
     }
     
     @Test
-    @DisplayName("Parse VOLUME data with zero values")
-    fun testParseVolumeDataZero() {
-        val data = byteArrayOf(0x00, 0x00, 0x00, 0x00)
+    @DisplayName("Parse VOLUME data with zero values - VB6 format")
+    fun testParseVolumeDataZeroVb6() {
+        val data = byteArrayOf('0'.code.toByte(), '0'.code.toByte(), '0'.code.toByte(), '0'.code.toByte(), '0'.code.toByte())
         
-        val (volumeLitres, amountCents) = EhlDataParser.parseVolumeData(data)
+        val volumeLitres = EhlDataParser.parseVolumeDataVb6(data)
         
         assertEquals(0.0, volumeLitres, 0.01)
-        assertEquals(0, amountCents)
     }
     
     @Test
-    @DisplayName("Parse VOLUME data throws on invalid size")
-    fun testParseVolumeDataInvalidSize() {
-        val data = byteArrayOf(0x00, 0x96.toByte(), 0x05)
+    @DisplayName("Parse VOLUME data throws on invalid size - VB6 format")
+    fun testParseVolumeDataInvalidSizeVb6() {
+        val data = byteArrayOf('0'.code.toByte(), '0'.code.toByte(), '0'.code.toByte(), '0'.code.toByte())
         
         assertThrows(IllegalArgumentException::class.java) {
-            EhlDataParser.parseVolumeData(data)
+            EhlDataParser.parseVolumeDataVb6(data)
         }
     }
     
@@ -138,24 +135,20 @@ class EhlDataParserTest {
     }
     
     @Test
-    @DisplayName("Round-trip VOLUME encoding and parsing")
-    fun testVolumeRoundTrip() {
-        // Create VOLUME response from emulator
-        val volumeLitres = 12.5
-        val amountCents = 1250
+    @DisplayName("Round-trip VOLUME encoding and parsing - VB6 format")
+    fun testVolumeRoundTripVb6() {
+        val volumeLitres = 45.50
         
-        // Encode as emulator does
-        val volDeci = (volumeLitres * 10).toInt()
-        val encoded = ByteArray(4)
-        encoded[0] = ((volDeci shr 8) and 0xFF).toByte()
-        encoded[1] = (volDeci and 0xFF).toByte()
-        encoded[2] = ((amountCents shr 8) and 0xFF).toByte()
-        encoded[3] = (amountCents and 0xFF).toByte()
+        // Encode as VB6 does: "04550" -> bytes ['0','5','5','4','0']
+        val volStr = "04550"
+        val encoded = ByteArray(5)
+        for (i in 0..4) {
+            encoded[i] = volStr[4 - i].code.toByte()
+        }
         
         // Parse back
-        val (parsedVolume, parsedAmount) = EhlDataParser.parseVolumeData(encoded)
+        val parsedVolume = EhlDataParser.parseVolumeDataVb6(encoded)
         
         assertEquals(volumeLitres, parsedVolume, 0.01)
-        assertEquals(amountCents, parsedAmount)
     }
 }

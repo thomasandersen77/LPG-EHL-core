@@ -39,7 +39,7 @@ class ReportsController(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
         date: LocalDate?,
 
-        @Parameter(description = "Filter by dispenser address")
+        @Parameter(description = "Filter by dispenser address (optional, defaults to all)")
         @RequestParam(required = false)
         dispenserAddress: Int?
     ): ResponseEntity<List<DailySummaryResponse>> {
@@ -71,7 +71,7 @@ class ReportsController(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
         to: LocalDate,
 
-        @Parameter(description = "Filter by dispenser address")
+        @Parameter(description = "Filter by dispenser address (optional, defaults to all)")
         @RequestParam(required = false)
         dispenserAddress: Int?
     ): ResponseEntity<PeriodSummaryResponse> {

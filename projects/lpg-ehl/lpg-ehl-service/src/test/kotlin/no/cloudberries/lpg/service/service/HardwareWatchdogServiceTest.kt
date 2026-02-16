@@ -32,8 +32,7 @@ class HardwareWatchdogServiceTest {
     @BeforeEach
     fun setup() {
         mockWatchdogCapable = mock<HardwareWatchdogCapable>()
-        // Enable scheduled loop for unit tests; production default is disabled unless explicitly configured.
-        watchdogService = HardwareWatchdogService(mockWatchdogCapable, scheduledEnabled = true)
+        watchdogService = HardwareWatchdogService(mockWatchdogCapable)
     }
 
     // ============================================================

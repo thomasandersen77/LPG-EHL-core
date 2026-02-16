@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import no.cloudberries.lpg.service.dto.DispenserStatusResponse
 import no.cloudberries.lpg.service.pump.DispenserService
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -17,7 +18,8 @@ import org.springframework.web.bind.annotation.*
 // @SecurityRequirement(name = "bearer-token") // Disabled for local demo testing
 class DispenserController(
     private val dispenserService: DispenserService,
-    private val plsService: no.cloudberries.lpg.api.pls.MockPlsService?
+    private val plsService: no.cloudberries.lpg.api.pls.MockPlsService?,
+    @Value("\${lpg.dispenser.address:1}") private val defaultAddress: Int
 ) {
 
     @GetMapping
@@ -95,8 +97,8 @@ class DispenserController(
         // Get current price from PLS
         val currentPrice = plsService?.getCurrentPrice("LPG")?.pricePerLiter?.toDouble() ?: 15.90
         
-        // Get status for dispenser 1 (default)
-        val dispenser = dispenserService.getDispenserStatus(1)
+        // Get status for configured dispenser
+        val dispenser = dispenserService.getDispenserStatus(defaultAddress)
         
         return if (dispenser != null) {
             // DispenserStatusResponse doesn't have volume/amount, so return default for now

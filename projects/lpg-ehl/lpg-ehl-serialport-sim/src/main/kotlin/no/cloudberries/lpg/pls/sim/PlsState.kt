@@ -360,7 +360,10 @@ class PlsState(
             EhlFrameCodec.CMD_STATE -> {
                 val statusByte = buildStatusByte()
                 val statusName = state.name
-                log.debug("📊 STATE addr=$addrInt -> $statusName (0x${statusByte.toHex()}, vol=${getVolumeMl()}ml)")
+                log.info(
+                    "📊 STATE addr=$addrInt state=$statusName status=0x${statusByte.toHex()} " +
+                        "bits=${describeStatusBits(statusByte.toInt() and 0xFF)} vol=${getVolumeMl()}ml"
+                )
                 EhlCommandResult.StateResponse(frame.addr, byteArrayOf(statusByte))
             }
             EhlFrameCodec.CMD_ERROR_QUERY -> {
@@ -493,6 +496,11 @@ class PlsState(
                 } catch (e: Exception) {
                     log.error("❌ UNBLOCK EXCEPTION: ${e.message}", e)
                 }
+                val statusAfter = buildStatusByte()
+                log.info(
+                    "📊 UNBLOCK state: before=$previousState after=$state status=0x${statusAfter.toHex()} " +
+                        "bits=${describeStatusBits(statusAfter.toInt() and 0xFF)}"
+                )
                 EhlCommandResult.OkAck(frame.addr)
             }
             EhlFrameCodec.CMD_STOP -> {
@@ -559,7 +567,7 @@ class PlsState(
      * 
      * Bit flags:
      * - 0x01 = START_SWITCH_ACTIVE (authorized)
-     * - 0x02 = NOZZLE_LIFTED
+     * - 0x02 = OPEN_FOR_DELIVERY / NOZZLE_LIFTED
      * - 0x04 = DELIVERY_ACTIVE (pumping)
      * - 0x08 = TRANSACTION_COMPLETE (stopped/payment pending)
      */
@@ -572,15 +580,11 @@ class PlsState(
                 statusByte = 0x00
             }
             DispenserState.AUTHORIZED -> {
-                // Start switch active = AUTHORIZED
-                statusByte = 0x01  // START_SWITCH_ACTIVE
-                // Add nozzle lifted flag if lifted
-                if (nozzleLifted) {
-                    statusByte = statusByte or 0x02
-                }
-                if (fieldConfig.profile == SimProfile.FIELD) {
-                    statusByte = statusByte or 0x02
-                }
+                // AUTHORIZED = pump is unblocked and ready for delivery
+                // 0x01 = START_SWITCH_ACTIVE (authorized)
+                // 0x02 = OPEN_FOR_DELIVERY (pump is ready - always set in AUTHORIZED state)
+                // The distinction between AUTHORIZED and PUMPING is the DELIVERY_ACTIVE bit (0x04)
+                statusByte = 0x01 or 0x02  // START_SWITCH_ACTIVE + OPEN_FOR_DELIVERY
             }
             DispenserState.PUMPING -> {
                 // Start switch + nozzle lifted + delivery active = PUMPING
@@ -597,6 +601,14 @@ class PlsState(
         }
         
         return statusByte.toByte()
+    }
+
+    private fun describeStatusBits(statusByte: Int): String {
+        val openForDelivery = statusByte and 0x02 != 0
+        val startButton = statusByte and 0x04 != 0
+        val autoMode = statusByte and 0x10 != 0
+        val error = statusByte and 0x80 != 0
+        return "open_for_delivery=$openForDelivery,startbutton=$startButton,automode=$autoMode,error=$error"
     }
 
     /**

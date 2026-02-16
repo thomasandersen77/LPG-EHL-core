@@ -3,7 +3,7 @@ package no.cloudberries.lpg.payment.terminal.gui
 import javafx.application.Application
 import javafx.stage.Stage
 import no.cloudberries.lpg.payment.terminal.sim.config.SimulatorConfig
-import no.cloudberries.lpg.payment.terminal.sim.service.EventStore
+import no.cloudberries.lpg.payment.terminal.sim.service.TerminalEventStore
 import no.cloudberries.lpg.payment.terminal.sim.service.TerminalStateManager
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -37,7 +37,7 @@ class TerminalFxApplication : Application() {
         val context = springContext ?: return
         val port = context.environment.getProperty("server.port", "18080")
 
-        val eventStore = context.getBean(EventStore::class.java)
+        val eventStore = context.getBean(TerminalEventStore::class.java)
         val stateManager = context.getBean(TerminalStateManager::class.java)
         val config = context.getBean(SimulatorConfig::class.java)
 

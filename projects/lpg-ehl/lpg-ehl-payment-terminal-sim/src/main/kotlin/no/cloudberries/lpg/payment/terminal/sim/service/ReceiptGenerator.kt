@@ -7,18 +7,18 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * Receipt text generator for mock terminal receipts.
+ * Receipt text generator aligned with real Nets/Ingenico terminal format.
  */
 @Service
 class ReceiptGenerator(
     private val config: SimulatorConfig
 ) {
 
-    private val dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
-        .withZone(ZoneId.systemDefault())
+    private val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+        .withZone(ZoneId.of("Europe/Oslo"))
 
     /**
-     * Generate purchase receipt text.
+     * Generate purchase receipt text (real terminal style: Bax terminalId-merchantId, Ref., Overf.).
      */
     fun generatePurchaseReceipt(
         amountMinor: Int,
@@ -29,13 +29,14 @@ class ReceiptGenerator(
     ): String {
         val amountKroner = amountMinor / 100.0
         val formattedDate = dateFormatter.format(timestamp)
+        val bax = "${config.terminalId}-${config.merchantId}"
 
         return buildString {
             appendLine("NORGESGASS AS")
             appendLine("NEDRE EIKERVEI 26")
             appendLine("DRAMMEN")
             appendLine()
-            appendLine("Bax: ${config.terminalId}")
+            appendLine("Bax: $bax")
             appendLine(formattedDate)
             appendLine()
             appendLine("BankAxept")
@@ -48,9 +49,10 @@ class ReceiptGenerator(
             if (responseCode != null) {
                 appendLine("Resp.: $responseCode")
             }
-            appendLine("Overf.: 019")
+            appendLine("Overf.: 020")
             appendLine()
-            appendLine("KJØP                     %.2f".format(amountKroner))
+            appendLine("KJØP")
+            appendLine("NOK                %.2f".format(amountKroner))
             if (approved) {
                 appendLine("GODKJENT")
             } else {
@@ -59,6 +61,37 @@ class ReceiptGenerator(
             appendLine()
             appendLine()
             appendLine()
+        }.trimEnd()
+    }
+
+    /**
+     * Generate timeout receipt (no card presented) – real terminal style.
+     */
+    fun generateTimeoutReceipt(
+        amountMinor: Int,
+        timestamp: Instant,
+        operationId: String
+    ): String {
+        val amountKroner = amountMinor / 100.0
+        val formattedDate = dateFormatter.format(timestamp)
+        val bax = "${config.terminalId}-${config.merchantId}"
+
+        return buildString {
+            appendLine("KOPI")
+            appendLine("NORGESGASS AS")
+            appendLine("NEDRE EIKERVEI 26")
+            appendLine("DRAMMEN")
+            appendLine()
+            appendLine("Bax: $bax")
+            appendLine(formattedDate)
+            appendLine()
+            appendLine("Kortet ikke presentert")
+            appendLine("Ref.:  ___")
+            appendLine("Overf.: 020")
+            appendLine()
+            appendLine("KJØP")
+            appendLine("NOK                %.2f".format(amountKroner))
+            appendLine("Tidsavbrudd")
         }.trimEnd()
     }
 
@@ -90,46 +123,78 @@ class ReceiptGenerator(
     }
 
     /**
-     * Generate Z-report text (mock).
+     * Generate X-report text (current totals, no reset) – real terminal style.
      */
-    fun generateZReport(timestamp: Instant): String {
+    fun generateXReport(timestamp: Instant): String {
         val formattedDate = dateFormatter.format(timestamp)
+        val bax = "${config.terminalId}-${config.merchantId}"
 
         return buildString {
-            appendLine("NETS AS")
-            appendLine("Terminal ID: ${config.terminalId}")
-            appendLine("Merchant: ${config.merchantId}")
+            appendLine("Bax: $bax")
+            appendLine(formattedDate)
+            appendLine("Valuta: NOK")
+            appendLine("Sesjon.: 001")
+            appendLine("X-rapport: 001")
             appendLine()
-            appendLine("Z-RAPPORT (DAGSAVSLUTNING)")
+            appendLine("X-Total")
             appendLine()
-            appendLine("Dato: $formattedDate")
+            appendLine("Siste Z-Total")
+            appendLine(formattedDate)
             appendLine()
-            appendLine("Antall transaksjoner: 42")
-            appendLine("Totalbeløp: NOK 12500.00")
+            appendLine("BankAxept              0")
+            appendLine("Beløp=              0,00")
             appendLine()
-            appendLine("Kjøp: 40 (NOK 12000.00)")
-            appendLine("Refusjon: 2 (NOK 500.00)")
-            appendLine()
+            appendLine("------------------------")
+            appendLine("Antall                 0")
+            appendLine("Total=              0,00")
         }.trimEnd()
     }
 
     /**
-     * Generate avstemming (reconciliation) report text.
+     * Generate Z-report text (end-of-day, resets counters) – real terminal style.
      */
-    fun generateAvstemmingReport(timestamp: Instant): String {
+    fun generateZReport(timestamp: Instant): String {
         val formattedDate = dateFormatter.format(timestamp)
+        val bax = "${config.terminalId}-${config.merchantId}"
+        val count = 0
+        val amount = "0,00"
+        val zNum = "001"
 
         return buildString {
-            appendLine("NETS AS")
-            appendLine("Terminal ID: ${config.terminalId}")
-            appendLine("Merchant: ${config.merchantId}")
+            appendLine("Bax: $bax")
+            appendLine(formattedDate)
+            appendLine("Valuta: NOK")
+            appendLine("Sesjon.: 001")
+            appendLine("X-rapport: $zNum")
             appendLine()
-            appendLine("AVSTEMMING")
+            appendLine("X-Total")
             appendLine()
-            appendLine("Dato: $formattedDate")
+            appendLine("Siste Z-Total")
+            appendLine(formattedDate)
             appendLine()
-            appendLine("Status: GODKJENT")
+            appendLine("BankAxept              $count")
+            appendLine("Beløp=              $amount")
             appendLine()
+            appendLine("------------------------")
+            appendLine("Antall                 $count")
+            appendLine("Total=              $amount")
+        }.trimEnd()
+    }
+
+    /**
+     * Generate avstemming (reconciliation) report – real terminal style.
+     */
+    fun generateAvstemmingReport(timestamp: Instant): String {
+        return buildString {
+            appendLine("Avstemming")
+            appendLine()
+            appendLine("------------------------")
+            appendLine("Innsamlet              0")
+            appendLine("Total=              0,00")
+            appendLine()
+            appendLine("Kortavtaler uten")
+            appendLine("omsetning skrives")
+            appendLine("ikke ut.")
         }.trimEnd()
     }
 }

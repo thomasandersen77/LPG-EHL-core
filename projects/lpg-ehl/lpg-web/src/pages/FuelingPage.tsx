@@ -2,9 +2,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useEffect, useState, useRef } from 'react';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
-const EMULATOR_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || '';
+const EMULATOR_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_EMULATOR_BASE_URL ||
+  window.location.origin;
 const WS_BASE_URL = EMULATOR_BASE_URL.replace(/^http/, 'ws');
 
 interface LiveStatus {
@@ -23,12 +24,38 @@ export function FuelingPage() {
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Helper function to get message for state
+  function getMessageForState(state: string): string {
+    switch (state) {
+      case 'PUMPING': return 'Fyller...';
+      case 'FINISHED':
+      case 'PAYMENT_PENDING': return 'Fylling fullført';
+      case 'IDLE': return 'Venter...';
+      case 'READY_TO_PUMP': return 'Klar til fylling';
+      default: return state;
+    }
+  }
+
   // Poll dispenser status (fallback if WS not connected)
   const { data: status } = useQuery<LiveStatus>({
     queryKey: ['dispenser-live-status'],
     queryFn: async () => {
-      const response = await axios.get(`${API_URL}/dispensers/status`);
-      return response.data;
+      const response = await axios.get(`${EMULATOR_BASE_URL}/api/v1/emulator/pump/status`);
+      const data = response.data as Record<string, unknown>;
+
+      const state = String(data.state ?? 'IDLE');
+      const volumeLiters = Number(data.volumeLitres ?? data.volumeLiters ?? 0);
+      const amountKr = Number(data.amountKr ?? 0);
+      const pricePerLiter = Number(data.pricePerLitreKr ?? data.pricePerLiterKr ?? 0);
+
+      return {
+        state: state === 'PUMPING' ? 'DISPENSING' : state,
+        volumeLiters,
+        amountKr,
+        pricePerLiter,
+        isActive: state === 'PUMPING',
+        message: getMessageForState(state),
+      };
     },
     refetchInterval: wsConnected ? false : 1000, // Only poll if WS not connected
   });
@@ -52,12 +79,16 @@ export function FuelingPage() {
         
         // Handle pump_update for real-time display
         if (data.type === 'pump_update') {
+          const state = data.state === 'PUMPING' ? 'DISPENSING' : data.state;
+          const volumeLiters = Number(data.volumeLitres ?? data.volumeLiters ?? 0);
+          const amountKr = Number(data.amountKr ?? 0);
+          const pricePerLiter = Number(data.pricePerLitreKr ?? data.pricePerLiterKr ?? 0);
           queryClient.setQueryData(['dispenser-live-status'], (old: LiveStatus | undefined) => ({
             ...old,
-            state: data.state === 'PUMPING' ? 'DISPENSING' : data.state,
-            volumeLiters: data.volumeLitres,
-            amountKr: data.amountKr,
-            pricePerLiter: data.pricePerLitreKr,
+            state,
+            volumeLiters,
+            amountKr,
+            pricePerLiter,
             isActive: data.state === 'PUMPING',
             message: getMessageForState(data.state)
           } as LiveStatus));
@@ -75,17 +106,6 @@ export function FuelingPage() {
     };
   }, [queryClient]);
 
-  // Helper function to get message for state
-  function getMessageForState(state: string): string {
-    switch (state) {
-      case 'PUMPING': return 'Fyller...';
-      case 'FINISHED': 
-      case 'PAYMENT_PENDING': return 'Fylling fullført';
-      case 'IDLE': return 'Venter...';
-      case 'READY_TO_PUMP': return 'Klar til fylling';
-      default: return state;
-    }
-  }
 
   // When state changes to FINISHED or PAYMENT_PENDING, wait 10 seconds then go home
   useEffect(() => {

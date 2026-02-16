@@ -107,13 +107,6 @@ class TransportConfiguration {
         @Value("\${ehl.serial.data-bits:8}") dataBits: Int,
         @Value("\${ehl.serial.parity:NONE}") parity: String,
         @Value("\${ehl.serial.parity-auto-detect:false}") autoDetect: Boolean,
-        @Value("\${lpg.dispenser.address:1}") dispenserAddress: Int,
-        @Value("\${ehl.serial.rs485.enabled:false}") rs485Enabled: Boolean,
-        @Value("\${ehl.serial.rs485.rts-high-during-send:true}") rs485RtsHighDuringSend: Boolean,
-        @Value("\${ehl.serial.rs485.rts-high-after-send:false}") rs485RtsHighAfterSend: Boolean,
-        @Value("\${ehl.serial.rs485.rx-during-tx:false}") rs485RxDuringTx: Boolean,
-        @Value("\${ehl.serial.rs485.rts-before-ms:0}") rs485RtsBeforeMs: Int,
-        @Value("\${ehl.serial.rs485.rts-after-ms:0}") rs485RtsAfterMs: Int,
         @Value("\${ehl.serial.stop-bits:1}") stopBits: Int,
         @Value("\${ehl.serial.read-timeout-ms:3000}") readTimeout: Int,
         @Value("\${ehl.serial.write-timeout-ms:1000}") writeTimeout: Int
@@ -127,51 +120,24 @@ class TransportConfiguration {
             else -> SerialPort.ONE_STOP_BIT
         }
         
-        val baseConfig = if (autoDetect) {
+        val config = if (autoDetect) {
             logger.info("")
             logger.info("════════════════════════════════════════════════════════════")
             logger.info("  🏭 FIELD MODE - AUTO-DETECT" + if (isSocat) " (via SOCAT)" else "")
             logger.info("════════════════════════════════════════════════════════════")
             logger.info("  Serial Port: $portName")
             logger.info("  Auto-detect: ENABLED")
-            logger.info("  Probe addr:  $dispenserAddress (lpg.dispenser.address)")
             logger.info("════════════════════════════════════════════════════════════")
             logger.info("")
             
-            runCatching {
-                serialConfigService.detectAndConfigureSerial(
-                    portName = portName,
-                    baudRate = baudRate,
-                    dataBits = dataBits,
-                    stopBits = stopBitsMode,
-                    autoDetect = true,
-                    manualParity = null,
-                    dispenserAddress = dispenserAddress,
-                    autoDetectTimeoutMs = minOf(2000L, readTimeout.toLong())
-                )
-            }.getOrElse { e ->
-                logger.error("Parity auto-detect failed, falling back to manual parity='$parity'. Cause: ${e.message}")
-                val parityMode = when (parity.uppercase()) {
-                    "NONE" -> SerialPort.NO_PARITY
-                    "ODD" -> SerialPort.ODD_PARITY
-                    "EVEN" -> SerialPort.EVEN_PARITY
-                    "MARK" -> SerialPort.MARK_PARITY
-                    "SPACE" -> SerialPort.SPACE_PARITY
-                    else -> {
-                        logger.warn("Unknown parity '$parity', defaulting to NONE")
-                        SerialPort.NO_PARITY
-                    }
-                }
-                SerialPortConfig(
-                    portName = portName,
-                    baudRate = baudRate,
-                    dataBits = dataBits,
-                    stopBits = stopBitsMode,
-                    parity = parityMode,
-                    readTimeout = readTimeout,
-                    writeTimeout = writeTimeout
-                )
-            }
+            serialConfigService.detectAndConfigureSerial(
+                portName = portName,
+                baudRate = baudRate,
+                dataBits = dataBits,
+                stopBits = stopBitsMode,
+                autoDetect = true,
+                manualParity = null
+            )
         } else {
             logger.info("")
             logger.info("════════════════════════════════════════════════════════════")
@@ -212,29 +178,16 @@ class TransportConfiguration {
                 dataBits = dataBits,
                 stopBits = stopBitsMode,
                 parity = parityMode,
-                rs485Enabled = rs485Enabled,
-                rs485RtsHighDuringSend = rs485RtsHighDuringSend,
-                rs485RtsHighAfterSend = rs485RtsHighAfterSend,
-                rs485RxDuringTx = rs485RxDuringTx,
-                rs485DelayRtsBeforeSendMs = rs485RtsBeforeMs,
-                rs485DelayRtsAfterSendMs = rs485RtsAfterMs,
                 readTimeout = readTimeout,
                 writeTimeout = writeTimeout
             )
         }
-
-        val config = baseConfig.copy(
-            rs485Enabled = rs485Enabled,
-            rs485RtsHighDuringSend = rs485RtsHighDuringSend,
-            rs485RtsHighAfterSend = rs485RtsHighAfterSend,
-            rs485RxDuringTx = rs485RxDuringTx,
-            rs485DelayRtsBeforeSendMs = rs485RtsBeforeMs,
-            rs485DelayRtsAfterSendMs = rs485RtsAfterMs
-        )
         
-        // Keep transport simple: connect/disconnect + explicit manual reconnect when needed.
-        // Avoid enabling scheduled watchdog loops that can mask protocol-level issues.
-        SerialPortManager(config)
+        val manager = SerialPortManager(config)
+        manager.enableWatchdog()
+        logger.info("🐕 Hardware watchdog enabled")
+        
+        manager
     }
     
     /**

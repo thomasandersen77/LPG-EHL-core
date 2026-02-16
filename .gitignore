@@ -26,6 +26,7 @@ hs_err_pid*
 
 __pycache__/
 .pycache/
+venv/
 
 # Legacy VB6 executables
 *.exe
@@ -84,6 +85,7 @@ Desktop.ini
 
 # Logs
 *.log
+*.log.*
 logs/
 
 # Build logs
@@ -95,6 +97,18 @@ logs/
 *.swp
 *~.nib
 local.properties
+*.backup
+
+# Node
+node_modules/
+
+# Gradle
+.gradle/
+**/.gradle/
+
+# Local Maven repositories (e.g. sandboxed builds)
+.m2/
+**/.m2/
 
 # Docker & Database
 local-data/

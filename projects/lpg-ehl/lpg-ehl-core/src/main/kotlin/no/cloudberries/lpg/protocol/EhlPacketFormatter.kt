@@ -91,9 +91,7 @@ object EhlPacketFormatter {
     }
     
     private fun formatVolumeData(data: ByteArray): String {
-        if (data.size != 5 && data.size != 6) {
-            return "Invalid data size: ${data.size} (expected 5 or 6 ASCII digits LSB-first)"
-        }
+        if (data.size != 5) return "Invalid data size: ${data.size} (expected 5 ASCII digits LSB-first)"
         
         return try {
             val litres = EhlDataParser.parseVolumeDataVb6(data)

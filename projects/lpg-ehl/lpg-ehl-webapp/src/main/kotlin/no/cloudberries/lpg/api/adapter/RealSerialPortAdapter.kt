@@ -82,6 +82,8 @@ class RealSerialPortAdapter(
             val result = serialPortManager.connect()
             if (result) {
                 logger.info("✅ Tilkoblet til $portName (FIELD MODE)")
+                // Enable hardware watchdog for self-healing
+                serialPortManager.enableWatchdog()
             } else {
                 logger.error("❌ Kunne ikke koble til $portName")
             }
@@ -93,6 +95,7 @@ class RealSerialPortAdapter(
     }
     
     override fun disconnect() {
+        serialPortManager.disableWatchdog()
         serialPortManager.disconnect()
         logger.info("🔌 Frakoblet fra $portName")
     }
@@ -124,5 +127,14 @@ class RealSerialPortAdapter(
         }
     }
     
-    // Intentionally no periodic watchdog health loop here.
+    /**
+     * Check watchdog and reconnect if needed (for scheduled health checks)
+     */
+    fun checkHealth(): Boolean {
+        if (!serialPortManager.checkWatchdog()) {
+            logger.warn("⚠️ Watchdog timeout - forsøker reconnect...")
+            return serialPortManager.reconnect()
+        }
+        return true
+    }
 }

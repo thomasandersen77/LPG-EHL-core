@@ -95,7 +95,17 @@ class TerminalEventPoller(
             "OperationStarted" -> eventHandler.handleOperationStarted(event)
             "OperationCompleted" -> eventHandler.handleOperationCompleted(event)
             "OperationTimeout" -> eventHandler.handleOperationTimeout(event)
+            "DisplayText" -> logDisplayText(event)
             else -> log.trace("Terminal event ignored: {}", event.eventType)
+        }
+    }
+
+    private fun logDisplayText(event: EventEnvelope) {
+        val text = (event.payload["text"] ?: event.payload["Text"])?.toString()?.trim().orEmpty()
+        if (text.isNotBlank()) {
+            log.info("Terminal display: {}", text)
+        } else {
+            log.info("Terminal display event received (eventId={})", event.eventId)
         }
     }
 }

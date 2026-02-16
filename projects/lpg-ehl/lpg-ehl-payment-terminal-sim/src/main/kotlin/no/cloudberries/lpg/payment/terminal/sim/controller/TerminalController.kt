@@ -33,12 +33,9 @@ class TerminalController(
             VendorDllLoadable = true,
             TerminalOpen = stateManager.isOpen(),
             TerminalReady = stateManager.isReady(),
+            ConnectionState = stateManager.getConnectionState(),
             LastError = null,
-            TerminalIdentity = if (stateManager.isOpen()) {
-                stateManager.getTerminalIdentity()
-            } else {
-                null
-            }
+            TerminalIdentity = stateManager.getTerminalIdentity()
         )
         log.debug("Terminal status: {}", state)
         return ResponseEntity.ok(response)
@@ -57,7 +54,7 @@ class TerminalController(
             ResponseEntity.ok(
                 SimpleResponse(
                     Success = true,
-                    Message = "Terminal opened and ready"
+                    Message = "Terminal opened"
                 )
             )
         } catch (ex: Exception) {
@@ -98,3 +95,4 @@ class TerminalController(
         }
     }
 }
+

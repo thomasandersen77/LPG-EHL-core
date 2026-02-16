@@ -55,6 +55,8 @@ java -jar lpg-ehl-serialport-sim/target/pls-sim.jar --port=<port> [options]
 | `--field.interCharacterDelayMs=MIN-MAX` | 1-2 | Delay between bytes |
 | `--field.readChunkingMode=<off|random>` | random | Chunking mode |
 
+LAB profile uses python-aligned status semantics; differences are noise/delay only.
+
 ### Frame Modes
 
 - **line**: Frames terminated by `\n` (newline)

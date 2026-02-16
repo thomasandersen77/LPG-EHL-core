@@ -13,7 +13,7 @@ import java.time.Instant
  */
 data class OperationResponse(
     val Success: Boolean,
-    val OperationId: String,
+    val OperationId: String?,
     val StartedAt: String,
     val CompletedAt: String? = null,
     val DurationMs: Long? = null,
@@ -27,6 +27,9 @@ data class OperationResponse(
     // Terminal outcome
     val LocalModeResult: Int? = null,
     val ResponseCode: String? = null,
+    val EntryMode: String? = null,
+    val EntryModeCode: String? = null,
+    val LocalModeResultData: String? = null,
     val RejectionSource: String? = null,
     val RejectionReason: String? = null,
 
@@ -51,6 +54,25 @@ data class OperationResponse(
 ) {
     companion object {
         /**
+         * Create an error response with default C#-style values.
+         */
+        fun error(
+            errorCode: String,
+            error: String,
+            startedAt: String = "0001-01-01T00:00:00"
+        ): OperationResponse {
+            return OperationResponse(
+                Success = false,
+                OperationId = null,
+                StartedAt = startedAt,
+                CallResult = 0,
+                LocalModeResult = 0,
+                Error = error,
+                ErrorCode = errorCode
+            )
+        }
+
+        /**
          * Create an approved purchase response.
          */
         fun approved(
@@ -73,11 +95,14 @@ data class OperationResponse(
                 ResultEventName = "OnLocalMode",
                 LocalModeResult = 0,
                 ResponseCode = "00",
+                EntryMode = "CONTACTLESS",
+                EntryModeCode = "2",
+                LocalModeResultData = "D  ;************8408;2;more_data",
                 RejectionSource = "0",
                 LocalModeFields = mapOf(
-                    "TerminalID" to terminalId,
-                    "MerchantId" to merchantId,
-                    "TotalAmount" to amountMinor.toString()
+                    "terminalID" to terminalId,
+                    "merchantId" to merchantId,
+                    "totalAmount" to amountMinor.toString()
                 ),
                 PrintTextRaw = receiptText,
                 PrintTextSanitized = receiptText,
@@ -165,13 +190,44 @@ data class OperationResponse(
         }
 
         /**
+         * Create operation timeout response (no card presented).
+         * Aligns with real terminal: success=false, errorCode=operation_timeout, LastDisplayText="Kortet ikke presentert".
+         */
+        fun timeout(
+            operationId: String,
+            startedAt: Instant,
+            completedAt: Instant,
+            durationMs: Long,
+            receiptText: String? = null
+        ): OperationResponse {
+            return OperationResponse(
+                Success = false,
+                OperationId = operationId,
+                StartedAt = startedAt.toString(),
+                CompletedAt = completedAt.toString(),
+                DurationMs = durationMs,
+                CallResult = 1,
+                ResultEventName = "OnLocalMode",
+                LocalModeResult = 2,
+                RejectionReason = "4:6",
+                PrintTextRaw = receiptText,
+                PrintTextSanitized = receiptText,
+                LastDisplayText = "Kortet ikke presentert",
+                Error = "Operation timed out waiting for card",
+                ErrorCode = "operation_timeout"
+            )
+        }
+
+        /**
          * Create an admin operation success response.
          */
         fun adminSuccess(
             operationId: String,
             startedAt: Instant,
             completedAt: Instant,
-            displayText: String = "OK"
+            displayText: String = "OK",
+            printTextRaw: String? = null,
+            reportFields: Map<String, String>? = null
         ): OperationResponse {
             return OperationResponse(
                 Success = true,
@@ -181,7 +237,35 @@ data class OperationResponse(
                 DurationMs = completedAt.toEpochMilli() - startedAt.toEpochMilli(),
                 CallResult = 1,
                 ResultEventName = "OnLocalMode",
-                LastDisplayText = displayText
+                LocalModeResult = 1,
+                LastDisplayText = displayText,
+                PrintTextRaw = printTextRaw,
+                PrintTextSanitized = printTextRaw,
+                ReportFields = reportFields
+            )
+        }
+
+        /**
+         * Admin operation that returns success=false but completed (e.g. reversal with no txn).
+         */
+        fun adminFormatError(
+            operationId: String,
+            startedAt: Instant,
+            completedAt: Instant,
+            displayText: String = "Formatfeil",
+            rejectionReason: String = "4:6"
+        ): OperationResponse {
+            return OperationResponse(
+                Success = false,
+                OperationId = operationId,
+                StartedAt = startedAt.toString(),
+                CompletedAt = completedAt.toString(),
+                DurationMs = completedAt.toEpochMilli() - startedAt.toEpochMilli(),
+                CallResult = 1,
+                ResultEventName = "OnLocalMode",
+                LocalModeResult = 2,
+                LastDisplayText = displayText,
+                RejectionReason = rejectionReason
             )
         }
     }

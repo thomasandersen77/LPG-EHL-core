@@ -1,6 +1,7 @@
 package no.cloudberries.lpg.emulator
 
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -9,30 +10,30 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/v1/emulator")
 @Profile("local", "dev", "h2")
 class EmulatorController(
-    private val emulatorScenarioService: EmulatorScenarioService
+    private val emulatorScenarioService: EmulatorScenarioService,
+    @Value("\${lpg.dispenser.address:1}") private val defaultAddress: Int
 ) {
     private val logger = LoggerFactory.getLogger(EmulatorController::class.java)
 
     data class SetScenarioRequest(
-        val dispenserAddress: Int,
         val scenario: EmulatorScenario
     )
 
     @PostMapping("/scenario")
     fun setScenario(@RequestBody body: SetScenarioRequest): EmulatorStatus {
-        logger.info("🎬 Setting emulator scenario: address=${body.dispenserAddress}, scenario=${body.scenario}")
-        emulatorScenarioService.setScenario(body.dispenserAddress, body.scenario)
-        return emulatorScenarioService.status(body.dispenserAddress)
+        logger.info("🎬 Setting emulator scenario: address=$defaultAddress, scenario=${body.scenario}")
+        emulatorScenarioService.setScenario(defaultAddress, body.scenario)
+        return emulatorScenarioService.status(defaultAddress)
     }
 
-    @PostMapping("/reset/{address}")
-    fun reset(@PathVariable("address") dispenserAddress: Int): EmulatorStatus {
-        logger.info("🔄 Resetting emulator: address=${dispenserAddress}")
-        emulatorScenarioService.reset(dispenserAddress)
-        return emulatorScenarioService.status(dispenserAddress)
+    @PostMapping("/reset")
+    fun reset(): EmulatorStatus {
+        logger.info("🔄 Resetting emulator: address=$defaultAddress")
+        emulatorScenarioService.reset(defaultAddress)
+        return emulatorScenarioService.status(defaultAddress)
     }
 
-    @GetMapping("/status/{address}")
-    fun status(@PathVariable("address") dispenserAddress: Int): EmulatorStatus =
-        emulatorScenarioService.status(dispenserAddress)
+    @GetMapping("/status")
+    fun status(): EmulatorStatus =
+        emulatorScenarioService.status(defaultAddress)
 }

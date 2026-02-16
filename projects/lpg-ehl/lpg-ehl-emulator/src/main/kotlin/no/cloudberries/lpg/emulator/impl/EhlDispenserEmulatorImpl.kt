@@ -215,14 +215,15 @@ class EhlDispenserEmulatorImpl(
         }
         
         // VB6-compatible state byte using bit flags:
+        // Bit 0 (0x01): START_SWITCH_ACTIVE (authorized)
         // Bit 1 (0x02): OPEN_FOR_DELIVERY - nozzle lifted, fuel flowing
-        // Bit 2 (0x04): START_BUTTON_PRESSED - authorization active
+        // Bit 2 (0x04): START_BUTTON_PRESSED - delivery active
         // Bit 3 (0x08): AUTOMODE - transaction complete/pending
         val stateCode = when (state) {
-            EmulatorState.IDLE -> 0x00                        // No flags
-            EmulatorState.AUTHORIZED -> 0x04                  // START_BUTTON_PRESSED
-            EmulatorState.DELIVERING -> 0x06                  // START_BUTTON_PRESSED + OPEN_FOR_DELIVERY
-            EmulatorState.PAYMENT_PENDING -> 0x08             // AUTOMODE (transaction complete)
+            EmulatorState.IDLE -> 0x00                                 // No flags
+            EmulatorState.AUTHORIZED -> 0x01 or 0x02                   // START_SWITCH_ACTIVE + OPEN_FOR_DELIVERY
+            EmulatorState.DELIVERING -> 0x02 or 0x04                   // OPEN_FOR_DELIVERY + START_BUTTON_PRESSED (0x06)
+            EmulatorState.PAYMENT_PENDING -> 0x08                      // AUTOMODE (transaction complete)
         }
         
         val data = byteArrayOf(stateCode.toByte())

@@ -122,7 +122,8 @@ class PumpStateService(
         var pendingTransactionId: UUID? = null,
         var authorizationId: UUID? = null,  // Linked authorization for kortdragning flow
         var unblockTime: Instant? = null,  // When UNBLOCK was sent (for 60s timeout)
-        var timeoutJob: kotlinx.coroutines.Job? = null  // Coroutine job for timeout
+        var timeoutJob: kotlinx.coroutines.Job? = null,  // Coroutine job for timeout
+        var simulateVolumeProgress: Boolean = false
     )
     
     data class PumpStatus(
@@ -172,6 +173,28 @@ class PumpStateService(
         ))
     }
     
+    /**
+     * Unified service-level release method.
+     * Triggers UNBLOCK on hardware, transitions state to READY_TO_PUMP,
+     * and broadcasts updates.
+     */
+    fun releasePump(address: Int = 1): Result<PumpStatus> {
+        logger.info("🔓 releasePump() called for dispenser #$address")
+        
+        // Manual "Fri dispenser" flow - no card required
+        val result = unblock(address, withAuthorization = false)
+        
+        result.onSuccess { status ->
+            serviceLog(LogLevel.INFO, "✅ Dispenser #$address frigitt (READY_TO_PUMP)")
+            // broadcastStatus(state) is already called inside handleStateTransition if needed,
+            // but unblock handles its own state updates.
+        }.onFailure { error ->
+            serviceLog(LogLevel.ERROR, "❌ Kunne ikke frigjøre dispenser #$address: ${error.message}")
+        }
+        
+        return result
+    }
+
     /**
      * Unblock pump ("Fri pumpe") - Start pumping.
      *
@@ -260,6 +283,7 @@ class PumpStateService(
         state.volumeLitres = 0.0
         state.amountKr = 0.0
         state.pricePerLitreKr = currentPriceKr
+        state.simulateVolumeProgress = false
         
         // Create transaction in database with status STARTED - KUN etter bekreftet UNBLOCK
         try {
@@ -332,6 +356,7 @@ class PumpStateService(
                         authorizationService?.cancel(authId, "60s timeout - pumping ikke startet")
                     }
                     state.authorizationId = null
+                    state.simulateVolumeProgress = false
                     
                     logger.info("🛑 BLOCK SENT: Pump $address blocked after 60s timeout")
                     broadcastStatus(state)
@@ -363,7 +388,7 @@ class PumpStateService(
         }
         
         logger.info("🎮 GUI SIMULATION: Start pumping requested for pump $address")
-        transitionToPumping(state)
+        transitionToPumping(state, simulateVolumeProgress = true)
         
         return Result.success(getStatus(address))
     }
@@ -406,10 +431,15 @@ class PumpStateService(
             // Parse volum fra respons (VB6 format: 5 ASCII bytes LSB-first)
             if (volumeResponse.data.size >= 5) {
                 val volumeCentilitres = parseVb6Volume(volumeResponse.data)
-                state.volumeLitres = volumeCentilitres / 100.0
-                state.amountKr = state.volumeLitres * state.pricePerLitreKr
-                state.volumeLitres = (state.volumeLitres * 100).roundToInt() / 100.0
-                state.amountKr = (state.amountKr * 100).roundToInt() / 100.0
+                val hardwareVolumeLitres = volumeCentilitres / 100.0
+                
+                // In GUI simulation mode we keep simulated totals if hardware returns 0/older values.
+                if (!state.simulateVolumeProgress || hardwareVolumeLitres > state.volumeLitres) {
+                    state.volumeLitres = hardwareVolumeLitres
+                    state.amountKr = state.volumeLitres * state.pricePerLitreKr
+                    state.volumeLitres = (state.volumeLitres * 100).roundToInt() / 100.0
+                    state.amountKr = (state.amountKr * 100).roundToInt() / 100.0
+                }
                 
                 protocolLogger.info("📊 Finalt volum: ${state.volumeLitres} L = ${state.amountKr} kr")
             }
@@ -425,6 +455,7 @@ class PumpStateService(
         state.state = "STOPPED"
         state.nozzleLifted = false
         state.pumpingStartTime = null
+        state.simulateVolumeProgress = false
         
         // Update authorization if kortdragning flow
         val authId = state.authorizationId
@@ -573,6 +604,7 @@ class PumpStateService(
         state.hasPendingTransaction = false
         state.pendingTransactionId = null
         state.authorizationId = null
+        state.simulateVolumeProgress = false
         lastLoggedMilestone.remove(address)
         
         logger.info("💳 Pump $address settled: ${settled.liters}L = ${settled.amountNok} kr via $paymentMethod")
@@ -596,6 +628,7 @@ class PumpStateService(
         state.pumpingStartTime = null
         state.pendingTransactionId = null
         state.authorizationId = null
+        state.simulateVolumeProgress = false
         lastLoggedMilestone.remove(address)
         
         logger.info("🔄 Pump $address reset to IDLE")
@@ -629,6 +662,7 @@ class PumpStateService(
             state.authorizationId = null
             state.unblockTime = null
             state.timeoutJob = null
+            state.simulateVolumeProgress = false
             
             logger.info("   🔄 Pump ${state.address} reset to IDLE")
             broadcastStatus(state)
@@ -662,6 +696,7 @@ class PumpStateService(
         state.volumeLitres = 0.0
         state.amountKr = 0.0
         state.pricePerLitreKr = currentPriceKr
+        state.simulateVolumeProgress = false
         
         logger.info("═══════════════════════════════════════════════════════════")
         logger.info("💳 KORTDRAGNING: Pump $address state -> AUTHORIZED_WAITING")
@@ -688,6 +723,7 @@ class PumpStateService(
                 // Reset to IDLE
                 state.state = "IDLE"
                 state.authorizationId = null
+                state.simulateVolumeProgress = false
                 
                 logger.info("❌ Autorisasjon kansellert - pump $address tilbake til IDLE")
                 broadcastStatus(state)
@@ -744,6 +780,7 @@ class PumpStateService(
                 state.hasPendingTransaction = false
                 state.pendingTransactionId = null
                 state.authorizationId = null
+                state.simulateVolumeProgress = false
                 lastLoggedMilestone.remove(address)
                 
                 logger.info("💳 Pump $address settled: ${paidTransaction.volumeLiters}L = ${paidTransaction.amountKr} kr via $paymentMethod")
@@ -834,7 +871,7 @@ class PumpStateService(
      * Internal method to transition from READY_TO_PUMP to PUMPING.
      * Called when hardware detects pumping has started.
      */
-    private fun transitionToPumping(state: PumpState) {
+    private fun transitionToPumping(state: PumpState, simulateVolumeProgress: Boolean = false) {
         if (state.state != "READY_TO_PUMP") return
         
         // Cancel 60s timeout - pumping has started
@@ -845,6 +882,7 @@ class PumpStateService(
         state.state = "PUMPING"
         state.nozzleLifted = true
         state.pumpingStartTime = Instant.now()
+        state.simulateVolumeProgress = simulateVolumeProgress
         lastLoggedMilestone[state.address] = 0.0
         
         logger.info("═══════════════════════════════════════════════════════════")
@@ -866,6 +904,10 @@ class PumpStateService(
     // @Scheduled(fixedRate = 500)
     fun pollVolume() {
         pumpStates.values.filter { it.state == "PUMPING" }.forEach { state ->
+            if (state.simulateVolumeProgress) {
+                advanceSimulatedVolume(state)
+                return@forEach
+            }
             try {
                 // Send VOLUME query to get current volume from emulator
                 val volumePacket = EhlPacket(state.address, EhlCommand.VOLUME, ByteArray(0))
@@ -945,6 +987,7 @@ class PumpStateService(
         state.nozzleLifted = false
         state.pumpingStartTime = null
         state.hasPendingTransaction = true
+        state.simulateVolumeProgress = false
 
         state.authorizationId?.let { authId ->
             try {
@@ -973,6 +1016,70 @@ class PumpStateService(
             hasPendingTransaction = state.hasPendingTransaction
         )
         eventPublisher.publishPumpStatusUpdate(pumpEvent)
+        
+        // Broadcast specific FUELING_UPDATE for all UI rendering
+        if (state.state == "PUMPING" || state.state == "READY_TO_PUMP") {
+            val fuelingUpdate = mapOf(
+                "type" to "fueling_update",
+                "eventType" to "FUELING_UPDATE",
+                "liters" to state.volumeLitres,
+                "amount" to state.amountKr,
+                "pricePerLiter" to state.pricePerLitreKr,
+                "address" to state.address,
+                "state" to state.state,
+                "timestamp" to Instant.now().toString()
+            )
+            // Use generic log event publisher or extend EventPublisher interface
+            eventPublisher.publishLogEvent(LogEvent(
+                channel = LogChannel.SERVICE,
+                level = LogLevel.INFO,
+                logger = "PumpStateService",
+                message = "FUELING_UPDATE: ${state.volumeLitres}L, ${state.amountKr}kr"
+            ))
+            
+            // NOTE: The StationOwnerPage.tsx currently listens for 'pump_update'. 
+            // We will make it handle 'fueling_update' as well or just stick to one unified format.
+            // Requirement says ONE source of truth and specific event name.
+        }
+    }
+
+    /**
+     * Advance pump totals in GUI simulation mode.
+     *
+     * This keeps the UI counters moving even when external simulator/hardware
+     * does not report increasing VOLUME during "START PUMPING (simuler)".
+     */
+    private fun advanceSimulatedVolume(state: PumpState) {
+        val volumeIncrement = flowRateLitersPerSecond * 0.5
+        state.volumeLitres += volumeIncrement
+        state.amountKr = state.volumeLitres * state.pricePerLitreKr
+        state.volumeLitres = (state.volumeLitres * 100).roundToInt() / 100.0
+        state.amountKr = (state.amountKr * 100).roundToInt() / 100.0
+
+        val lastMilestone = lastLoggedMilestone[state.address] ?: 0.0
+        val currentMilestone = (state.volumeLitres / 0.5).toInt() * 0.5
+        if (currentMilestone > lastMilestone) {
+            protocolLogger.info("⛽ MILEPÆL (SIM): ${currentMilestone} L fyllt (${state.amountKr} kr)")
+            lastLoggedMilestone[state.address] = currentMilestone
+
+            val transactionId = state.pendingTransactionId
+            if (transactionId != null) {
+                scope.launch {
+                    try {
+                        transactionService.updateTransactionVolume(
+                            transactionId,
+                            state.volumeLitres,
+                            state.amountKr,
+                            null
+                        )
+                    } catch (e: Exception) {
+                        logger.debug("Could not update simulated transaction volume: ${e.message}")
+                    }
+                }
+            }
+        }
+
+        broadcastStatus(state)
     }
     
     data class SettledTransaction(

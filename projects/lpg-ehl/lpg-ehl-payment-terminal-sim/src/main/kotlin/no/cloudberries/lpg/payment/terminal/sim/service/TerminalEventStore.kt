@@ -5,39 +5,32 @@ import no.cloudberries.lpg.payment.terminal.sim.model.response.EventEnvelope
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * In-memory event store for SSE streaming and polling.
+ * Single source of truth for terminal events.
  *
- * Events are stored in a circular buffer with cursor-based access.
+ * Stores all emitted events in-memory with monotonic cursor ordering and allows
+ * consumers to retrieve events by cursor or timestamp.
  */
 @Service
-class EventStore(
+class TerminalEventStore(
     private val config: SimulatorConfig
 ) {
-    private val log = LoggerFactory.getLogger(EventStore::class.java)
+    private val log = LoggerFactory.getLogger(TerminalEventStore::class.java)
 
-    // Monotonic cursor for event ordering
     private val cursorGenerator = AtomicLong(0)
-
-    // Event buffer (circular, limited size)
     private val events = ConcurrentLinkedDeque<EventEnvelope>()
-
-    // Listeners for real-time GUI updates
     private val listeners = CopyOnWriteArrayList<EventStoreListener>()
 
-    /**
-     * Publish an event.
-     */
-    fun publishEvent(
+    fun append(
         eventType: String,
         operationId: String? = null,
         payload: Map<String, Any> = emptyMap()
-    ) {
+    ): EventEnvelope {
         val cursor = cursorGenerator.incrementAndGet()
         val event = EventEnvelope(
             Cursor = cursor,
@@ -49,15 +42,10 @@ class EventStore(
         )
 
         events.addLast(event)
-
-        // Limit buffer size (remove oldest if exceeds limit)
         while (events.size > config.eventBufferSize) {
             events.removeFirst()
         }
 
-        log.debug("Event published: type={}, cursor={}, operationId={}", eventType, cursor, operationId)
-
-        // Notify listeners
         listeners.forEach { listener ->
             try {
                 listener.onEvent(event)
@@ -65,38 +53,23 @@ class EventStore(
                 log.warn("Event listener error: {}", ex.message)
             }
         }
+
+        log.debug("Event appended: type={}, cursor={}, operationId={}", eventType, cursor, operationId)
+        return event
     }
 
-    /**
-     * Add a listener for real-time event notifications.
-     */
     fun addListener(listener: EventStoreListener) {
         listeners.add(listener)
     }
 
-    /**
-     * Remove a listener.
-     */
     fun removeListener(listener: EventStoreListener) {
         listeners.remove(listener)
     }
 
-    /**
-     * Get events since a given cursor.
-     *
-     * @param sinceCursor Start from cursor (exclusive). Use 0 to get all buffered events.
-     * @return List of events with Cursor > sinceCursor
-     */
     fun getEventsSince(sinceCursor: Long): List<EventEnvelope> {
         return events.filter { it.Cursor > sinceCursor }
     }
 
-    /**
-     * Get events since a timestamp.
-     *
-     * @param sinceTimestamp ISO-8601 timestamp
-     * @return List of events with Timestamp >= sinceTimestamp
-     */
     fun getEventsSinceTimestamp(sinceTimestamp: String): List<EventEnvelope> {
         val targetInstant = try {
             Instant.parse(sinceTimestamp)
@@ -115,16 +88,13 @@ class EventStore(
         }
     }
 
-    /**
-     * Get current cursor (latest event cursor).
-     */
-    fun getCurrentCursor(): Long {
-        return cursorGenerator.get()
+    fun resolveSince(since: String): List<EventEnvelope> {
+        return since.toLongOrNull()?.let { getEventsSince(it) }
+            ?: getEventsSinceTimestamp(since)
     }
 
-    /**
-     * Clear all events (for testing).
-     */
+    fun getCurrentCursor(): Long = cursorGenerator.get()
+
     fun clear() {
         events.clear()
         log.debug("Event store cleared")

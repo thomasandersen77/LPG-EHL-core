@@ -1,8 +1,9 @@
 package no.cloudberries.lpg.payment.terminal.sim.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import no.cloudberries.lpg.payment.terminal.sim.config.SimulatorConfig
 import no.cloudberries.lpg.payment.terminal.sim.model.response.EventEnvelope
-import no.cloudberries.lpg.payment.terminal.sim.service.EventStore
+import no.cloudberries.lpg.payment.terminal.sim.service.TerminalEventPublisher
+import no.cloudberries.lpg.payment.terminal.sim.service.TerminalEventStore
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -20,12 +21,12 @@ import java.util.concurrent.TimeUnit
 @RestController
 @RequestMapping("/v1/events")
 class EventController(
-    private val eventStore: EventStore,
-    private val objectMapper: ObjectMapper
+    private val eventStore: TerminalEventStore,
+    private val eventPublisher: TerminalEventPublisher,
+    private val config: SimulatorConfig
 ) {
     private val log = LoggerFactory.getLogger(EventController::class.java)
 
-    // Executor for SSE background tasks
     private val executor = Executors.newCachedThreadPool()
 
     /**
@@ -41,13 +42,7 @@ class EventController(
     ): ResponseEntity<List<EventEnvelope>> {
         log.debug("Polling events since: {}", since)
 
-        val events = if (since.toLongOrNull() != null) {
-            // Numeric cursor
-            eventStore.getEventsSince(since.toLong())
-        } else {
-            // Timestamp
-            eventStore.getEventsSinceTimestamp(since)
-        }
+        val events = eventStore.resolveSince(since)
 
         log.debug("Returning {} events", events.size)
         return ResponseEntity.ok(events)
@@ -67,81 +62,47 @@ class EventController(
         log.info("SSE connection established, since={}", since)
 
         val emitter = SseEmitter(Long.MAX_VALUE) // No timeout
+        if (!eventPublisher.registerSse(emitter, since)) {
+            emitter.complete()
+            return emitter
+        }
 
-        // Send initial events
         executor.execute {
             try {
-                val initialEvents = if (since.toLongOrNull() != null) {
-                    eventStore.getEventsSince(since.toLong())
-                } else {
-                    eventStore.getEventsSinceTimestamp(since)
-                }
-
-                initialEvents.forEach { event ->
-                    sendEvent(emitter, event)
-                }
-
-                // Keep-alive: send heartbeat every 30 seconds
-                var lastCursor = eventStore.getCurrentCursor()
                 while (!Thread.currentThread().isInterrupted) {
-                    Thread.sleep(5000) // Poll every 5 seconds
-
-                    // Send new events
-                    val newEvents = eventStore.getEventsSince(lastCursor)
-                    newEvents.forEach { event ->
-                        sendEvent(emitter, event)
-                        lastCursor = event.Cursor
-                    }
-
-                    // Send heartbeat comment
-                    if (newEvents.isEmpty()) {
-                        emitter.send(SseEmitter.event()
+                    TimeUnit.MILLISECONDS.sleep(config.sseHeartbeatMs)
+                    emitter.send(
+                        SseEmitter.event()
                             .comment("heartbeat")
-                            .build())
-                    }
+                            .build()
+                    )
                 }
             } catch (ex: InterruptedException) {
                 log.debug("SSE thread interrupted")
                 emitter.complete()
             } catch (ex: Exception) {
                 log.error("SSE error", ex)
+                eventPublisher.unregisterSse(emitter)
                 emitter.completeWithError(ex)
             }
         }
 
         emitter.onCompletion {
             log.info("SSE connection closed")
+            eventPublisher.unregisterSse(emitter)
         }
 
         emitter.onTimeout {
             log.warn("SSE connection timeout")
+            eventPublisher.unregisterSse(emitter)
             emitter.complete()
         }
 
         emitter.onError { ex ->
             log.error("SSE error", ex)
+            eventPublisher.unregisterSse(emitter)
         }
 
         return emitter
-    }
-
-    /**
-     * Send an event via SSE emitter.
-     */
-    private fun sendEvent(emitter: SseEmitter, event: EventEnvelope) {
-        try {
-            val eventData = objectMapper.writeValueAsString(event)
-            emitter.send(
-                SseEmitter.event()
-                    .id(event.Cursor.toString())
-                    .name(event.EventType)
-                    .data(eventData)
-                    .build()
-            )
-            log.debug("SSE event sent: type={}, cursor={}", event.EventType, event.Cursor)
-        } catch (ex: Exception) {
-            log.error("Failed to send SSE event", ex)
-            throw ex
-        }
     }
 }

@@ -10,6 +10,21 @@ interface TerminalClient {
     fun openTerminal(): TerminalSimpleResponse
 
     /**
+     * Health check for terminal service.
+     */
+    fun getHealth(): TerminalHealthResponse
+
+    /**
+     * Get terminal readiness and connection status.
+     */
+    fun getStatus(): TerminalStatusResponse
+
+    /**
+     * Close terminal connection.
+     */
+    fun closeTerminal(): TerminalSimpleResponse
+
+    /**
      * Perform a purchase (card payment) on the terminal.
      */
     fun purchase(request: TerminalPurchaseRequest): TerminalOperationResponse
@@ -26,10 +41,32 @@ data class TerminalSimpleResponse(
     val error: String? = null
 )
 
+data class TerminalHealthResponse(
+    val status: String,
+    val configLoaded: Boolean
+)
+
+data class TerminalStatusResponse(
+    val terminalOpen: Boolean,
+    val terminalReady: Boolean,
+    val connectionState: String? = null,
+    val lastError: String? = null
+)
+
 data class TerminalOperationResponse(
     val success: Boolean,
     val operationId: String? = null,
     val callResult: Int? = null,
+    val entryMode: String? = null,
+    val entryModeCode: String? = null,
+    val localModeResultData: String? = null,
+    val responseCode: String? = null,
+    val rejectionReason: String? = null,
+    val printTextRaw: String? = null,
+    val printTextSanitized: String? = null,
+    val lastDisplayText: String? = null,
+    val localModeResult: Int? = null,
+    val durationMs: Long? = null,
     val error: String? = null,
     val errorCode: String? = null
 )

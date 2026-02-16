@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>no.cloudberries.lpg</groupId>
+        <artifactId>lpg-ehl-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <!--
+      NOTE:
+      The upstream project expected an external/internal dependency:
+        no.cloudberries.norgesgass:baxi-kotlin:0.1.0-SNAPSHOT
+      That artifact is not published to Maven Central.
+      This module provides a minimal compile-time API surface so the workspace builds.
+      Replace this module with the real implementation when available.
+    -->
+    <groupId>no.cloudberries.norgesgass</groupId>
+    <artifactId>baxi-kotlin</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+
+    <name>baxi-kotlin (stub)</name>
+    <description>Compile-time stub for Baxi payment terminal integration</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
+        <plugins>
+            <plugin>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+

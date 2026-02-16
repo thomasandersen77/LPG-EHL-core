@@ -122,26 +122,12 @@ class HeadlessStartupRunner(
     }
     
     private fun startHardwareMonitoring() {
-        val watchdog = hardwareWatchdogService
-        if (watchdog == null) {
-            logger.info("   ℹ️  Hardware watchdog service not available")
-            return
-        }
-
-        // Default is OFF: avoid reconnect churn on normal RS-485 silence / protocol-level timeouts.
-        // Can be enabled explicitly if you really want a scheduled reconnect policy.
-        val scheduledEnabled = environment.getProperty(
-            "ehl.watchdog.scheduled.enabled",
-            Boolean::class.java,
-            false
-        )
-
-        if (scheduledEnabled) {
-            logger.info("🐕 Hardware watchdog scheduled loop: ENABLED (ehl.watchdog.scheduled.enabled=true)")
-            logger.info("   ✅ Automatic health checks + reconnect policy active")
+        if (hardwareWatchdogService != null) {
+            logger.info("🐕 Starting hardware watchdog service...")
+            // Watchdog kjører automatisk via @Scheduled annotations
+            logger.info("   ✅ Watchdog service active")
         } else {
-            logger.info("🐕 Hardware watchdog scheduled loop: DISABLED (default)")
-            logger.info("   ✅ Manual reconnect still available via transport.reconnect()")
+            logger.info("   ℹ️  Hardware watchdog service not available")
         }
     }
     

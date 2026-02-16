@@ -44,33 +44,121 @@ class PumpPaymentOrchestrator(
             return TerminalOperationResponse(success = false, error = "Terminal client not configured")
         }
 
-        log.info("Opening terminal for purchase (pumpId={}, amountMinor={})", pumpId, amountMinor)
-        val openResponse = terminalClient.openTerminal()
-        if (!openResponse.success) {
-            log.error("Terminal open failed: {}", openResponse.error)
-            return TerminalOperationResponse(success = false, error = openResponse.error)
+        log.info("Preparing terminal for purchase (pumpId={}, amountMinor={})", pumpId, amountMinor)
+        if (!prepareTerminalForPurchase()) {
+            return TerminalOperationResponse(
+                success = false,
+                error = "Terminal not ready for purchase",
+                errorCode = "terminal_not_ready"
+            )
         }
 
-        val purchaseResponse = terminalClient.purchase(
-            TerminalPurchaseRequest(
-                amountMinor = amountMinor,
-                optionalData = optionalData,
-                clientRequestId = clientRequestId
-            )
+        val purchaseRequest = TerminalPurchaseRequest(
+            amountMinor = amountMinor,
+            optionalData = optionalData,
+            clientRequestId = clientRequestId
         )
 
-        if (purchaseResponse.success && !purchaseResponse.operationId.isNullOrBlank()) {
-            startPumpingAfterPayment(
-                amountCents = amountMinor.toLong(),
-                pumpId = pumpId,
-                productId = productId,
-                operationId = purchaseResponse.operationId
-            )
-        } else {
-            log.error("Purchase failed: {}", purchaseResponse.error ?: purchaseResponse.errorCode)
+        val purchaseResponse = performPurchaseWithRetry(purchaseRequest)
+
+        purchaseResponse.operationId?.let { opId ->
+            if (purchaseResponse.success) {
+                startPumpingAfterPayment(
+                    amountCents = amountMinor.toLong(),
+                    pumpId = pumpId,
+                    productId = productId,
+                    operationId = opId
+                )
+            } else {
+                log.error("Purchase failed: {}", purchaseResponse.error ?: purchaseResponse.errorCode)
+            }
+        } ?: run {
+            if (purchaseResponse.success) {
+                log.warn("Purchase succeeded but no operationId returned")
+            } else {
+                log.error("Purchase failed: {}", purchaseResponse.error ?: purchaseResponse.errorCode)
+            }
         }
 
         return purchaseResponse
+    }
+
+    private fun prepareTerminalForPurchase(): Boolean {
+        val status = terminalClient?.getStatus() ?: return false
+        var needsOpen = false
+
+        if (status.connectionState.equals("Aborted", ignoreCase = true)) {
+            log.warn("Terminal connection aborted; closing and reopening")
+            terminalClient.closeTerminal()
+            needsOpen = true
+        }
+
+        if (!status.terminalReady) {
+            needsOpen = true
+        }
+
+        if (needsOpen) {
+            log.info("Opening terminal")
+            val openResponse = terminalClient.openTerminal()
+            if (!openResponse.success) {
+                log.error("Terminal open failed: {}", openResponse.error)
+                return false
+            }
+        } else {
+            log.info("Terminal already ready; skipping open")
+        }
+
+        return waitForReady(timeoutMs = 60_000)
+    }
+
+    private fun waitForReady(timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val status = terminalClient?.getStatus() ?: return false
+            if (status.terminalReady) {
+                return true
+            }
+            Thread.sleep(1000)
+        }
+        log.warn("Terminal not ready after waiting {} ms", timeoutMs)
+        return false
+    }
+
+    private fun performPurchaseWithRetry(request: TerminalPurchaseRequest): TerminalOperationResponse {
+        val maxBusyRetries = 3
+        var busyAttempts = 0
+        var notReadyAttempts = 0
+
+        while (true) {
+            val response = terminalClient?.purchase(request)
+                ?: return TerminalOperationResponse(success = false, error = "Terminal client not configured")
+
+            if (response.success) {
+                return response
+            }
+
+            when (response.errorCode) {
+                "terminal_busy" -> {
+                    busyAttempts++
+                    if (busyAttempts >= maxBusyRetries) {
+                        return response
+                    }
+                    log.warn("Terminal busy, retrying purchase (attempt {} of {})", busyAttempts, maxBusyRetries)
+                    Thread.sleep(1500)
+                }
+                "terminal_not_ready" -> {
+                    notReadyAttempts++
+                    if (notReadyAttempts >= maxBusyRetries) {
+                        return response
+                    }
+                    log.warn("Terminal not ready, reopening before retry (attempt {} of {})", notReadyAttempts, maxBusyRetries)
+                    if (!prepareTerminalForPurchase()) {
+                        return response
+                    }
+                }
+                else -> return response
+            }
+        }
     }
 
     /**
