@@ -61,17 +61,17 @@ zip_module() {
 
 # Zip all Maven modules (Kotlin/Java)
 echo "=== Maven Modules ==="
-zip_module "projects/lpg-ehl/lpg-ehl-core"
-zip_module "projects/lpg-ehl/lpg-ehl-service"
-zip_module "projects/lpg-ehl/lpg-transport"
-zip_module "projects/lpg-ehl/lpg-ehl-emulator"
-zip_module "projects/lpg-ehl/lpg-ehl-serialport-sim"
-zip_module "projects/lpg-ehl/lpg-ehl-webapp"
-zip_module "projects/lpg-ehl/lpg-ehl-app-headless"
+zip_module "lpg-ehl-core"
+zip_module "lpg-ehl-service"
+zip_module "lpg-transport"
+zip_module "lpg-ehl-emulator"
+zip_module "lpg-ehl-serialport-sim"
+zip_module "lpg-ehl-webapp"
+zip_module "lpg-ehl-app-headless"
 
 echo ""
 echo "=== React Frontend ==="
-zip_module "projects/lpg-ehl/lpg-web"
+zip_module "lpg-web"
 
 echo ""
 echo "📋 Created archives:"

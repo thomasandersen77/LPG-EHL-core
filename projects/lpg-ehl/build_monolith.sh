@@ -37,17 +37,17 @@ done
 
 # Paths
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # projects/lpg-ehl
-REPO_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"                 # repo root
+REPO_ROOT="$PROJECT_DIR"
 
-MVNW="$REPO_ROOT/mvnw"
+MVNW="$PROJECT_DIR/mvnw"
 if [ ! -x "$MVNW" ]; then
     echo -e "${RED}✗ BUILD FAILED:${NC} Could not find executable mvnw at $MVNW"
     exit 1
 fi
 
-cd "$REPO_ROOT"
+cd "$PROJECT_DIR"
 
-BUILD_LOG="$REPO_ROOT/.build.log"
+BUILD_LOG="$PROJECT_DIR/.build.log"
 BUILD_START=$(date +%s)
 
 # Helper: Run Maven command (quiet unless error or verbose)
@@ -97,7 +97,7 @@ if [ -d "$FRONTEND_DIR" ]; then
     cp -r "$FRONTEND_DIR/dist/"* "$WEBAPP_STATIC/"
     STATIC_FILES=$(find "$WEBAPP_STATIC" -type f | wc -l | tr -d ' ')
     echo -e "${GREEN}✓${NC} ${GRAY}($STATIC_FILES files)${NC}"
-    cd "$REPO_ROOT"
+    cd "$PROJECT_DIR"
 else
     echo -e "${YELLOW}⚠ Skipped${NC}"
 fi
@@ -115,18 +115,18 @@ echo -n -e "  ${GRAY}[3/4]${NC} Packaging JAR files... "
 
 PKG_ARGS="-DskipTests -q"
 
-run_maven "WebApp package" package -pl projects/lpg-ehl/lpg-ehl-webapp -am $PKG_ARGS
-run_maven "Headless package" package -pl projects/lpg-ehl/lpg-ehl-app-headless -am $PKG_ARGS
-run_maven "PLS Sim package" package -pl projects/lpg-ehl/lpg-ehl-serialport-sim -am $PKG_ARGS
-run_maven "Payment Terminal Sim package" package -pl projects/lpg-ehl/lpg-ehl-payment-terminal-sim -am $PKG_ARGS
-run_maven "Payment Terminal GUI package" package -pl projects/lpg-ehl/lpg-ehl-payment-terminal-gui -am $PKG_ARGS
+run_maven "WebApp package" package -pl lpg-ehl-webapp -am $PKG_ARGS
+run_maven "Headless package" package -pl lpg-ehl-app-headless -am $PKG_ARGS
+run_maven "PLS Sim package" package -pl lpg-ehl-serialport-sim -am $PKG_ARGS
+run_maven "Payment Terminal Sim package" package -pl lpg-ehl-payment-terminal-sim -am $PKG_ARGS
+run_maven "Payment Terminal GUI package" package -pl lpg-ehl-payment-terminal-gui -am $PKG_ARGS
 
 echo -e "${GREEN}✓${NC}"
 
 # Step 4: Create Release Artifacts
 echo -n -e "  ${GRAY}[4/4]${NC} Creating release artifacts... "
 
-RELEASE_DIR="$REPO_ROOT/release"
+RELEASE_DIR="$PROJECT_DIR/release"
 mkdir -p "$RELEASE_DIR"
 
 # Find and copy JARs
@@ -154,13 +154,13 @@ fi
 # Require main artifacts
 if [ -z "$WEBAPP_JAR" ] || [ ! -f "$WEBAPP_JAR" ]; then
     echo ""
-    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find WebApp JAR in projects/lpg-ehl/lpg-ehl-webapp/target"
+    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find WebApp JAR in lpg-ehl-webapp/target"
     exit 1
 fi
 
 if [ -z "$HEADLESS_JAR" ] || [ ! -f "$HEADLESS_JAR" ]; then
     echo ""
-    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find Headless JAR in projects/lpg-ehl/lpg-ehl-app-headless/target"
+    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find Headless JAR in lpg-ehl-app-headless/target"
     exit 1
 fi
 

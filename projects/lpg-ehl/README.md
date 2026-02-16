@@ -48,8 +48,8 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 
 ### 🔧 Development
 - **[Multi-Station Setup](docs/development/MULTI-STATION-SETUP.md)** - Run 3 Edge stations + Cloud simultaneously
-- **[API Documentation](projects/lpg-ehl/lpg-ehl-api/README.md)** - REST API endpoints and configuration
-- **[Frontend Documentation](projects/lpg-ehl/lpg-web/README.md)** - React frontend setup and usage
+- **[API Documentation](lpg-ehl-api/README.md)** - REST API endpoints and configuration
+- **[Frontend Documentation](lpg-web/README.md)** - React frontend setup and usage
 
 ### 📜 Legacy & History
 - **[Legacy Analysis](docs/legacy/LEGACY_ANALYSIS.md)** - VB6/Python legacy code analysis
@@ -58,19 +58,22 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 ## 🏗️ Project Structure
 
 ```
-LPG-EHL-core/
+projects/lpg-ehl/
 ├── pom.xml                          # Parent POM (multi-module Maven)
-├── build_monolith.sh                # Builds a single runnable JAR (API + Web)
-├── init-db.sql                      # Database schema (used by Liquibase)
-├── release/
-│   └── lpg-ehl-monolith.jar         # Monolith output from build_monolith.sh
-├── projects/lpg-ehl/                # Main server project (modules + frontend)
-│   ├── lpg-ehl-core/                # Core protocol implementation
-│   ├── lpg-ehl-emulator/            # Emulator for testing without hardware
-│   ├── lpg-ehl-api/                 # Spring Boot REST API + Azure queue sync
-│   └── lpg-web/                     # React frontend (bundled into the webapp jar)
-├── projects/                        # Separate non-core projects (tools, reference implementations)
-└── legacy/                          # Archived/legacy code and historical field artifacts
+├── mvnw                             # Maven wrapper (recommended)
+├── build_monolith.sh                # Builds runnable jars into ./release/
+├── lpg-ehl-core/                    # Core protocol implementation
+├── lpg-ehl-service/                 # Business logic + persistence + migrations
+├── lpg-transport/                   # Serial/TCP transport layer
+├── lpg-ehl-webapp/                  # Web API + bundled React frontend
+├── lpg-ehl-app-headless/            # Headless production service
+├── lpg-ehl-emulator/                # LAB mode dispenser simulator
+├── lpg-ehl-serialport-sim/          # Serial port simulator
+├── lpg-ehl-payment-terminal-*/      # Payment terminal simulators
+├── lpg-web/                         # React frontend (Vite)
+├── docs/                            # Project documentation
+├── scripts/                         # Helper scripts
+└── release/                         # Build outputs + release config/templates
 ```
 
 ## 🚀 Quick Start
@@ -87,7 +90,7 @@ LPG-EHL-core/
 1. **Clone the repository**
    ```bash
    git clone git@github.com:thomasandersen77/LPG-EHL-core.git
-   cd LPG-EHL-core
+   cd LPG-EHL-core/projects/lpg-ehl
    ```
 
 2. **Install SDKMAN** (if not already installed)
@@ -103,7 +106,7 @@ LPG-EHL-core/
 
 4. **Build all modules**
    ```bash
-   mvn clean install
+   ./mvnw clean install
    ```
    
    Expected output:

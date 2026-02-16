@@ -15,17 +15,17 @@
     <description>EHL Protocol Implementation for LPG Dispensers - Parent POM</description>
 
     <modules>
-        <module>projects/lpg-ehl/lpg-ehl-core</module>
+        <module>lpg-ehl-core</module>
         <module>kotlin-scripts/serial-port-tests</module>
-        <module>projects/lpg-ehl/lpg-ehl-emulator</module>
-        <module>projects/lpg-ehl/lpg-ehl-api</module>
-        <module>projects/lpg-ehl/lpg-ehl-webapp</module>
-        <module>projects/lpg-ehl/lpg-transport</module>
-        <module>projects/lpg-ehl/lpg-ehl-serialport-sim</module>
-        <module>projects/lpg-ehl/lpg-ehl-payment-terminal-sim</module>
-        <module>projects/lpg-ehl/lpg-ehl-payment-terminal-gui</module>
-        <module>projects/lpg-ehl/lpg-ehl-service</module>
-        <module>projects/lpg-ehl/lpg-ehl-app-headless</module>
+        <module>lpg-ehl-emulator</module>
+        <module>lpg-ehl-api</module>
+        <module>lpg-ehl-webapp</module>
+        <module>lpg-transport</module>
+        <module>lpg-ehl-serialport-sim</module>
+        <module>lpg-ehl-payment-terminal-sim</module>
+        <module>lpg-ehl-payment-terminal-gui</module>
+        <module>lpg-ehl-service</module>
+        <module>lpg-ehl-app-headless</module>
     </modules>
 
     <properties>

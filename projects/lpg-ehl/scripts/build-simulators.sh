@@ -38,7 +38,7 @@ GRAY='\033[0;90m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-MVN_ARGS=(clean package -pl projects/lpg-ehl/lpg-ehl-serialport-sim,projects/lpg-ehl/lpg-ehl-payment-terminal-sim,projects/lpg-ehl/lpg-ehl-payment-terminal-gui -am)
+MVN_ARGS=(clean package -pl lpg-ehl-serialport-sim,lpg-ehl-payment-terminal-sim,lpg-ehl-payment-terminal-gui -am)
 if [[ "$SKIP_TESTS" == "true" ]]; then
   MVN_ARGS+=(-DskipTests)
 fi
@@ -62,36 +62,36 @@ RELEASE_DIR="$PROJECT_ROOT/release"
 mkdir -p "$RELEASE_DIR"
 
 # PLS
-PLS_SIM_JAR=$(find "$PROJECT_ROOT/projects/lpg-ehl/lpg-ehl-serialport-sim/target" -name "pls-sim.jar" | head -1)
+PLS_SIM_JAR=$(find "$PROJECT_ROOT/lpg-ehl-serialport-sim/target" -name "pls-sim.jar" | head -1)
 if [ -z "$PLS_SIM_JAR" ]; then
-  PLS_SIM_JAR=$(find "$PROJECT_ROOT/projects/lpg-ehl/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
+  PLS_SIM_JAR=$(find "$PROJECT_ROOT/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
 # Terminal sim
-PAYMENT_TERMINAL_SIM_JAR=$(find "$PROJECT_ROOT/projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim-exec.jar" | head -1)
+PAYMENT_TERMINAL_SIM_JAR=$(find "$PROJECT_ROOT/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim-exec.jar" | head -1)
 if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
-  PAYMENT_TERMINAL_SIM_JAR=$(find "$PROJECT_ROOT/projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim.jar" | head -1)
+  PAYMENT_TERMINAL_SIM_JAR=$(find "$PROJECT_ROOT/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim.jar" | head -1)
 fi
 if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
-  PAYMENT_TERMINAL_SIM_JAR=$(find "$PROJECT_ROOT/projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target" -name "lpg-ehl-payment-terminal-sim-*.jar" -not -name "*-plain.jar" | head -1)
+  PAYMENT_TERMINAL_SIM_JAR=$(find "$PROJECT_ROOT/lpg-ehl-payment-terminal-sim/target" -name "lpg-ehl-payment-terminal-sim-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
 # Terminal GUI
-PAYMENT_TERMINAL_GUI_JAR=$(find "$PROJECT_ROOT/projects/lpg-ehl/lpg-ehl-payment-terminal-gui/target" -name "payment-terminal-gui.jar" | head -1)
+PAYMENT_TERMINAL_GUI_JAR=$(find "$PROJECT_ROOT/lpg-ehl-payment-terminal-gui/target" -name "payment-terminal-gui.jar" | head -1)
 if [ -z "$PAYMENT_TERMINAL_GUI_JAR" ]; then
-  PAYMENT_TERMINAL_GUI_JAR=$(find "$PROJECT_ROOT/projects/lpg-ehl/lpg-ehl-payment-terminal-gui/target" -name "lpg-ehl-payment-terminal-gui-*.jar" -not -name "*-plain.jar" | head -1)
+  PAYMENT_TERMINAL_GUI_JAR=$(find "$PROJECT_ROOT/lpg-ehl-payment-terminal-gui/target" -name "lpg-ehl-payment-terminal-gui-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
 if [ -z "$PLS_SIM_JAR" ] || [ ! -f "$PLS_SIM_JAR" ]; then
-  echo -e "${RED}✗ Could not find PLS simulator jar in projects/lpg-ehl/lpg-ehl-serialport-sim/target${NC}"
+  echo -e "${RED}✗ Could not find PLS simulator jar in lpg-ehl-serialport-sim/target${NC}"
   exit 1
 fi
 if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ] || [ ! -f "$PAYMENT_TERMINAL_SIM_JAR" ]; then
-  echo -e "${RED}✗ Could not find payment terminal sim jar in projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target${NC}"
+  echo -e "${RED}✗ Could not find payment terminal sim jar in lpg-ehl-payment-terminal-sim/target${NC}"
   exit 1
 fi
 if [ -z "$PAYMENT_TERMINAL_GUI_JAR" ] || [ ! -f "$PAYMENT_TERMINAL_GUI_JAR" ]; then
-  echo -e "${RED}✗ Could not find payment terminal gui jar in projects/lpg-ehl/lpg-ehl-payment-terminal-gui/target${NC}"
+  echo -e "${RED}✗ Could not find payment terminal gui jar in lpg-ehl-payment-terminal-gui/target${NC}"
   exit 1
 fi
 
