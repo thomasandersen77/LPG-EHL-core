@@ -35,11 +35,19 @@ for arg in "$@"; do
     esac
 done
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+# Paths
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # projects/lpg-ehl
+REPO_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"                 # repo root
 
-BUILD_LOG="$SCRIPT_DIR/.build.log"
+MVNW="$REPO_ROOT/mvnw"
+if [ ! -x "$MVNW" ]; then
+    echo -e "${RED}✗ BUILD FAILED:${NC} Could not find executable mvnw at $MVNW"
+    exit 1
+fi
+
+cd "$REPO_ROOT"
+
+BUILD_LOG="$REPO_ROOT/.build.log"
 BUILD_START=$(date +%s)
 
 # Helper: Run Maven command (quiet unless error or verbose)
@@ -48,9 +56,9 @@ run_maven() {
     shift
     
     if [ "$VERBOSE" = true ]; then
-        ./mvnw "$@"
+        "$MVNW" "$@"
     else
-        if ! ./mvnw "$@" > "$BUILD_LOG" 2>&1; then
+        if ! "$MVNW" "$@" > "$BUILD_LOG" 2>&1; then
             echo ""
             echo -e "${RED}✗ BUILD FAILED: $description${NC}"
             echo ""
@@ -70,14 +78,14 @@ echo -e "${BLUE}  🛢️  LPG-EHL Build System${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "  ${GRAY}Java:${NC}  $(java -version 2>&1 | head -1 | cut -d'"' -f2)"
-echo -e "  ${GRAY}Maven:${NC} $(./mvnw -version 2>/dev/null | head -1 | cut -d' ' -f3)"
+echo -e "  ${GRAY}Maven:${NC} $("$MVNW" -version 2>/dev/null | head -1 | cut -d' ' -f3)"
 echo -e "  ${GRAY}Tests:${NC} $([ "$SKIP_TESTS" = true ] && echo 'Skipped' || echo 'Enabled')"
 echo ""
 
 # Step 1: Build React Frontend
 echo -n -e "  ${GRAY}[1/4]${NC} Building React frontend... "
-FRONTEND_DIR="$SCRIPT_DIR/projects/lpg-ehl/lpg-web"
-WEBAPP_STATIC="$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-webapp/src/main/resources/static"
+FRONTEND_DIR="$PROJECT_DIR/lpg-web"
+WEBAPP_STATIC="$PROJECT_DIR/lpg-ehl-webapp/src/main/resources/static"
 
 if [ -d "$FRONTEND_DIR" ]; then
     cd "$FRONTEND_DIR"
@@ -89,7 +97,7 @@ if [ -d "$FRONTEND_DIR" ]; then
     cp -r "$FRONTEND_DIR/dist/"* "$WEBAPP_STATIC/"
     STATIC_FILES=$(find "$WEBAPP_STATIC" -type f | wc -l | tr -d ' ')
     echo -e "${GREEN}✓${NC} ${GRAY}($STATIC_FILES files)${NC}"
-    cd "$SCRIPT_DIR"
+    cd "$REPO_ROOT"
 else
     echo -e "${YELLOW}⚠ Skipped${NC}"
 fi
@@ -118,29 +126,29 @@ echo -e "${GREEN}✓${NC}"
 # Step 4: Create Release Artifacts
 echo -n -e "  ${GRAY}[4/4]${NC} Creating release artifacts... "
 
-RELEASE_DIR="release"
+RELEASE_DIR="$REPO_ROOT/release"
 mkdir -p "$RELEASE_DIR"
 
 # Find and copy JARs
-WEBAPP_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
-HEADLESS_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-app-headless/target" -name "lpg-ehl-app-headless-*.jar" -not -name "*-plain.jar" | head -1)
-PLS_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-serialport-sim/target" -name "pls-sim.jar" | head -1)
+WEBAPP_JAR=$(find "$PROJECT_DIR/lpg-ehl-webapp/target" -name "lpg-ehl-webapp-*.jar" -not -name "*-plain.jar" | head -1)
+HEADLESS_JAR=$(find "$PROJECT_DIR/lpg-ehl-app-headless/target" -name "lpg-ehl-app-headless-*.jar" -not -name "*-plain.jar" | head -1)
+PLS_SIM_JAR=$(find "$PROJECT_DIR/lpg-ehl-serialport-sim/target" -name "pls-sim.jar" | head -1)
 if [ -z "$PLS_SIM_JAR" ]; then
     # Fallback if naming changes in the future
-    PLS_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
+    PLS_SIM_JAR=$(find "$PROJECT_DIR/lpg-ehl-serialport-sim/target" -name "lpg-ehl-serialport-sim-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
-PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim-exec.jar" | head -1)
+PAYMENT_TERMINAL_SIM_JAR=$(find "$PROJECT_DIR/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim-exec.jar" | head -1)
 if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
-    PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim.jar" | head -1)
+    PAYMENT_TERMINAL_SIM_JAR=$(find "$PROJECT_DIR/lpg-ehl-payment-terminal-sim/target" -name "payment-terminal-sim.jar" | head -1)
 fi
 if [ -z "$PAYMENT_TERMINAL_SIM_JAR" ]; then
-    PAYMENT_TERMINAL_SIM_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-sim/target" -name "lpg-ehl-payment-terminal-sim-*.jar" -not -name "*-plain.jar" | head -1)
+    PAYMENT_TERMINAL_SIM_JAR=$(find "$PROJECT_DIR/lpg-ehl-payment-terminal-sim/target" -name "lpg-ehl-payment-terminal-sim-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
-PAYMENT_TERMINAL_GUI_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-gui/target" -name "payment-terminal-gui.jar" | head -1)
+PAYMENT_TERMINAL_GUI_JAR=$(find "$PROJECT_DIR/lpg-ehl-payment-terminal-gui/target" -name "payment-terminal-gui.jar" | head -1)
 if [ -z "$PAYMENT_TERMINAL_GUI_JAR" ]; then
-    PAYMENT_TERMINAL_GUI_JAR=$(find "$SCRIPT_DIR/projects/lpg-ehl/lpg-ehl-payment-terminal-gui/target" -name "lpg-ehl-payment-terminal-gui-*.jar" -not -name "*-plain.jar" | head -1)
+    PAYMENT_TERMINAL_GUI_JAR=$(find "$PROJECT_DIR/lpg-ehl-payment-terminal-gui/target" -name "lpg-ehl-payment-terminal-gui-*.jar" -not -name "*-plain.jar" | head -1)
 fi
 
 # Require main artifacts
