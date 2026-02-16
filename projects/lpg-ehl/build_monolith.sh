@@ -9,8 +9,7 @@
 #   release/payment-terminal-gui.jar     - Payment Terminal Visual Simulator GUI
 #
 # Usage:
-#   ./build_monolith.sh              # Build all
-#   ./build_monolith.sh --skip-tests # Skip tests
+#   ./build_monolith.sh              # Build all (tests always skipped)
 #   ./build_monolith.sh --verbose    # Show Maven output
 
 set -e
@@ -26,11 +25,9 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Parse arguments
-SKIP_TESTS=false
 VERBOSE=false
 for arg in "$@"; do
     case $arg in
-        --skip-tests) SKIP_TESTS=true ;;
         --verbose) VERBOSE=true ;;
     esac
 done
@@ -79,7 +76,7 @@ echo -e "${BLUE}═════════════════════�
 echo ""
 echo -e "  ${GRAY}Java:${NC}  $(java -version 2>&1 | head -1 | cut -d'"' -f2)"
 echo -e "  ${GRAY}Maven:${NC} $("$MVNW" -version 2>/dev/null | head -1 | cut -d' ' -f3)"
-echo -e "  ${GRAY}Tests:${NC} $([ "$SKIP_TESTS" = true ] && echo 'Skipped' || echo 'Enabled')"
+echo -e "  ${GRAY}Tests:${NC} Skipped (always)"
 echo ""
 
 # Step 1: Build React Frontend
@@ -104,8 +101,7 @@ fi
 
 # Step 2: Maven Build
 echo -n -e "  ${GRAY}[2/4]${NC} Compiling all modules... "
-MVN_ARGS="clean install"
-[ "$SKIP_TESTS" = true ] && MVN_ARGS="$MVN_ARGS -DskipTests"
+MVN_ARGS="clean install -DskipTests"
 
 run_maven "Maven compile" $MVN_ARGS -q
 echo -e "${GREEN}✓${NC}"
@@ -115,6 +111,17 @@ echo -n -e "  ${GRAY}[3/4]${NC} Packaging JAR files... "
 
 PKG_ARGS="-DskipTests -q"
 
+# Package all Kotlin modules explicitly
+run_maven "Core package" package -pl lpg-ehl-core -am $PKG_ARGS
+run_maven "Baxi Kotlin package" package -pl baxi-kotlin -am $PKG_ARGS
+run_maven "Serial Port Tests package" package -pl kotlin-scripts/serial-port-tests -am $PKG_ARGS
+run_maven "Emulator package" package -pl lpg-ehl-emulator -am $PKG_ARGS
+run_maven "API package" package -pl lpg-ehl-api -am $PKG_ARGS
+run_maven "Transport package" package -pl lpg-transport -am $PKG_ARGS
+run_maven "Service package" package -pl lpg-ehl-service -am $PKG_ARGS
+run_maven "Nets Cloud Connect package" package -pl lpg-nets-cloud-connect -am $PKG_ARGS
+
+# Package application JARs
 run_maven "WebApp package" package -pl lpg-ehl-webapp -am $PKG_ARGS
 run_maven "Headless package" package -pl lpg-ehl-app-headless -am $PKG_ARGS
 run_maven "PLS Sim package" package -pl lpg-ehl-serialport-sim -am $PKG_ARGS

@@ -1,5 +1,7 @@
 package no.cloudberries.lpg.netscloud
 
+import kotlinx.serialization.Serializable
+
 /**
  * Abstraction for talking to a payment terminal provider (real Nets Cloud Connect, simulator, etc.).
  */
@@ -35,17 +37,20 @@ interface TerminalClient {
     fun reversal(operationId: String? = null): TerminalOperationResponse
 }
 
+@Serializable
 data class TerminalSimpleResponse(
     val success: Boolean,
     val message: String? = null,
     val error: String? = null
 )
 
+@Serializable
 data class TerminalHealthResponse(
     val status: String,
     val configLoaded: Boolean
 )
 
+@Serializable
 data class TerminalStatusResponse(
     val terminalOpen: Boolean,
     val terminalReady: Boolean,
@@ -53,6 +58,7 @@ data class TerminalStatusResponse(
     val lastError: String? = null
 )
 
+@Serializable
 data class TerminalOperationResponse(
     val success: Boolean,
     val operationId: String? = null,
@@ -71,6 +77,7 @@ data class TerminalOperationResponse(
     val errorCode: String? = null
 )
 
+@Serializable
 data class TerminalPurchaseRequest(
     val amountMinor: Int,
     val operatorId: String = "0000",
@@ -80,6 +87,7 @@ data class TerminalPurchaseRequest(
     val preAvstemming: TerminalPreAvstemmingConfig? = null
 )
 
+@Serializable
 data class TerminalPreAvstemmingConfig(
     val enabled: Boolean = false,
     val password: String = "0000",

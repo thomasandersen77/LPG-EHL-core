@@ -30,8 +30,9 @@ NC='\033[0m'
 DO_BUILD=false
 FIELD_MODE=false
 GUI_ENABLED=false
+HEADLESS_MODE=false
+WITH_TERMINAL=false
 TERMINAL_PORT=18080
-TERMINAL_HEADLESS=false
 
 show_help() {
   cat <<'EOF'
@@ -39,14 +40,19 @@ START ALL SIMULATORS – Socat + Terminal + PLS
 
 Starter simulatorene for terminal/pumpe-integrasjon.
 
-Default-modus (lokal utvikling):
+Default-modus (lokal utvikling med GUI):
   1. Socat       – virtuell seriell kobling (/tmp/vserial0 <-> /tmp/vserial1)
   2. PLS         – Pumpe-simulator (/tmp/vserial0)
-  3. Terminal    – Payment Terminal Simulator (port 18080)
+  3. Terminal    – Payment Terminal Simulator (port 18080, GUI)
 
 --field modus (ARK/edge – kun socat + PLS):
   1. Socat       – virtuell seriell kobling (/tmp/vserial0 <-> /tmp/vserial1)
   2. PLS         – Pumpe-simulator (/tmp/vserial0)
+  Legg til --with-terminal for å inkludere terminal-simulator.
+
+--headless modus (Debian server via SSH – ingen GUI):
+  Alle komponenter kjøres med kun terminal output.
+  Perfekt for remote servere uten display.
 
   Webapp startes separat:
     java -jar release/lpg-ehl-webapp.jar \
@@ -61,17 +67,30 @@ Port-fordeling:
 Valgfrie parametre:
   --help, -h             Vis denne hjelpen
   --build                Bygg JARs først
-  --field                ARK/edge-modus: kun socat + PLS (ingen terminal sim)
-  --gui                  Aktiver GUI for PLS simulator
+  --field                ARK/edge-modus: kun socat + PLS
+  --with-terminal        Inkluder terminal-simulator i field mode
+  --headless             Tvinger ALLE komponenter til terminal-modus (ingen GUI)
+  --gui                  Aktiver GUI for PLS simulator (kun i ikke-headless mode)
   --terminal-port=PORT   Terminal sim port (default: 18080)
-  --terminal-headless    Headless terminal sim (ingen GUI)
 
 Eksempler:
-  ./scripts/start-all-simulators.sh                  # Alt (lokal dev)
-  ./scripts/start-all-simulators.sh --field           # ARK/edge
-  ./scripts/start-all-simulators.sh --field --gui     # ARK/edge med PLS GUI
-  ./scripts/start-all-simulators.sh --build           # Bygg + start alt
-  ./scripts/start-all-simulators.sh --terminal-headless
+  # Lokal dev med GUI:
+  ./scripts/start-all-simulators.sh
+  
+  # Field mode (kun PLS):
+  ./scripts/start-all-simulators.sh --field
+  
+  # Field mode med terminal (begge headless):
+  ./scripts/start-all-simulators.sh --field --with-terminal --headless
+  
+  # Headless server (Debian via SSH) – alle komponenter:
+  ./scripts/start-all-simulators.sh --headless
+  
+  # Headless server – kun field mode:
+  ./scripts/start-all-simulators.sh --field --headless
+  
+  # Bygg først, deretter start headless:
+  ./scripts/start-all-simulators.sh --build --headless
 
 Stop: Ctrl+C
 EOF
@@ -83,16 +102,28 @@ while [[ $# -gt 0 ]]; do
     help|--help|-h) show_help ;;
     --build) DO_BUILD=true; shift ;;
     --field) FIELD_MODE=true; shift ;;
+    --with-terminal) WITH_TERMINAL=true; shift ;;
+    --headless) HEADLESS_MODE=true; shift ;;
     --gui) GUI_ENABLED=true; shift ;;
     --terminal-port=*) TERMINAL_PORT="${1#*=}"; shift ;;
-    --terminal-headless) TERMINAL_HEADLESS=true; shift ;;
     *) echo -e "${RED}Unknown option: $1${NC}"; show_help ;;
   esac
 done
 
+# Override GUI_ENABLED if HEADLESS_MODE is active
+if [[ "$HEADLESS_MODE" == "true" ]]; then
+    GUI_ENABLED=false
+fi
+
+# Determine if terminal should be started
+START_TERMINAL=true
+if [[ "$FIELD_MODE" == "true" ]] && [[ "$WITH_TERMINAL" != "true" ]]; then
+    START_TERMINAL=false
+fi
+
 # Step count
 TOTAL_STEPS=3
-if [[ "$FIELD_MODE" == "true" ]]; then
+if [[ "$START_TERMINAL" != "true" ]]; then
     TOTAL_STEPS=2
 fi
 
@@ -166,8 +197,8 @@ build_if_needed() {
   local missing=()
   [[ ! -f "$PLS_SIM_JAR" ]] && missing+=("pls-sim")
 
-  if [[ "$FIELD_MODE" != "true" ]]; then
-    if [[ "$TERMINAL_HEADLESS" == "true" ]]; then
+  if [[ "$START_TERMINAL" == "true" ]]; then
+    if [[ "$HEADLESS_MODE" == "true" ]]; then
       [[ ! -f "$PAYMENT_TERMINAL_SIM_JAR" ]] && missing+=("payment-terminal-sim")
     else
       [[ ! -f "$PAYMENT_TERMINAL_GUI_JAR" ]] && missing+=("payment-terminal-gui")
@@ -189,8 +220,8 @@ build_if_needed
 
 # Verify required jars exist
 REQUIRED_JARS=("$PLS_SIM_JAR")
-if [[ "$FIELD_MODE" != "true" ]]; then
-  if [[ "$TERMINAL_HEADLESS" == "true" ]]; then
+if [[ "$START_TERMINAL" == "true" ]]; then
+  if [[ "$HEADLESS_MODE" == "true" ]]; then
     REQUIRED_JARS+=("$PAYMENT_TERMINAL_SIM_JAR")
   else
     REQUIRED_JARS+=("$PAYMENT_TERMINAL_GUI_JAR")
@@ -207,8 +238,14 @@ done
 
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-if [[ "$FIELD_MODE" == "true" ]]; then
-    echo -e "${BOLD}  🛢️  Start Simulators – FIELD mode (ARK/edge)${NC}"
+if [[ "$HEADLESS_MODE" == "true" ]]; then
+    echo -e "${BOLD}  🛢️  Start Simulators – HEADLESS (terminal-only)${NC}"
+elif [[ "$FIELD_MODE" == "true" ]]; then
+    if [[ "$WITH_TERMINAL" == "true" ]]; then
+        echo -e "${BOLD}  🛢️  Start Simulators – FIELD mode + Terminal${NC}"
+    else
+        echo -e "${BOLD}  🛢️  Start Simulators – FIELD mode (ARK/edge)${NC}"
+    fi
 else
     echo -e "${BOLD}  🛢️  Start All Simulators${NC}"
 fi
@@ -269,11 +306,11 @@ fi
 echo -e "${GREEN}      ✓ PLS Simulator running (PID: $PLS_PID)${NC}"
 echo ""
 
-# 3. Payment Terminal Simulator (only in default mode, skipped in --field)
-if [[ "$FIELD_MODE" != "true" ]]; then
+# 3. Payment Terminal Simulator
+if [[ "$START_TERMINAL" == "true" ]]; then
     terminal_jar="$PAYMENT_TERMINAL_GUI_JAR"
     terminal_mode="GUI"
-    if [[ "$TERMINAL_HEADLESS" == "true" ]]; then
+    if [[ "$HEADLESS_MODE" == "true" ]]; then
       terminal_jar="$PAYMENT_TERMINAL_SIM_JAR"
       terminal_mode="HEADLESS"
     fi
@@ -303,7 +340,19 @@ echo -e "${CYAN}═════════════════════�
 echo -e "${BOLD}  ✅ Klart${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-if [[ "$FIELD_MODE" == "true" ]]; then
+if [[ "$HEADLESS_MODE" == "true" ]]; then
+    echo -e "  ${BOLD}Headless mode – alle komponenter kjører uten GUI${NC}"
+    echo -e "  Perfekt for Debian server via SSH."
+    echo ""
+    if [[ "$FIELD_MODE" == "true" ]]; then
+        echo -e "  ${BOLD}Start webapp separat:${NC}"
+        echo -e "  java -jar release/lpg-ehl-webapp.jar \\"
+        echo -e "      --spring.profiles.active=field \\"
+        echo -e "      --ehl.serial.port=/tmp/vserial1"
+        echo ""
+        echo -e "  PLS: /tmp/vserial0  →  socat  →  /tmp/vserial1 (webapp)"
+    fi
+elif [[ "$FIELD_MODE" == "true" ]]; then
     echo -e "  ${BOLD}Field mode – start webapp separat:${NC}"
     echo -e "  java -jar release/lpg-ehl-webapp.jar \\"
     echo -e "      --spring.profiles.active=field \\"

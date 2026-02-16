@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Configuration
 
 @Configuration
 @ConfigurationProperties(prefix = "nets-cloud-connect")
-data class NetsCloudConnectConfig(
+class NetsCloudConnectConfig(
     var baseUrl: String = "https://connectcloud.aws.nets.eu",
     var username: String = "",
     var password: String = "",

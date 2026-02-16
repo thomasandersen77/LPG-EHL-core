@@ -4,8 +4,8 @@ terminal:
 nets-cloud-connect:
   base-url: https://connectcloud.aws.nets.eu
   username: ${NETS_USERNAME:cloudberries_shared}
-  password: ${NETS_PASSWORD}
-  terminal-id: ${NETS_TERMINAL_ID}
+  password: ${NETS_PASSWORD:B8PnVjmVq-SMM9QD}
+  terminal-id: ${NETS_TERMINAL_ID:42696609}
   
   websocket:
     ping-interval-ms: 20000

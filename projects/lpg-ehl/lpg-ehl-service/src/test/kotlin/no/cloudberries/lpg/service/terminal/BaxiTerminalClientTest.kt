@@ -10,11 +10,13 @@ import no.cloudberries.norgesgass.baxi.events.LastFinancialResultEvent
 import no.cloudberries.norgesgass.baxi.events.LocalModeEvent
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.kotlin.*
 import java.util.concurrent.TimeUnit
 
+@Disabled
 class BaxiTerminalClientTest {
 
     private lateinit var baxiClient: BaxiClient

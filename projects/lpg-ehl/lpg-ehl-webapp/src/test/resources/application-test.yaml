@@ -3,6 +3,20 @@ spring:
   application:
     name: lpg-ehl-api-test
   
+  # Allow bean definition overriding for RestClientSsl conflict in Spring Boot 3.2.x
+  main:
+    allow-bean-definition-overriding: true
+
+  # Exclude autoconfiguration that cause NoClassDefFoundError with test classpath
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.http.client.autoconfigure.imperative.ImperativeHttpClientAutoConfiguration
+      - org.springframework.boot.http.client.autoconfigure.HttpClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration
+      - org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.gson.GsonAutoConfiguration
+      - org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration
+
   # H2 In-Memory Database
   datasource:
     url: jdbc:h2:mem:lpg_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL

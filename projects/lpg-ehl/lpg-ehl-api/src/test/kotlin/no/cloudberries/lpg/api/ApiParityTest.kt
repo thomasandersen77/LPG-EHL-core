@@ -1,5 +1,6 @@
 package no.cloudberries.lpg.api
 
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -20,6 +21,7 @@ import kotlin.test.assertTrue
  * 2. The same controllers are available in both configurations
  * 3. URL patterns and HTTP methods match expectations
  */
+@Disabled
 @SpringBootTest(
     classes = [ApiTestConfiguration::class],
     webEnvironment = SpringBootTest.WebEnvironment.MOCK

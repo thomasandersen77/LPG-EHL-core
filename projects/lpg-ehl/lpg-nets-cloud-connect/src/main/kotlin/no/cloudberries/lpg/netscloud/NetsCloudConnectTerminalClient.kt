@@ -37,38 +37,57 @@ class NetsCloudConnectTerminalClient(
                 
                 // 2. Connect WebSocket
                 logger.info("STEP 2/3: WebSocket Connect")
-                webSocketClient = NetsCloudWebSocketClient(
-                    config.baseUrl,
-                    loginResponse.token,
-                    config
-                )
-                webSocketClient!!.connect()
+                val wsClient = NetsCloudWebSocketClient(config, responseParser)
+                wsClient.connect(loginResponse.token)
+                webSocketClient = wsClient
                 logger.info("   ✅ WebSocket connected")
-                
+
                 // 3. Send Open command
                 logger.info("STEP 3/3: Send Open command")
                 val openRequest = messageBuilder.buildOpenRequest()
-                webSocketClient!!.sendMessage(openRequest)
+                wsClient.sendMessage(openRequest)
                 logger.info("   ✅ Open command sent")
-                
+
                 // 4. Wait for TerminalReady
                 logger.info("⏳ Waiting for TerminalReady...")
+                val primaryTimeout = config.timeouts.openTerminalTimeoutMs
                 var attempts = 0
-                while (attempts < 5) {
-                    val message = webSocketClient!!.receiveMessage(
-                        config.timeouts.openTerminalTimeoutMs
-                    )
-                    
+                val maxAttempts = 5
+
+                while (attempts < maxAttempts) {
+                    val message = wsClient.receiveMessage(primaryTimeout)
+
                     if (message == null) {
+                        // MANGLER 1: Priming/fallback - send admin 12605 to trigger response
+                        if (attempts == 0) {
+                            logger.warn("⚠️  Primary timeout - trying priming with LastResult command...")
+                            val lastResultRequest = messageBuilder.buildLastResultRequest()
+                            wsClient.sendMessage(lastResultRequest)
+                            logger.info("   ✅ LastResult priming command sent")
+
+                            // Give it shorter timeout for priming attempt
+                            val primingMessage = wsClient.receiveMessage(10_000)
+                            if (primingMessage != null && responseParser.isTerminalReady(primingMessage)) {
+                                isTerminalOpen = true
+                                logger.info("━".repeat(60))
+                                logger.info("✅ TERMINAL READY (via priming)!")
+                                logger.info("━".repeat(60))
+                                return@runBlocking TerminalSimpleResponse(
+                                    success = true,
+                                    message = "Terminal opened successfully (priming)"
+                                )
+                            }
+                        }
+
                         logger.error("❌ Timeout waiting for TerminalReady")
                         return@runBlocking TerminalSimpleResponse(
                             success = false,
                             error = "Timeout waiting for TerminalReady"
                         )
                     }
-                    
+
                     logger.debug("   Message #${attempts + 1}: ${message.take(100)}...")
-                    
+
                     if (responseParser.isTerminalReady(message)) {
                         isTerminalOpen = true
                         logger.info("━".repeat(60))
@@ -79,7 +98,7 @@ class NetsCloudConnectTerminalClient(
                             message = "Terminal opened successfully"
                         )
                     }
-                    
+
                     if (responseParser.isError(message)) {
                         val error = responseParser.parseError(message)
                         logger.error("❌ Terminal error: $error")
@@ -88,10 +107,10 @@ class NetsCloudConnectTerminalClient(
                             error = "Terminal error: $error"
                         )
                     }
-                    
+
                     attempts++
                 }
-                
+
                 logger.error("❌ Failed to open terminal after $attempts attempts")
                 TerminalSimpleResponse(
                     success = false,
@@ -110,6 +129,14 @@ class NetsCloudConnectTerminalClient(
     
     override fun purchase(request: TerminalPurchaseRequest): TerminalOperationResponse = runBlocking {
         operationLock.withLock {
+            val wsClient = webSocketClient ?: run {
+                logger.error("❌ Terminal not open")
+                return@runBlocking TerminalOperationResponse(
+                    success = false,
+                    error = "Terminal not open"
+                )
+            }
+
             if (!isTerminalOpen) {
                 logger.error("❌ Terminal not open")
                 return@runBlocking TerminalOperationResponse(
@@ -117,7 +144,7 @@ class NetsCloudConnectTerminalClient(
                     error = "Terminal not open"
                 )
             }
-            
+
             try {
                 logger.info("━".repeat(60))
                 logger.info("💳 Starting purchase: ${request.amountMinor} øre (${request.amountMinor / 100.0} kr)")
@@ -128,21 +155,21 @@ class NetsCloudConnectTerminalClient(
                     request.amountMinor,
                     request.operatorId
                 )
-                webSocketClient!!.sendMessage(purchaseRequest)
+                wsClient.sendMessage(purchaseRequest)
                 logger.info("✅ Purchase command sent")
                 logger.info("⏳ Waiting for card tap...")
-                
+
                 // 2. Accumulate responses
                 val displayTexts = mutableListOf<String>()
                 val printTexts = mutableListOf<String>()
-                
+
                 // 3. Wait for transaction complete
                 val startTime = System.currentTimeMillis()
                 val timeout = config.timeouts.purchaseTimeoutMs
-                
+
                 var messageCount = 0
                 while ((System.currentTimeMillis() - startTime) < timeout) {
-                    val message = webSocketClient!!.receiveMessage(timeout)
+                    val message = wsClient.receiveMessage(timeout)
                     
                     if (message == null) {
                         logger.error("❌ Timeout waiting for transaction result")
@@ -169,11 +196,15 @@ class NetsCloudConnectTerminalClient(
                         }
                     }
                     
-                    // Check for completion
+                    // Check for completion (Dfs13LocalMode or Dfs13LastFinancialResult)
                     if (responseParser.isTransactionComplete(message)) {
-                        val localMode = responseParser.parseLocalMode(message)
+                        val localMode = if (message.contains("Dfs13LocalMode")) {
+                            responseParser.parseLocalMode(message)
+                        } else {
+                            responseParser.parseLastFinancialResult(message)
+                        }
                         val duration = System.currentTimeMillis() - startTime
-                        
+
                         logger.info("━".repeat(60))
                         if (localMode?.result == 1) {
                             logger.info("✅ TRANSACTION APPROVED!")
@@ -185,7 +216,7 @@ class NetsCloudConnectTerminalClient(
                         logger.info("   Response Code: ${localMode?.responseCode}")
                         logger.info("   Duration: ${duration}ms")
                         logger.info("━".repeat(60))
-                        
+
                         return@runBlocking TerminalOperationResponse(
                             success = localMode?.result == 1,
                             callResult = localMode?.result,
@@ -225,17 +256,25 @@ class NetsCloudConnectTerminalClient(
     
     override fun reversal(operationId: String?): TerminalOperationResponse = runBlocking {
         operationLock.withLock {
+            val wsClient = webSocketClient ?: run {
+                logger.error("❌ Terminal not open")
+                return@runBlocking TerminalOperationResponse(
+                    success = false,
+                    error = "Terminal not open"
+                )
+            }
+
             try {
                 logger.info("━".repeat(60))
                 logger.info("🔄 Starting reversal...")
                 logger.info("━".repeat(60))
-                
+
                 val reversalRequest = messageBuilder.buildReversalRequest()
-                webSocketClient!!.sendMessage(reversalRequest)
+                wsClient.sendMessage(reversalRequest)
                 logger.info("✅ Reversal command sent")
-                
+
                 // Wait for response
-                val message = webSocketClient!!.receiveMessage(config.timeouts.reversalTimeoutMs)
+                val message = wsClient.receiveMessage(config.timeouts.reversalTimeoutMs)
                 
                 if (message == null) {
                     logger.error("❌ Timeout waiting for reversal result")
@@ -246,7 +285,11 @@ class NetsCloudConnectTerminalClient(
                 }
                 
                 if (responseParser.isTransactionComplete(message)) {
-                    val localMode = responseParser.parseLocalMode(message)
+                    val localMode = if (message.contains("Dfs13LocalMode")) {
+                        responseParser.parseLocalMode(message)
+                    } else {
+                        responseParser.parseLastFinancialResult(message)
+                    }
                     logger.info("━".repeat(60))
                     if (localMode?.result == 1) {
                         logger.info("✅ REVERSAL APPROVED!")
@@ -254,7 +297,7 @@ class NetsCloudConnectTerminalClient(
                         logger.error("❌ REVERSAL DECLINED!")
                     }
                     logger.info("━".repeat(60))
-                    
+
                     return@runBlocking TerminalOperationResponse(
                         success = localMode?.result == 1,
                         callResult = localMode?.result,
