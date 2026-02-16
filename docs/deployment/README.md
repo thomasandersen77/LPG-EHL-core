@@ -9,12 +9,6 @@ Denne katalogen inneholder all dokumentasjon relatert til deployment av LPG-EHL 
   - Systemd service oppsett
   - Produksjonskonfigurasjon
 
-- **[DOCKER_DEPLOY.md](DOCKER_DEPLOY.md)** - Docker Compose deployment
-  - Quick start guide
-  - Arkitektur diagram
-  - Service konfigurasjon (PostgreSQL, Azurite, Emulator, API, Frontend, ngrok)
-  - Troubleshooting
-
 - **[MONOLITH_DEPLOYMENT.md](MONOLITH_DEPLOYMENT.md)** - Single JAR deployment guide
   - Build prosess med `build_monolith.sh`
   - SPA (React Router) support
@@ -34,14 +28,7 @@ Best for ARK-maskiner på bensinstasjoner:
 - Minimal ressursbruk
 - Se [MONOLITH_DEPLOYMENT.md](MONOLITH_DEPLOYMENT.md)
 
-### 2. Docker Compose (Anbefalt for Lokal Utvikling)
-Best for utviklingsmiljø:
-- Enkel start/stopp av hele systemet
-- Isolerte tjenester
-- Database og Azure emulator inkludert
-- Se [DOCKER_DEPLOY.md](DOCKER_DEPLOY.md)
-
-### 3. Cloud Deployment
+### 2. Cloud Deployment
 For cloud-basert administrasjonssystem:
 - Render.com / Azure / AWS
 - Separat fra edge-enheter

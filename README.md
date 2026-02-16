@@ -18,7 +18,7 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 - **lpg-ehl-emulator**: Emulator for testing without physical hardware
 - **lpg-ehl-api**: Spring Boot REST API with Azure sync and full observability
 - **lpg-web**: React frontend with modern UI and real-time updates
-- **Docker + PostgreSQL**: Production-ready containerized deployment with local database
+- **Deployment**: Monolith JAR for Edge (see `docs/deployment/`)
 - **Azure Sync**: Automatic cloud backup and reporting integration with retry logic
 
 ## 📚 Documentation
@@ -43,7 +43,6 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 
 ### 🚀 Deployment
 - **[Deployment Guide (Norwegian)](docs/deployment/DEPLOYMENT_NO.md)** - Deployment til Linux ARK-maskin
-- **[Docker Deploy](docs/deployment/DOCKER_DEPLOY.md)** - Docker Compose deployment guide
 - **[Monolith Deployment](docs/deployment/MONOLITH_DEPLOYMENT.md)** - Single JAR deployment
 - **[Render Deploy](docs/deployment/RENDER_DEPLOY.md)** - Cloud deployment to Render.com
 
@@ -62,7 +61,6 @@ This is a multi-module Maven project that implements the EHL protocol for contro
 LPG-EHL-core/
 ├── pom.xml                          # Parent POM (multi-module Maven)
 ├── build_monolith.sh                # Builds a single runnable JAR (API + Web)
-├── docker-compose.postgres.yaml     # Local Postgres + Azurite (queue emulator)
 ├── init-db.sql                      # Database schema (used by Liquibase)
 ├── release/
 │   └── lpg-ehl-monolith.jar         # Monolith output from build_monolith.sh
@@ -81,7 +79,6 @@ LPG-EHL-core/
 
 - **Java 21** (Temurin recommended)
 - **Node.js 18+** (needed to build the bundled React frontend)
-- **Docker + Docker Compose** (local PostgreSQL + Azurite)
 - **Maven 3.9+** (or just use `./mvnw`)
 - **SDKMAN** (optional, recommended)
 
@@ -170,18 +167,12 @@ This project implements a complete **Edge-to-Cloud** architecture for LPG statio
 You can run the **Edge system (this repo)** locally with PostgreSQL + Azurite (queue emulator).
 The **Cloud Admin System (MinLPG)** lives in a separate repo and can be run separately if you need end-to-end messaging.
 
-1. **Start local dependencies (PostgreSQL + Azurite)**
-   ```bash
-   # Remove -d if you want logs in the foreground
-   docker-compose -f docker-compose.postgres.yaml up -d
-   ```
-
-2. **Build the monolith JAR (API + Web UI)**
+1. **Build the monolith JAR (API + Web UI)**
    ```bash
    ./build_monolith.sh
    ```
 
-3. **Run the monolith**
+2. **Run the monolith**
 
    This uses the `local` profile by default (see `projects/lpg-ehl/lpg-ehl-api/src/main/resources/application.yaml`).
 
@@ -233,16 +224,8 @@ We provide scripts to simulate real-world usage:
    API_AUTH_TOKEN=<random-token>
    ```
 
-3. **Start production services**
-   ```bash
-   docker-compose up -d
-   
-   # Monitor logs
-   docker-compose logs -f lpg-ehl-app
-   
-   # Check status
-   docker-compose ps
-   ```
+3. **Start production service**
+   - See the monolith + systemd guidance in `docs/deployment/`.
 
 ## 🤖 AI Analysis - Zipping Modules
 
@@ -349,9 +332,6 @@ chmod +x scripts/zip-all-for-ai.sh
    # Health check
    curl http://localhost:8080/health
    
-   # Check database
-   docker exec lpg-ehl-postgres psql -U lpg_user -d lpg_ehl -c "SELECT COUNT(*) FROM transactions;"
-   
    # View backups
    ls -lh /opt/lpg-ehl/backups/
    ```
@@ -364,7 +344,7 @@ chmod +x scripts/zip-all-for-ai.sh
 │                                                 │
 │  ┌──────────────┐    ┌──────────────┐          │
 │  │ lpg-ehl-app  │───>│  PostgreSQL  │          │
-│  │  (Docker)    │    │   (Docker)   │          │
+│  │              │    │              │          │
 │  │              │    │              │          │
 │  │ - Protocol   │    │ - Transactions│         │
 │  │ - REST API   │    │ - Events     │         │
@@ -425,10 +405,10 @@ See `init-db.sql` for complete schema.
 **Manual backup:**
 ```bash
 # Create manual backup
-docker exec lpg-ehl-postgres pg_dump -U lpg_user lpg_ehl | gzip > manual_backup_$(date +%Y%m%d).sql.gz
+pg_dump -U lpg_user lpg_ehl | gzip > manual_backup_$(date +%Y%m%d).sql.gz
 
 # Restore from backup
-gunzip < backup.sql.gz | docker exec -i lpg-ehl-postgres psql -U lpg_user -d lpg_ehl
+gunzip < backup.sql.gz | psql -U lpg_user -d lpg_ehl
 ```
 
 ### API Endpoints
@@ -454,24 +434,7 @@ Authorization: Bearer <API_AUTH_TOKEN>
 
 ### Monitoring
 
-```bash
-# View all logs
-docker-compose logs
-
-# Follow specific service
-docker-compose logs -f lpg-ehl-app
-docker-compose logs -f postgres
-docker-compose logs -f azure-sync
-
-# Check disk usage
-du -sh /opt/lpg-ehl/*
-
-# Monitor database size
-docker exec lpg-ehl-postgres psql -U lpg_user -d lpg_ehl -c "\l+"
-
-# Check unsynced transactions
-docker exec lpg-ehl-postgres psql -U lpg_user -d lpg_ehl -c "SELECT * FROM unsynced_transactions;"
-```
+See `docs/deployment/` for the current operational approach.
 
 ## 📦 Modules
 
@@ -687,7 +650,6 @@ See [lpg-ehl-core/README.md](projects/lpg-ehl/lpg-ehl-core/README.md) for comple
 - [ ] WebSocket real-time updates
 - [ ] Payment system integration
 - [ ] Admin web interface
-- [ ] Docker containerization
 
 ## 📄 Documentation
 

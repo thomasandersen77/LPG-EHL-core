@@ -45,8 +45,8 @@ sdk install maven
 # socat (for virtual serial ports)
 brew install socat
 
-# Docker (for database)
-brew install docker
+# (Optional) Database tools
+# We are not using Docker in this repo anymore.
 ```
 
 ### Quick Start - LAB Mode (IntelliJ)
@@ -100,7 +100,8 @@ Dette lager artifacts i `release/` (bl.a. `pls-sim.jar`, `payment-terminal-*.jar
 ### Steg 2: Start Database (valgfritt)
 
 ```bash
-docker-compose -f docker-compose-local.yaml up -d
+# Not using Docker anymore.
+# If you need a DB for a specific scenario, document the setup under docs/deployment/
 ```
 
 ### Steg 3: Start PLS-simulator (SOCAT)
