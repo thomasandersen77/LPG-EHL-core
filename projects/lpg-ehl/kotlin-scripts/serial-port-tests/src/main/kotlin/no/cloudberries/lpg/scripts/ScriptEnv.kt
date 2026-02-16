@@ -93,9 +93,6 @@ object ScriptEnv {
             dataBits = cfg.dataBits,
             stopBits = cfg.stopBits,
             parity = cfg.parity,
-            rs485Enabled = cfg.rs485Enabled,
-            rs485DelayRtsBeforeSendMs = cfg.rs485RtsBeforeMs,
-            rs485DelayRtsAfterSendMs = cfg.rs485RtsAfterMs,
             readTimeout = cfg.readTimeoutMs,
             writeTimeout = cfg.writeTimeoutMs
         )
