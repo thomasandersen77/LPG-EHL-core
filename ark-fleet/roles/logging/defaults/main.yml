@@ -1,0 +1,7 @@
+---
+# Defaults for logging role
+
+# If not provided in group_vars/ark.yml, these are safe fallback values.
+ark_journald_system_max_use: "200M"
+ark_journald_runtime_max_use: "100M"
+

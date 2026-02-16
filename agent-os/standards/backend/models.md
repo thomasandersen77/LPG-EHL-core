@@ -1,10 +1,25 @@
-## Database model best practices
+## Models and persistence (Kotlin + Spring Data JPA)
 
-- **Clear Naming**: Use singular names for models and plural for tables following your framework's conventions
-- **Timestamps**: Include created and updated timestamps on all tables for auditing and debugging
-- **Data Integrity**: Use database constraints (NOT NULL, UNIQUE, foreign keys) to enforce data rules at the database level
-- **Appropriate Data Types**: Choose data types that match the data's purpose and size requirements
-- **Indexes on Foreign Keys**: Index foreign key columns and other frequently queried fields for performance
-- **Validation at Multiple Layers**: Implement validation at both model and database levels for defense in depth
-- **Relationship Clarity**: Define relationships clearly with appropriate cascade behaviors and naming conventions
-- **Avoid Over-Normalization**: Balance normalization with practical query performance needs
+In this repo, persistent domain data primarily lives in `projects/lpg-ehl/lpg-ehl-service/`.
+
+### Entity rules
+
+- **Don’t leak entities across the API boundary**: Controllers should expose DTOs; map to/from entities in the service layer.
+- **Prefer explicit types**:
+  - Use `UUID` identifiers where appropriate.
+  - Store enums as strings (`@Enumerated(EnumType.STRING)`) unless there is a strong reason not to.
+- **Constraints are part of the design**: Use NOT NULL/UNIQUE/FKs to enforce invariants when the invariant truly belongs in the DB.
+- **Timestamps**: Model time explicitly (`Instant`/`OffsetDateTime`/`LocalDateTime`) and be consistent; avoid “magic” string timestamps.
+- **Relationships**: Keep JPA relationships intentional; avoid accidental eager loading and N+1s. Prefer `@ManyToOne(fetch = LAZY)` and explicit fetch plans when needed.
+
+### Domain vs persistence
+
+- **Business rules live in services**: Entities should remain simple and stable; orchestration and validation belongs in services.
+- **Protocol core stays clean**: `lpg-ehl-core` models should not depend on JPA/Spring.
+
+### Review checklist
+
+- [ ] Entity is in the correct module (`lpg-ehl-service`)
+- [ ] DTO mapping exists at boundaries (controller/service)
+- [ ] Enum persistence is safe (`STRING`)
+- [ ] Relationship fetch strategy is intentional

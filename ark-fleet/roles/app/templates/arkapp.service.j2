@@ -1,0 +1,19 @@
+# Managed by Ansible (ark-fleet). Local changes will be overwritten.
+
+[Unit]
+Description=ARK App (placeholder)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ ark_app_user }}
+Group={{ ark_app_group }}
+WorkingDirectory={{ ark_app_base_dir }}
+ExecStart=/usr/bin/bash -lc 'while true; do echo "arkapp placeholder running"; sleep 60; done'
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+

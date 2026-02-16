@@ -1,10 +1,25 @@
 ## API endpoint standards and conventions
 
-- **RESTful Design**: Follow REST principles with clear resource-based URLs and appropriate HTTP methods (GET, POST, PUT, PATCH, DELETE)
-- **Consistent Naming**: Use consistent, lowercase, hyphenated or underscored naming conventions for endpoints across the API
-- **Versioning**: Implement API versioning strategy (URL path or headers) to manage breaking changes without disrupting existing clients
-- **Plural Nouns**: Use plural nouns for resource endpoints (e.g., `/users`, `/products`) for consistency
-- **Nested Resources**: Limit nesting depth to 2-3 levels maximum to keep URLs readable and maintainable
-- **Query Parameters**: Use query parameters for filtering, sorting, pagination, and search rather than creating separate endpoints
-- **HTTP Status Codes**: Return appropriate, consistent HTTP status codes that accurately reflect the response (200, 201, 400, 404, 500, etc.)
-- **Rate Limiting Headers**: Include rate limit information in response headers to help clients manage their usage
+This codebase is Kotlin + Spring Boot. The primary REST API lives in the edge applications (`projects/lpg-ehl/lpg-ehl-webapp` and, when enabled, `projects/lpg-ehl/lpg-ehl-app-headless` via profiles).
+
+### Design rules
+
+- **Adapters stay thin**: Controllers should be a thin adapter layer over services (business logic lives in `lpg-ehl-service`).
+- **Versioned paths**: Use a stable, versioned base path (prefer `/api/v1/...` unless the existing code uses a different convention).
+- **Resource-oriented URLs**: Use nouns; keep nesting shallow; use query params for filters/pagination.
+- **Explicit DTOs**: Use request/response DTOs at the API boundary; avoid leaking JPA entities directly.
+- **Consistent status codes**:
+  - `200`/`201` for success
+  - `400` for validation/contract errors
+  - `404` for missing resources
+  - `409` for state conflicts (common in device/payment flows)
+  - `503` for dependencies not ready (serial transport/payment terminal)
+- **Error shape**: Prefer a consistent JSON error format. Centralize mapping in a `@ControllerAdvice` (or equivalent) rather than ad-hoc `try/catch` in each controller.
+- **OpenAPI is a contract**:
+  - The payment terminal Mono server contract is `openapi-payment-terminal.yaml`.
+  - If `openapi.yaml` is used for the edge API, keep it aligned with controllers and DTOs.
+
+### Observability and safety
+
+- **No secrets in logs**: Never log credentials/tokens; be mindful of payment identifiers.
+- **Hardware interactions are stateful**: For operations that command the dispenser or payment terminal, document preconditions and idempotency expectations in the endpoint KDoc and/or OpenAPI description.

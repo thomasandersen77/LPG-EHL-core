@@ -1,0 +1,51 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ ark_base_packages | default([]) }}"
+    state: present
+
+- name: Ensure application group exists
+  ansible.builtin.group:
+    name: "{{ ark_app_group }}"
+    system: true
+
+- name: Ensure application user exists
+  ansible.builtin.user:
+    name: "{{ ark_app_user }}"
+    group: "{{ ark_app_group }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Ensure application directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ark_app_user }}"
+    group: "{{ ark_app_group }}"
+    mode: "0755"
+  loop:
+    - "{{ ark_app_base_dir }}"
+    - "{{ ark_app_data_dir }}"
+    - "{{ ark_app_log_dir }}"
+
+- name: Set system hostname (if provided)
+  ansible.builtin.hostname:
+    name: "{{ ark_hostname }}"
+  when: ark_hostname is defined and ark_hostname | length > 0
+  notify: Restart systemd-hostnamed
+
+- name: Ensure /etc/hosts has 127.0.1.1 mapping for hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s+'
+    line: "127.0.1.1 {{ ark_hostname }}"
+    state: present
+    create: false
+  when: ark_hostname is defined and ark_hostname | length > 0
+

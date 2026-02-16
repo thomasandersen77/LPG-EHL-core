@@ -1,0 +1,27 @@
+---
+- name: Ensure timezone data package is present
+  ansible.builtin.apt:
+    name: tzdata
+    state: present
+
+- name: Set /etc/timezone
+  ansible.builtin.copy:
+    dest: /etc/timezone
+    content: "{{ timezone }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Set /etc/localtime symlink
+  ansible.builtin.file:
+    src: "/usr/share/zoneinfo/{{ timezone }}"
+    dest: /etc/localtime
+    state: link
+    force: true
+
+- name: Ensure chrony service is enabled and running
+  ansible.builtin.service:
+    name: chrony
+    enabled: true
+    state: started
+

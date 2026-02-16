@@ -1,0 +1,21 @@
+---
+- name: Install placeholder systemd unit
+  ansible.builtin.template:
+    src: arkapp.service.j2
+    dest: "/etc/systemd/system/{{ ark_app_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  register: arkapp_unit
+
+- name: Reload systemd if unit changed
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: arkapp_unit.changed
+
+- name: Enable and start placeholder service
+  ansible.builtin.systemd:
+    name: "{{ ark_app_service_name }}.service"
+    enabled: true
+    state: started
+

@@ -1,0 +1,23 @@
+---
+# Fleet-wide defaults for ARK devices (preprod)
+
+ark_base_packages:
+  - curl
+  - ca-certificates
+  - jq
+  - unzip
+  - vim-tiny
+  - htop
+  - net-tools
+  - iproute2
+  - rsync
+  - chrony
+
+# journald limits (see roles/logging)
+ark_journald_system_max_use: "200M"
+ark_journald_runtime_max_use: "100M"
+
+# Hostname convention / domain:
+# - We typically use short hostnames like `ark-pp-001`
+# - If you later need FQDNs, set that policy explicitly (out of scope for this skeleton)
+

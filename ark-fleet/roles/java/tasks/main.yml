@@ -1,0 +1,6 @@
+---
+- name: Install Java runtime
+  ansible.builtin.apt:
+    name: "{{ java_package }}"
+    state: present
+

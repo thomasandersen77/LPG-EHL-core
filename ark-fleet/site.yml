@@ -1,0 +1,18 @@
+---
+- name: ARK fleet baseline
+  hosts: ark
+  become: true
+
+  roles:
+    - role: base
+      tags: [base]
+    - role: time
+      tags: [time]
+    - role: logging
+      tags: [logging]
+    - role: hardening
+      tags: [hardening]
+    - role: java
+      tags: [java]
+    - role: app
+      tags: [app]

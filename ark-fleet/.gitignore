@@ -1,0 +1,15 @@
+.retry
+*.retry
+*.log
+*.tmp
+*.swp
+
+# Vault / secret handling (DO NOT COMMIT)
+.vault-pass
+*.vault-pass
+vault_pass.txt
+vault-password.txt
+
+# Local artifacts
+pkglist.tsv
+
