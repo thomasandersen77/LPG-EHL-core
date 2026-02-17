@@ -80,6 +80,17 @@ Use one of:
 - **Ansible Vault** (recommended): add vaulted vars files and keep vault passwords out of git (see `.gitignore`).
 - **External secret retrieval**: inject secrets at runtime from CI secret stores, SOPS, etc.
 
+## Users and Permissions
+
+The ARK system uses multiple user accounts for security and separation of concerns:
+
+- **arkadmin** - Shared admin account for developers (SSH + sudo)
+- **alejandro, thomas** - Individual admin accounts (SSH + sudo)
+- **appuser** - Application runtime user (no sudo, has serial port access)
+- **arkapp** - System account for file ownership
+
+See [docs/USERS-AND-PERMISSIONS.md](docs/USERS-AND-PERMISSIONS.md) for detailed information.
+
 ## Key Configuration Variables
 
 See `inventories/preprod/group_vars/ark.yml` for the complete list. Key variables include:
@@ -90,6 +101,7 @@ See `inventories/preprod/group_vars/ark.yml` for the complete list. Key variable
 - `ark_terminal_network`: Terminal network address (default: 192.168.50.1/24)
 - `timezone`: System timezone (default: US/Eastern)
 - `ark_admin_users`: List of admin users to create
+- `ark_app_user_name`: Application runtime user (default: appuser)
 - `ark_disable_write_cache`: Disable disk write cache for data integrity (default: true)
 - `ark_root_device`: Root filesystem device for hardening (default: /dev/sda1)
 
