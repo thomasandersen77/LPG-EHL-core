@@ -1,17 +1,26 @@
 ---
 # Global defaults (preprod)
 
-timezone: Europe/Oslo
+timezone: US/Eastern
 
-# Placeholder admin user. This is the account you SSH as.
+# SSH connection user - shared admin account for developers
+# This is the account Ansible uses to connect and deploy
+ansible_user: arkadmin
+
+# Legacy reference (not used by Ansible)
 ark_admin_user: alejandro
 
+# Legacy system user (kept for backward compatibility)
 ark_app_user: arkapp
 ark_app_group: arkapp
 
 ark_app_base_dir: /opt/arkapp
 ark_app_data_dir: /var/lib/arkapp
 ark_app_log_dir: /var/log/arkapp
+
+# Application runtime user (actual application runs as this user)
+# This is configured in the app role
+# ark_app_user_name: appuser (defined in roles/app/defaults/main.yml)
 
 # Placeholder NIC name. Confirm via `ip link` on the device.
 ark_nic_name: enp0s25

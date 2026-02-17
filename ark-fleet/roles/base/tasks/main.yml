@@ -1,4 +1,42 @@
 ---
+- name: Install prerequisite packages for repository management
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+
+- name: Add Microsoft repository GPG key
+  ansible.builtin.apt_key:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    state: present
+
+- name: Add Microsoft repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] https://packages.microsoft.com/debian/12/prod bookworm main"
+    state: present
+    filename: microsoft-prod
+
+- name: Add Adoptium (Temurin) repository GPG key
+  ansible.builtin.apt_key:
+    url: https://packages.adoptium.net/artifactory/api/gpg/key/public
+    state: present
+
+- name: Add Adoptium (Temurin) repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] https://packages.adoptium.net/artifactory/deb bookworm main"
+    state: present
+    filename: adoptium
+
+- name: Enable non-free-firmware repository
+  ansible.builtin.apt_repository:
+    repo: "deb http://deb.debian.org/debian bookworm non-free-firmware"
+    state: present
+    filename: debian-non-free-firmware
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true

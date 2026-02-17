@@ -1,18 +1,44 @@
 # Managed by Ansible (ark-fleet). Local changes will be overwritten.
 
 [Unit]
-Description=ARK App (placeholder)
+Description=ARK Application Service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User={{ ark_app_user }}
-Group={{ ark_app_group }}
-WorkingDirectory={{ ark_app_base_dir }}
-ExecStart=/usr/bin/bash -lc 'while true; do echo "arkapp placeholder running"; sleep 60; done'
+User={{ ark_app_user_name }}
+Group={{ ark_app_user_name }}
+WorkingDirectory={{ ark_app_install_dir }}
+
+# Serial port access granted via dialout group membership
+# Application has read/write access to /dev/ttyS*, /dev/ttyUSB*, /dev/ttyACM*
+SupplementaryGroups={{ ark_app_user_groups | join(' ') }}
+
+# Placeholder command - replace with your actual application
+ExecStart=/usr/bin/bash -lc 'while true; do echo "ARK app running as {{ ark_app_user_name }} with serial port access"; sleep 60; done'
+
+# Restart policy
 Restart=always
-RestartSec=3
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ ark_app_service_name }}
+
+# Security hardening (while maintaining serial port access)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ ark_app_data_dir_user }} {{ ark_app_log_dir_user }}
+
+# Allow access to /dev for serial ports
+DeviceAllow=/dev/ttyS* rw
+DeviceAllow=/dev/ttyUSB* rw
+DeviceAllow=/dev/ttyACM* rw
+DevicePolicy=closed
 
 [Install]
 WantedBy=multi-user.target

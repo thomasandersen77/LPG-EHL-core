@@ -147,3 +147,5 @@ obj/
 # WireMock
 wiremock-standalone-*.jar
 wiremock/
+
+ark-fleet/reference/* */
