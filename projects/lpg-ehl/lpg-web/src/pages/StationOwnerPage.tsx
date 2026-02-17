@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { pumpApi, type PumpStatus } from '../api/pump';
 import { useQuery } from '@tanstack/react-query';
@@ -321,9 +321,6 @@ export function StationOwnerPage() {
         <div className="header-right">
           <span className="header-section-label">Dispenserkontroll</span>
           <div className="header-actions-new">
-            <Link to="/diagnose" className="diagnose-link-new">
-              🔧 Diagnose
-            </Link>
             <button onClick={handleLogout} className="logout-btn-new">
               Logg ut
             </button>

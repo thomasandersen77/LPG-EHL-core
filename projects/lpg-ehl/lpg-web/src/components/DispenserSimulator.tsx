@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
 
 // API base URL
-// Both webapp frontend and API run on port 8080
-const API_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || '';
+const API_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || import.meta.env.VITE_API_BASE_URL || window.location.origin;
+const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
 
 // Pump API
 const pumpApi = {
@@ -14,16 +15,61 @@ const pumpApi = {
 };
 
 export function DispenserSimulator() {
+  const queryClient = useQueryClient();
+  const wsRef = useRef<WebSocket | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
 
-  // Poll pump status
+  // Poll pump status – same query key as ControlPanel for shared cache
   const { data: pumpStatus, isLoading, error } = useQuery({
-    queryKey: ['pump-status-sim'],
+    queryKey: ['pump-status'],
     queryFn: () => pumpApi.getStatus(),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data?.state === 'PUMPING' ? 500 : 2000;
+      return data?.state === 'PUMPING' ? 500 : wsConnected ? false : 2000;
     }
   });
+
+  // WebSocket for real-time pump_update (PLS simulator / hardware)
+  useEffect(() => {
+    const ws = new WebSocket(`${WS_BASE_URL}/ws/logs`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setWsConnected(true);
+      ws.send(JSON.stringify({ action: 'subscribe', channels: ['service'] }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'pump_update' || data.type === 'fueling_update') {
+          const volumeLitres = Number(data.volumeLitres ?? data.volumeLiters ?? 0);
+          const amountKr = Number(data.amountKr ?? data.amount ?? 0);
+          const pricePerLitreKr = Number(data.pricePerLitreKr ?? data.pricePerLiterKr ?? 0);
+          queryClient.setQueryData(['pump-status'], (old: Record<string, unknown> | undefined) => ({
+            ...old,
+            state: data.state ?? old?.state,
+            address: data.address ?? old?.address,
+            volumeLitres,
+            amountKr,
+            pricePerLitreKr: pricePerLitreKr || old?.pricePerLitreKr,
+            nozzleLifted: data.nozzleLifted ?? old?.nozzleLifted,
+            hasPendingTransaction: data.hasPendingTransaction ?? old?.hasPendingTransaction
+          }));
+        }
+      } catch (e) {
+        console.error('Error parsing WebSocket message:', e);
+      }
+    };
+
+    ws.onclose = () => setWsConnected(false);
+    ws.onerror = () => setWsConnected(false);
+
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [queryClient]);
   
   const state = {
     state: pumpStatus?.state === 'PUMPING' ? 'DELIVERING' : 

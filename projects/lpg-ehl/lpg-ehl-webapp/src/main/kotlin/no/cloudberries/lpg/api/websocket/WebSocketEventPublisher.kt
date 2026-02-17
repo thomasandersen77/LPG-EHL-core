@@ -58,7 +58,7 @@ class WebSocketEventPublisher(
             val welcome = mapOf(
                 "type" to "connected",
                 "message" to "Tilkoblet logger-websocket",
-                "availableChannels" to LogChannel.values().map { it.name.lowercase() }
+                "availableChannels" to LogChannel.entries.map { it.name.lowercase() }
             )
             objectMapper.writeValueAsString(welcome)
         }
