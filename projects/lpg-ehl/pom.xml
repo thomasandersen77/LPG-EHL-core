@@ -28,6 +28,7 @@
         <module>lpg-ehl-service</module>
         <module>lpg-ehl-app-headless</module>
         <module>lpg-nets-cloud-connect</module>
+        <module>lpg-iot-hub-connect</module>
     </modules>
 
     <properties>
