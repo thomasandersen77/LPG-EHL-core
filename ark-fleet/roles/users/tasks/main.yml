@@ -1,0 +1,60 @@
+---
+- name: Ensure admin users exist
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    comment: "{{ item.comment | default('') }}"
+    groups: "{{ item.groups | default([]) }}"
+    shell: "{{ item.shell | default('/bin/bash') }}"
+    create_home: true
+    state: present
+  loop: "{{ ark_admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create .ssh directory for admin users
+  ansible.builtin.file:
+    path: "/home/{{ item.name }}/.ssh"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0700"
+  loop: "{{ ark_admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Deploy SSH authorized keys for admin users (single key)
+  ansible.builtin.copy:
+    src: "{{ ark_ssh_keys_dir }}/{{ item.name }}.pub"
+    dest: "/home/{{ item.name }}/.ssh/authorized_keys"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0600"
+  loop: "{{ ark_admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - ark_ssh_keys_dir is defined
+    - item.ssh_keys is not defined
+  ignore_errors: true
+
+- name: Deploy multiple SSH authorized keys for admin users
+  ansible.builtin.template:
+    src: authorized_keys.j2
+    dest: "/home/{{ item.name }}/.ssh/authorized_keys"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0600"
+  loop: "{{ ark_admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - item.ssh_keys is defined
+    - item.ssh_keys | length > 0
+
+- name: Ensure sudo group has passwordless sudo
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/90-ark-sudo
+    line: "%sudo ALL=(ALL:ALL) NOPASSWD:ALL"
+    create: true
+    mode: "0440"
+    validate: "visudo -cf %s"

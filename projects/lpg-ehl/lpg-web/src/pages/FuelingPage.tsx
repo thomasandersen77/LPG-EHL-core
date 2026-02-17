@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useEffect, useState, useRef } from 'react';
+import { useSmoothCounter } from '../hooks/useSmoothCounter';
 const EMULATOR_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_EMULATOR_BASE_URL ||
@@ -76,7 +77,7 @@ export function FuelingPage() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+
         // Handle pump_update for real-time display
         if (data.type === 'pump_update') {
           const state = data.state === 'PUMPING' ? 'DISPENSING' : data.state;
@@ -119,10 +120,15 @@ export function FuelingPage() {
     }
   }, [status?.state, hasFinished, navigate]);
 
-  const volumeLiters = status?.volumeLiters || 0;
-  const amountKr = status?.amountKr || 0;
+  const rawVolumeLiters = status?.volumeLiters || 0;
+  const rawAmountKr = status?.amountKr || 0;
   const pricePerLiter = status?.pricePerLiter || 0;
   const state = status?.state || 'IDLE';
+
+  const isPumping = state === 'DISPENSING';
+  const volumeLiters = useSmoothCounter(rawVolumeLiters, isPumping);
+  const amountKr = useSmoothCounter(rawAmountKr, isPumping);
+
   const message = status?.message || 'Venter...';
 
   return (
@@ -130,11 +136,10 @@ export function FuelingPage() {
       <div className="w-full max-w-4xl">
         {/* Status Message */}
         <div className="text-center mb-8">
-          <div className={`inline-block px-8 py-4 rounded-2xl text-2xl font-bold ${
-            state === 'DISPENSING' ? 'bg-green-500 text-white animate-pulse' :
-            (state === 'FINISHED' || state === 'PAYMENT_PENDING') ? 'bg-blue-500 text-white' :
-            'bg-gray-300 text-gray-700'
-          }`}>
+          <div className={`inline-block px-8 py-4 rounded-2xl text-2xl font-bold ${state === 'DISPENSING' ? 'bg-green-500 text-white animate-pulse' :
+              (state === 'FINISHED' || state === 'PAYMENT_PENDING') ? 'bg-blue-500 text-white' :
+                'bg-gray-300 text-gray-700'
+            }`}>
             {message}
           </div>
         </div>

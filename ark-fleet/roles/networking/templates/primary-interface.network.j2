@@ -1,0 +1,13 @@
+[Match]
+Name={{ ark_primary_interface }}
+
+[Network]
+{% if ark_primary_dhcp | default(true) %}
+DHCP=yes
+{% else %}
+Address={{ ark_primary_address }}
+Gateway={{ ark_primary_gateway | default('') }}
+{% if ark_primary_dns is defined %}
+DNS={{ ark_primary_dns }}
+{% endif %}
+{% endif %}

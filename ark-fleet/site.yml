@@ -6,6 +6,10 @@
   roles:
     - role: base
       tags: [base]
+    - role: users
+      tags: [users]
+    - role: networking
+      tags: [networking]
     - role: time
       tags: [time]
     - role: logging

@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./mvnw clean package:*)"
+      "Bash(./mvnw clean package:*)",
+      "Bash(ls:*)",
+      "Bash(tar:*)",
+      "Bash(chmod:*)",
+      "Bash(/Users/alejandrosaksida/Alejandro/repos/Cloudberries/NorgesGass/LPG-EHL-core/ark-fleet/.gitignore:*)"
     ]
   }
 }

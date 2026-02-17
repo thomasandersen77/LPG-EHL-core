@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSmoothCounter } from '../hooks/useSmoothCounter';
 import { useAppMode } from '../contexts/AppModeContext';
 import { confirmPayment } from '../api/emulator';
 // Build: 2026-01-29T01:00 - Hide emulator in FIELD mode
@@ -90,7 +91,7 @@ export function ControlPanel() {
   const [maxAmount, setMaxAmount] = useState(2000);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
-  
+
   // Pump status
   const { data: pumpStatus, isLoading } = useQuery({
     queryKey: ['pump-status'],
@@ -112,7 +113,7 @@ export function ControlPanel() {
       setErrorMessage(error.message || 'Kunne ikke simulere kortdragning');
     }
   });
-  
+
   // Start pumping mutation
   const startPumpingMutation = useMutation({
     mutationFn: () => pumpApi.startPumping(),
@@ -158,7 +159,7 @@ export function ControlPanel() {
       setErrorMessage(error.message || 'Kunne ikke frigjøre pumpen');
     }
   });
-  
+
   // Cleanup stuck authorizations mutation
   const cleanupMutation = useMutation({
     mutationFn: () => pumpApi.cleanupAuthorizations(),
@@ -187,8 +188,8 @@ export function ControlPanel() {
     ws.onopen = () => {
       setWsConnected(true);
       // Subscribe to channels - skip 'emulator' in FIELD mode, 'service' always included
-      const channels = isFieldMode 
-        ? ['api', 'service', 'protocol'] 
+      const channels = isFieldMode
+        ? ['api', 'service', 'protocol']
         : ['api', 'service', 'emulator', 'protocol'];
       ws.send(JSON.stringify({
         action: 'subscribe',
@@ -199,12 +200,12 @@ export function ControlPanel() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+
         // Handle log messages
         if (data.channel) {
           setLogs(prev => [...prev.slice(-499), data as LogEntry]);
         }
-        
+
         // Handle pump_update - update cache directly for real-time display
         if (data.type === 'pump_update' || data.type === 'fueling_update' || data.eventType === 'FUELING_UPDATE') {
           const volumeLitres = Number(data.volumeLitres ?? data.volumeLiters ?? 0);
@@ -221,7 +222,7 @@ export function ControlPanel() {
             hasPendingTransaction: data.hasPendingTransaction ?? old?.hasPendingTransaction
           } as PumpStatus));
         }
-        
+
         // Handle price_update - refresh status
         if (data.type === 'price_update') {
           queryClient.invalidateQueries({ queryKey: ['pump-status'] });
@@ -243,12 +244,12 @@ export function ControlPanel() {
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
-  
+
   // 60-second countdown for AUTHORIZED_WAITING and READY_TO_PUMP states
   useEffect(() => {
     if (pumpStatus?.state === 'AUTHORIZED_WAITING' || pumpStatus?.state === 'READY_TO_PUMP') {
       setCountdown(60);
-      
+
       const interval = setInterval(() => {
         setCountdown(prev => {
           if (prev === null || prev <= 1) {
@@ -258,7 +259,7 @@ export function ControlPanel() {
           return prev - 1;
         });
       }, 1000);
-      
+
       return () => clearInterval(interval);
     } else {
       setCountdown(null);
@@ -273,8 +274,8 @@ export function ControlPanel() {
   }, [isFieldMode, activeChannel]);
 
   // Filter logs by channel
-  const filteredLogs = activeChannel === 'all' 
-    ? logs 
+  const filteredLogs = activeChannel === 'all'
+    ? logs
     : logs.filter(log => log.channel === activeChannel);
 
   // Get state color
@@ -375,14 +376,14 @@ export function ControlPanel() {
                 <div className="bg-gray-700 rounded-lg p-4 text-center">
                   <div className="text-gray-400 text-sm">Volum</div>
                   <div className="text-3xl font-bold text-blue-400">
-                    {(pumpStatus?.volumeLitres ?? 0).toFixed(2)}
+                    {useSmoothCounter(pumpStatus?.volumeLitres || 0, pumpStatus?.state === 'PUMPING').toFixed(2)}
                   </div>
                   <div className="text-gray-400 text-xs">liter</div>
                 </div>
                 <div className="bg-gray-700 rounded-lg p-4 text-center">
                   <div className="text-gray-400 text-sm">Beløp</div>
                   <div className="text-3xl font-bold text-green-400">
-                    {(pumpStatus?.amountKr ?? 0).toFixed(2)}
+                    {useSmoothCounter(pumpStatus?.amountKr || 0, pumpStatus?.state === 'PUMPING').toFixed(2)}
                   </div>
                   <div className="text-gray-400 text-xs">kr</div>
                 </div>
@@ -449,11 +450,10 @@ export function ControlPanel() {
                     <button
                       onClick={() => unblockMutation.mutate()}
                       disabled={unblockMutation.isPending || countdown === 0}
-                      className={`w-full py-4 rounded-xl font-bold text-xl transition-colors ${
-                        countdown === 0 
-                          ? 'bg-gray-600 cursor-not-allowed' 
+                      className={`w-full py-4 rounded-xl font-bold text-xl transition-colors ${countdown === 0
+                          ? 'bg-gray-600 cursor-not-allowed'
                           : 'bg-green-600 hover:bg-green-700'
-                      }`}
+                        }`}
                     >
                       {unblockMutation.isPending ? '...' : '🔓 FRI DISPENSER'}
                     </button>
@@ -477,11 +477,10 @@ export function ControlPanel() {
                     <button
                       onClick={() => startPumpingMutation.mutate()}
                       disabled={startPumpingMutation.isPending || countdown === 0}
-                      className={`w-full py-4 rounded-xl font-bold text-xl transition-colors ${
-                        countdown === 0 
-                          ? 'bg-gray-600 cursor-not-allowed' 
+                      className={`w-full py-4 rounded-xl font-bold text-xl transition-colors ${countdown === 0
+                          ? 'bg-gray-600 cursor-not-allowed'
                           : 'bg-blue-600 hover:bg-blue-700'
-                      }`}
+                        }`}
                     >
                       {startPumpingMutation.isPending ? '...' : '⛽ START PUMPING (simuler)'}
                     </button>
@@ -541,11 +540,10 @@ export function ControlPanel() {
                 <button
                   key={channel}
                   onClick={() => setActiveChannel(channel as typeof activeChannel)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    activeChannel === channel
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeChannel === channel
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                    }`}
                 >
                   {channel === 'all' ? 'Alle' : channel.charAt(0).toUpperCase() + channel.slice(1)}
                   <span className="ml-2 text-xs opacity-70">
@@ -619,7 +617,7 @@ export function ControlPanel() {
             </p>
           </div>
         </div>
-        
+
         {/* Admin Section */}
         <div className="mt-6 bg-red-900/20 rounded-xl p-6 border border-red-700/50">
           <h3 className="text-xl font-bold mb-4 text-red-400">🔧 Admin - Feilsøking</h3>
