@@ -1,0 +1,17 @@
+---
+# Defaults for users role
+
+# Admin users with sudo access
+ark_admin_users:
+  - name: alejandro
+    comment: "Alejandro Saksida"
+    groups: ["sudo"]
+    shell: /bin/bash
+  - name: thomas
+    comment: "Thomas"
+    groups: ["sudo"]
+    shell: /bin/bash
+
+# SSH authorized keys directory (for deployment)
+# Place public keys in roles/users/files/ssh-keys/<username>.pub
+ark_ssh_keys_dir: "ssh-keys"

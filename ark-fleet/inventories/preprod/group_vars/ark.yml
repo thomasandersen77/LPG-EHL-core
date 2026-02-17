@@ -2,16 +2,65 @@
 # Fleet-wide defaults for ARK devices (preprod)
 
 ark_base_packages:
-  - curl
+  # Essential system packages
+  - apt-transport-https
+  - apt-utils
   - ca-certificates
-  - jq
-  - unzip
-  - vim-tiny
-  - htop
-  - net-tools
+  - curl
+  - wget
+  # Shell and utilities
+  - bash
+  - bash-completion
+  - coreutils
+  - findutils
+  - grep
+  - sed
+  # Network tools
+  - bind9-dnsutils
+  - bind9-host
   - iproute2
-  - rsync
-  - chrony
+  - iputils-ping
+  - netcat-traditional
+  - traceroute
+  - tcpdump
+  - ethtool
+  - arp-scan
+  - socat
+  # Network services
+  - dnsmasq
+  - openssh-server
+  # System monitoring and management
+  - htop
+  - lsof
+  - dmidecode
+  # File utilities
+  - bzip2
+  - gzip
+  - xz-utils
+  - zstd
+  - unzip
+  # Text editors
+  - vim-tiny
+  - nano
+  # Time synchronization (systemd-timesyncd is built-in)
+  # Java runtime
+  - default-jre
+  - temurin-21-jre
+  # .NET SDK
+  - dotnet-sdk-9.0
+  # Mono runtime
+  - mono-complete
+  # JSON processing
+  - jq
+  # Firewall
+  - iptables
+  - iptables-persistent
+  - nftables
+  # Hardware support
+  - firmware-misc-nonfree
+  - intel-microcode
+  # Misc utilities
+  - cron
 
 # journald limits (see roles/logging)
 ark_journald_system_max_use: "200M"
@@ -20,4 +69,15 @@ ark_journald_runtime_max_use: "100M"
 # Hostname convention / domain:
 # - We typically use short hostnames like `ark-pp-001`
 # - If you later need FQDNs, set that policy explicitly (out of scope for this skeleton)
+
+# Networking configuration (based on reference ARK 3360)
+# Primary interface uses DHCP by default
+ark_primary_dhcp: true
+
+# Secondary/terminal interface for local network (192.168.50.x)
+ark_terminal_interface: "ens32"
+ark_terminal_network: "192.168.50.1/24"
+
+# dnsmasq configuration (if needed for local DNS/DHCP)
+ark_dnsmasq_enabled: false
 

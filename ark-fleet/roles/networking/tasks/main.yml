@@ -1,0 +1,47 @@
+---
+- name: Enable systemd-networkd service
+  ansible.builtin.systemd:
+    name: systemd-networkd
+    enabled: true
+    state: started
+
+- name: Enable systemd-networkd-wait-online service
+  ansible.builtin.systemd:
+    name: systemd-networkd-wait-online
+    enabled: true
+
+- name: Configure primary network interface
+  ansible.builtin.template:
+    src: primary-interface.network.j2
+    dest: "/etc/systemd/network/10-{{ ark_primary_interface }}.network"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart systemd-networkd
+  when: ark_primary_interface is defined
+
+- name: Configure terminal/secondary network interface
+  ansible.builtin.template:
+    src: terminal-interface.network.j2
+    dest: "/etc/systemd/network/50-terminal.network"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart systemd-networkd
+  when: ark_terminal_interface is defined and ark_terminal_network is defined
+
+- name: Ensure dnsmasq is configured (if enabled)
+  ansible.builtin.template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart dnsmasq
+  when: ark_dnsmasq_enabled | bool
+
+- name: Ensure dnsmasq service state
+  ansible.builtin.systemd:
+    name: dnsmasq
+    enabled: "{{ ark_dnsmasq_enabled | bool }}"
+    state: "{{ 'started' if ark_dnsmasq_enabled | bool else 'stopped' }}"
