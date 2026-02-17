@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
+import { useSmoothCounter } from '../hooks/useSmoothCounter';
 
 // API base URL
 const API_BASE_URL = import.meta.env.VITE_EMULATOR_BASE_URL || import.meta.env.VITE_API_BASE_URL || window.location.origin;
@@ -70,15 +71,22 @@ export function DispenserSimulator() {
       wsRef.current = null;
     };
   }, [queryClient]);
-  
+
+  const rawLitres = pumpStatus?.volumeLitres || 0;
+  const rawAmount = pumpStatus?.amountKr || 0;
+  const isPumping = pumpStatus?.state === 'PUMPING';
+
+  const smoothLitres = useSmoothCounter(rawLitres, isPumping);
+  const smoothAmount = useSmoothCounter(rawAmount, isPumping);
+
   const state = {
-    state: pumpStatus?.state === 'PUMPING' ? 'DELIVERING' : 
-           pumpStatus?.state === 'PAYMENT_PENDING' ? 'FINISHED' :
-           pumpStatus?.state === 'READY_TO_PUMP' ? 'READY' :
-           pumpStatus?.state || 'IDLE',
+    state: pumpStatus?.state === 'PUMPING' ? 'DELIVERING' :
+      pumpStatus?.state === 'PAYMENT_PENDING' ? 'FINISHED' :
+        pumpStatus?.state === 'READY_TO_PUMP' ? 'READY' :
+          pumpStatus?.state || 'IDLE',
     connected: true,
-    litres: pumpStatus?.volumeLitres || 0,
-    amountToPay: pumpStatus?.amountKr || 0,
+    litres: smoothLitres,
+    amountToPay: smoothAmount,
     pricePerLitre: pumpStatus?.pricePerLitreKr || 0
   };
 
@@ -133,7 +141,7 @@ export function DispenserSimulator() {
 
         {/* Control Link */}
         <div className="text-center mb-8">
-          <Link 
+          <Link
             to="/control"
             className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-colors"
           >
@@ -197,7 +205,7 @@ export function DispenserSimulator() {
                 <p className="text-gray-500 text-sm mt-2">Bruk kontrollpanelet for å starte</p>
               </div>
             )}
-            
+
             {pumpStatus?.state === 'READY_TO_PUMP' && (
               <div className="text-center py-6 bg-green-900/30 rounded-xl border border-green-500">
                 <div className="text-5xl mb-3">✅</div>
@@ -205,7 +213,7 @@ export function DispenserSimulator() {
                 <p className="text-gray-400 text-sm mt-2">Venter på at kunde starter pumping</p>
               </div>
             )}
-            
+
             {pumpStatus?.state === 'PUMPING' && (
               <div className="text-center py-6 bg-blue-900/30 rounded-xl border border-blue-500 animate-pulse">
                 <div className="text-5xl mb-3">⛽</div>
@@ -213,7 +221,7 @@ export function DispenserSimulator() {
                 <p className="text-gray-400 text-sm mt-2">Levering i gang</p>
               </div>
             )}
-            
+
             {pumpStatus?.state === 'PAYMENT_PENDING' && (
               <div className="text-center py-6 bg-orange-900/30 rounded-xl border border-orange-500">
                 <div className="text-5xl mb-3">💳</div>
@@ -230,7 +238,7 @@ export function DispenserSimulator() {
           <p className="text-gray-400 mb-4">
             Dette er en sanntidsvisning av pumpe #1. For å kontrollere pumpen (starte, stoppe, bekrefte betaling), bruk kontrollpanelet.
           </p>
-          <Link 
+          <Link
             to="/control"
             className="block text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
           >

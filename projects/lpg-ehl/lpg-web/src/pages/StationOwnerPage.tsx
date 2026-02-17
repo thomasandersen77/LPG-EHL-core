@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { pumpApi, type PumpStatus } from '../api/pump';
+import { useSmoothCounter } from '../hooks/useSmoothCounter';
 import { useQuery } from '@tanstack/react-query';
 import { fetchPeriodSummary } from '../api/reports';
 import { fetchTransactions, type TransactionDto } from '../api/transactions';
@@ -42,14 +43,14 @@ export function StationOwnerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
-  
+
   // Price state
   const [priceWithTax, setPriceWithTax] = useState(17.99);
   const [priceWithoutTax, setPriceWithoutTax] = useState(11.50);
   const [showPriceModal, setShowPriceModal] = useState(false);
   const [newPriceWithTax, setNewPriceWithTax] = useState('');
   const [newPriceWithoutTax, setNewPriceWithoutTax] = useState('');
-  
+
   // Klippekort state
   const [klippekortSize, setKlippekortSize] = useState(6);
 
@@ -75,7 +76,7 @@ export function StationOwnerPage() {
     };
 
     pollStatus();
-    const interval = setInterval(pollStatus, 
+    const interval = setInterval(pollStatus,
       pumpStatus?.state === 'PUMPING' ? 5000 : 10000 // Relax polling when WebSocket is used
     );
     return () => clearInterval(interval);
@@ -99,7 +100,7 @@ export function StationOwnerPage() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+
         // Handle pump updates
         if (data.type === 'pump_update' || data.type === 'fueling_update' || data.eventType === 'FUELING_UPDATE') {
           const volumeLitres = Number(data.volumeLitres ?? data.volumeLiters ?? data.liters ?? 0);
@@ -115,12 +116,12 @@ export function StationOwnerPage() {
             nozzleLifted: data.nozzleLifted ?? prev?.nozzleLifted,
             hasPendingTransaction: data.hasPendingTransaction ?? prev?.hasPendingTransaction
           } as PumpStatus));
-          
+
           if (pricePerLitreKr > 0) {
             setPriceWithTax(pricePerLitreKr);
           }
         }
-        
+
         // Handle price updates
         if (data.type === 'price_update') {
           if (data.pricePerLiterKr > 0) {
@@ -247,14 +248,14 @@ export function StationOwnerPage() {
   const handleSavePrice = async () => {
     const withTax = parseFloat(newPriceWithTax);
     const withoutTax = parseFloat(newPriceWithoutTax);
-    
+
     if (!isNaN(withTax) && withTax > 0) {
       setPriceWithTax(withTax);
     }
     if (!isNaN(withoutTax) && withoutTax > 0) {
       setPriceWithoutTax(withoutTax);
     }
-    
+
     // Call API to update price if available
     try {
       await axios.post(`${API_URL}/prices/update`, {
@@ -264,7 +265,7 @@ export function StationOwnerPage() {
     } catch (err) {
       // Price API might not be available, that's ok
     }
-    
+
     setShowPriceModal(false);
     setNewPriceWithTax('');
     setNewPriceWithoutTax('');
@@ -301,12 +302,16 @@ export function StationOwnerPage() {
   const isConnected = isReadyToPump || isPumping || isPaymentPending;
   const isOnline = pumpStatus != null && state !== 'OFFLINE';
 
+  // Smooth counters for real-time feel
+  const smoothAmount = useSmoothCounter(pumpStatus?.amountKr || 0, isPumping);
+  const smoothVolume = useSmoothCounter(pumpStatus?.volumeLitres || 0, isPumping);
+
   // Display values
   const displayAmount = isConnected
-    ? (pumpStatus?.amountKr?.toFixed(2) ?? '0.00')
+    ? smoothAmount.toFixed(2)
     : '0000,00';
   const displayVolume = isConnected
-    ? (pumpStatus?.volumeLitres?.toFixed(2) ?? '0.00')
+    ? smoothVolume.toFixed(2)
     : '0000,00';
   const currentPrice = withRoadTax ? priceWithTax : priceWithoutTax;
 
@@ -351,19 +356,19 @@ export function StationOwnerPage() {
           <div className="rapporter-box-v2">
             <div className="rapporter-header-v2">RAPPORTER</div>
             <div className="rapporter-tabs-v2">
-              <button 
+              <button
                 className={`rapporter-tab-v2 ${reportType === 'omsetning' ? 'active' : ''}`}
                 onClick={() => { setReportType('omsetning'); setActiveView('reports'); }}
               >
                 Omsetningsrapport
               </button>
-              <button 
+              <button
                 className={`rapporter-tab-v2 ${reportType === 'veibruksavgift' ? 'active' : ''}`}
                 onClick={() => { setReportType('veibruksavgift'); setActiveView('reports'); }}
               >
                 Veibruksavgift
               </button>
-              <button 
+              <button
                 className={`rapporter-tab-v2 ${reportType === 'uttak' ? 'active' : ''}`}
                 onClick={() => { setReportType('uttak'); setActiveView('reports'); }}
               >
@@ -374,13 +379,13 @@ export function StationOwnerPage() {
 
           {/* Action Buttons - ENDRE PRIS / KVITTERINGER */}
           <div className="action-row-v2">
-            <button 
+            <button
               className="action-btn-v2"
               onClick={() => setShowPriceModal(true)}
             >
               ENDRE PRIS
             </button>
-            <button 
+            <button
               className="action-btn-v2"
               onClick={() => setActiveView('receipts')}
             >
@@ -409,7 +414,7 @@ export function StationOwnerPage() {
           </div>
 
           {/* Hent kvitteringer button */}
-          <button 
+          <button
             className="hent-kvitteringer-btn-v2"
             onClick={() => void handleFetchReceipts()}
           >
@@ -419,13 +424,13 @@ export function StationOwnerPage() {
           {/* Additional Navigation - Hidden on main view for cleaner UI */}
           {activeView === 'dashboard' && (
             <div className="extra-nav-v2">
-              <button 
+              <button
                 className="extra-nav-btn-v2"
                 onClick={() => setActiveView('customers')}
               >
                 👥 Mine kunder
               </button>
-              <button 
+              <button
                 className="extra-nav-btn-v2"
                 onClick={() => setActiveView('klippekort')}
               >
@@ -564,7 +569,7 @@ export function StationOwnerPage() {
             <div className="subview-content-v2">
               <h2>{reportType === 'omsetning' && 'Omsetningsrapport'}{reportType === 'veibruksavgift' && 'Veibruksavgift'}{reportType === 'uttak' && 'Uttaksrapport'}</h2>
               <p className="subview-period">Periode: {dateFrom} - {dateTo}</p>
-              
+
               {isLoadingReport ? (
                 <div className="loading-msg-v2">Laster rapport...</div>
               ) : periodSummary ? (
@@ -599,11 +604,11 @@ export function StationOwnerPage() {
           {activeView === 'receipts' && (
             <div className="subview-content-v2">
               <h2>Kvitteringer</h2>
-              <div className="date-row-v2" style={{marginBottom: '1rem'}}>
+              <div className="date-row-v2" style={{ marginBottom: '1rem' }}>
                 <div className="date-field-v2"><label>FRA DATO</label><input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></div>
                 <div className="date-field-v2"><label>TIL DATO</label><input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></div>
               </div>
-              <button className="hent-kvitteringer-btn-v2" style={{marginBottom: '1rem'}} onClick={() => void handleFetchReceipts()}>
+              <button className="hent-kvitteringer-btn-v2" style={{ marginBottom: '1rem' }} onClick={() => void handleFetchReceipts()}>
                 Hent kvitteringer
               </button>
               <div className="receipts-table-v2">
@@ -681,7 +686,7 @@ export function StationOwnerPage() {
             <p className="modal-description">
               Sett ny pris for denne dispenseren. Når API-et er koblet til vil disse verdiene sendes videre.
             </p>
-            
+
             <div className="price-input-group">
               <label>MED VEIBRUKSAVGIFT (KR/L)</label>
               <input
@@ -693,7 +698,7 @@ export function StationOwnerPage() {
                 className="price-modal-input"
               />
             </div>
-            
+
             <div className="price-input-group">
               <label>UTEN VEIBRUKSAVGIFT (KR/L)</label>
               <input
@@ -705,7 +710,7 @@ export function StationOwnerPage() {
                 className="price-modal-input"
               />
             </div>
-            
+
             <div className="modal-buttons">
               <button className="modal-btn save" onClick={handleSavePrice}>
                 Lagre
