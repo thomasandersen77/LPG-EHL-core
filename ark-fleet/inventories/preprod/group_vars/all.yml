@@ -3,7 +3,11 @@
 
 timezone: US/Eastern
 
-# Placeholder admin user. This is the account you SSH as.
+# SSH connection user - shared admin account for developers
+# This is the account Ansible uses to connect and deploy
+ansible_user: arkadmin
+
+# Legacy reference (not used by Ansible)
 ark_admin_user: alejandro
 
 ark_app_user: arkapp

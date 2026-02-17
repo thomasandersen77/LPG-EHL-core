@@ -50,7 +50,9 @@ vim inventories/preprod/hosts.yml
 all:
   vars:
     ansible_become: true
-    ansible_user: <your-temp-user>  # Temporary user for initial setup
+    # For initial setup, use a temporary user with sudo access
+    ansible_user: <your-temp-user>
+    # After initial deployment, change to: arkadmin
 
   children:
     preprod:
@@ -67,18 +69,36 @@ all:
 
 ## Step 2: Configure SSH Keys
 
-1. Add SSH public keys for your admin users:
+The ARK fleet uses three admin accounts:
+- **arkadmin** - Shared account for developers (primary account for Ansible)
+- **alejandro** - Individual admin account
+- **thomas** - Individual admin account
+
+### Configure arkadmin Shared Account
+
+The `arkadmin` account allows multiple developers to connect using their individual SSH keys:
 
 ```bash
-# Copy your SSH public keys
+# Developer 1: Add your SSH public key
+cp ~/.ssh/id_rsa.pub roles/users/files/ssh-keys/arkadmin-dev1.pub
+
+# Developer 2: Add your SSH public key
+cp ~/.ssh/id_rsa.pub roles/users/files/ssh-keys/arkadmin-dev2.pub
+```
+
+### Configure Individual Admin Accounts (Optional)
+
+```bash
+# Copy SSH public keys for individual accounts
 cp ~/.ssh/id_rsa.pub roles/users/files/ssh-keys/alejandro.pub
 cp /path/to/thomas/key.pub roles/users/files/ssh-keys/thomas.pub
 ```
 
-2. Verify the keys are in place:
+### Verify Keys
 
 ```bash
 ls -l roles/users/files/ssh-keys/
+# Should show: arkadmin-dev1.pub, arkadmin-dev2.pub, and optionally alejandro.pub, thomas.pub
 ```
 
 ## Step 3: Verify Connectivity
@@ -135,8 +155,12 @@ ansible-playbook -i inventories/preprod/hosts.yml site.yml -l ark-pp-001
 After deployment, verify the configuration:
 
 ```bash
-# SSH as one of the managed users
+# SSH as the arkadmin shared user (both developers can use this)
+ssh arkadmin@192.168.1.101
+
+# Or SSH as individual users
 ssh alejandro@192.168.1.101
+ssh thomas@192.168.1.101
 
 # Verify system information
 hostnamectl
@@ -222,21 +246,60 @@ journalctl -u <service-name> -n 50
 
 After successful deployment:
 
-1. Remove the temporary admin user (if created):
-   ```bash
-   ssh alejandro@192.168.1.101
-   sudo deluser --remove-home <temp-user>
-   ```
+### 1. Switch to arkadmin for Future Deployments
 
-2. Update your SSH config to use the managed users:
-   ```bash
-   # ~/.ssh/config
-   Host ark-pp-*
-       User alejandro
-       IdentityFile ~/.ssh/id_rsa
-   ```
+Update the inventory to use `arkadmin` instead of the temporary user:
 
-3. Document the device in your asset management system
+```bash
+vim inventories/preprod/group_vars/all.yml
+```
+
+Change:
+```yaml
+ansible_user: arkadmin  # Already set by default
+```
+
+Or in hosts.yml, remove the temporary user override:
+```yaml
+all:
+  vars:
+    ansible_become: true
+    # ansible_user defaults to arkadmin from group_vars/all.yml
+```
+
+### 2. Remove Temporary User (Optional)
+
+If you created a temporary admin user for initial setup:
+
+```bash
+ssh arkadmin@192.168.1.101
+sudo deluser --remove-home <temp-user>
+```
+
+### 3. Configure SSH Client
+
+Update your SSH config for convenience:
+
+```bash
+# ~/.ssh/config
+Host ark-pp-*
+    User arkadmin
+    IdentityFile ~/.ssh/id_rsa
+
+Host ark-prod-*
+    User arkadmin
+    IdentityFile ~/.ssh/id_rsa
+```
+
+Now you can connect with just: `ssh ark-pp-001`
+
+### 4. Document the Device
+
+Document the device in your asset management system with:
+- Hostname
+- IP address
+- Admin users (arkadmin, alejandro, thomas)
+- Deployment date
 
 ## Customization
 

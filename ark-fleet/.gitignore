@@ -13,3 +13,14 @@ vault-password.txt
 # Local artifacts
 pkglist.tsv
 
+
+# SSH keys (only commit key filenames, not actual keys)
+roles/users/files/ssh-keys/*.pub
+!roles/users/files/ssh-keys/README.md
+
+# Preseed files with actual SSH keys (only commit template)
+files/preseed.cfg
+!files/preseed-template.cfg
+
+# Temporary bootstrap files
+scripts/*-custom.sh

@@ -12,11 +12,16 @@ The Ansible playbooks are based on a complete capture of a working ARK 3360 devi
 
 For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
+For **zero-touch deployment** without keyboard/monitor access, see [docs/BOOTSTRAP-DEPLOYMENT.md](docs/BOOTSTRAP-DEPLOYMENT.md).
+
 **Quick deploy to preprod:**
 
 ```bash
-# Add your SSH keys first
-cp ~/.ssh/id_rsa.pub roles/users/files/ssh-keys/alejandro.pub
+# Add your SSH keys for the arkadmin shared account
+# Developer 1:
+cp ~/.ssh/id_rsa.pub roles/users/files/ssh-keys/arkadmin-dev1.pub
+# Developer 2:
+cp ~/.ssh/id_rsa.pub roles/users/files/ssh-keys/arkadmin-dev2.pub
 
 # Edit inventory to add your devices
 vim inventories/preprod/hosts.yml
@@ -42,7 +47,7 @@ ansible-playbook -i inventories/preprod/hosts.yml site.yml --tags users,networki
 The playbook includes the following roles (in execution order):
 
 1. **base**: System packages, hostname, application user/group setup
-2. **users**: Admin user accounts (alejandro, thomas) with sudo access
+2. **users**: Admin user accounts (alejandro, thomas, arkadmin) with sudo access
 3. **networking**: systemd-networkd configuration for primary and terminal interfaces
 4. **time**: Timezone and NTP configuration (systemd-timesyncd)
 5. **logging**: journald configuration
