@@ -1,11 +1,8 @@
-﻿using System;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Azure.Devices.Client;
 
-namespace PumpSteering
+namespace pump_steering
 {
     // Simple state holder
     public class LoopState
@@ -16,29 +13,36 @@ namespace PumpSteering
         public bool IsOpenForDelivery { get; set; }
     }
 
-    public class Program
+    public static class Program
     {
-        private static SerialService _serial;
-        private static DeviceClient _deviceClient;
-        private static LoopState _state = new LoopState();
-        private static string _connectionString;
+        private static SerialService? _serial;
+        private static DeviceClient? _deviceClient;
+        private static readonly LoopState State = new();
+        private static string? _connectionString;
         private static string _serialPortName = "/dev/ttyS3"; // Default
+        private static int _address = 33; // Default EHL address
 
         public static async Task Main(string[] args)
         {
             if (args.Length < 1)
             {
-                Console.WriteLine("Usage: dotnet run -- <device_connection_string> [serial_port]");
+                Console.WriteLine("Usage: dotnet run -- <device_connection_string> [serial_port] [address]");
                 return;
             }
 
             _connectionString = args[0];
             if (args.Length >= 2) _serialPortName = args[1];
+            if (args.Length >= 3 && int.TryParse(args[2], out int addr)) _address = addr;
 
-            Console.WriteLine($"Initializing Pump Steering IoT Client... Serial Port: {_serialPortName}");
+            Console.WriteLine($"Initializing Pump Steering IoT Client... Serial Port: {_serialPortName}, Address: {_address}");
 
             // Init Serial
-            var serialConfig = new SerialConfig { PortName = _serialPortName, BaudRate = 9600 };
+            var serialConfig = new SerialConfig
+            {
+                PortName = _serialPortName,
+                BaudRate = 9600,
+                Address = (byte)_address
+            };
             _serial = new SerialService(serialConfig);
             try 
             {
@@ -76,10 +80,10 @@ namespace PumpSteering
             {
                 Console.WriteLine($"Error: {ex.Message}");
             }
-            finally 
+            finally
             {
                 if (_deviceClient != null) await _deviceClient.CloseAsync();
-                if (_serial != null) _serial.Close();
+                _serial.Close();
             }
         }
 
@@ -91,7 +95,7 @@ namespace PumpSteering
                 try 
                 {
                     // 1. Poll State
-                    var stateInfo = _serial.PollState();
+                    var stateInfo = _serial?.PollState();
                     if (stateInfo.HasValue)
                     {
                         var (open, start, auto) = stateInfo.Value;
@@ -99,26 +103,26 @@ namespace PumpSteering
                         // If "open_for_delivery" is true, it means pump is delivering or ready?
                         // Actually, CMD_UNBLOCK enables "Open for Delivery" state (bit 1).
                         // So if bit 1 is set, IsLocked = false.
-                        _state.IsOpenForDelivery = open;
-                        _state.IsLocked = !open; 
+                        State.IsOpenForDelivery = open;
+                        State.IsLocked = !open; 
                         
                         // Console.WriteLine($"[Poll] State: Open={open} Start={start} Auto={auto}");
                     }
 
                     // 2. Poll Volume (only if delivering? or always?)
                     // Always poll volume to catch updates
-                    var volStr = _serial.PollVolume();
+                    var volStr = _serial?.PollVolume();
                     if (volStr != null && decimal.TryParse(volStr, out decimal v))
                     {
-                        _state.Volume = v;
+                        State.Volume = v;
                     }
 
                     // 3. Poll Price (maybe less frequently?)
                     // For now, poll every loop
-                    var priceStr = _serial.PollPrice();
+                    var priceStr = _serial?.PollPrice();
                     if (priceStr != null && decimal.TryParse(priceStr, out decimal p))
                     {
-                        _state.Price = p;
+                        State.Price = p;
                     }
 
                     // Sleep for a bit
@@ -136,23 +140,22 @@ namespace PumpSteering
         {
             while (!ct.IsCancellationRequested)
             {
-                var telemetryDataPoint = new
-                {
-                    price = _state.Price,
-                    volume = _state.Volume,
-                    is_locked = _state.IsLocked, // Derived from OpenForDelivery bit
-                    is_open_for_delivery = _state.IsOpenForDelivery,
-                    timestamp = DateTime.UtcNow
-                };
+                var telemetry = TelemetryFactory.CreateStateTelemetry(
+                    address: _address,
+                    price: State.Price,
+                    volume: State.Volume,
+                    isLocked: State.IsLocked,
+                    isOpenForDelivery: State.IsOpenForDelivery
+                );
 
-                string messageString = JsonSerializer.Serialize(telemetryDataPoint);
+                string messageString = JsonSerializer.Serialize(telemetry);
                 var message = new Message(Encoding.UTF8.GetBytes(messageString));
                 message.ContentType = "application/json";
                 message.ContentEncoding = "utf-8";
 
-                try 
+                try
                 {
-                    await _deviceClient.SendEventAsync(message);
+                    await _deviceClient?.SendEventAsync(message, ct)!;
                     Console.WriteLine($"[Telemetry] Sent: {messageString}");
                 }
                 catch (Exception ex)
@@ -164,81 +167,306 @@ namespace PumpSteering
             }
         }
 
-        // Direct Method Handlers
+        // ===== Direct Method Handlers =====
 
-        private static Task<MethodResponse> SetPriceHandler(MethodRequest methodRequest, object userContext)
+        private static async Task<MethodResponse> SetPriceHandler(MethodRequest methodRequest, object userContext)
         {
-            try 
+            try
             {
-                var payload = JsonDocument.Parse(methodRequest.DataAsJson);
-                if (payload.RootElement.TryGetProperty("price", out JsonElement priceElement))
-                {
-                    if (priceElement.TryGetDecimal(out decimal newPrice))
-                    {
-                        // Call Serial Service
-                        bool currentLocked = _state.IsLocked;
-                        // Usually price setting requires pump to be ready or idle?
-                        
-                        string priceStr = newPrice.ToString("F2"); // Format XX.XX
-                        // Validate simple format mapping
-                        if (newPrice < 0 || newPrice > 99.99m) 
-                             return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes("{\"error\": \"Price out of range\"}"), 400));
-                        
-                        // We might need to ensure formatting "15.90" not "15,90" depending on locale!
-                        // Enforce dot
-                        priceStr = newPrice.ToString("00.00", System.Globalization.CultureInfo.InvariantCulture);
+                // Parse envelope or legacy payload
+                var (envelope, isLegacy) = ContractParser.ParseMethodRequest<SetPricePayload>(methodRequest.DataAsJson);
 
-                        bool success = _serial.SetPrice(priceStr);
-                        
-                        if (success)
-                        {
-                            return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes($"{{\"result\": \"Price updated\", \"new_price\": {newPrice}}}"), 200));
-                        }
-                        else 
-                        {
-                            return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes("{\"error\": \"Serial command failed\"}"), 500));
-                        }
-                    }
+                // Validate CID (warn if generated)
+                var (cid, wasGenerated) = ContractParser.ValidateOrGenerateCid(envelope.Cid);
+                if (wasGenerated && !isLegacy)
+                {
+                    Console.WriteLine($"[SetPrice] Warning: Invalid CID, generated new one: {cid}");
                 }
-                return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes("{\"error\": \"Invalid price format\"}"), 400));
+
+                // Validate payload
+                var priceValidation = ContractValidator.ValidatePrice(envelope.Payload.Price);
+                if (!priceValidation.IsValid)
+                {
+                    var errorResponse = new MethodResponseDto(
+                        Cid: cid,
+                        Ok: false,
+                        ErrorCode: priceValidation.ErrorCode,
+                        Message: priceValidation.Message
+                    );
+
+                    // Send error telemetry
+                    await SendMethodTelemetryAsync(cid, envelope.Side, envelope.Actor, "SetPrice",
+                        success: false, errorMessage: priceValidation.Message);
+
+                    return new MethodResponse(
+                        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(errorResponse)),
+                        400);
+                }
+
+                // Format price
+                var priceStr = envelope.Payload.Price.ToString("00.00", System.Globalization.CultureInfo.InvariantCulture);
+
+                // Execute serial command
+                bool success = _serial != null && _serial.SetPrice(priceStr);
+
+                // Send telemetry (success or failure)
+                await SendMethodTelemetryAsync(cid, envelope.Side, envelope.Actor, "SetPrice",
+                    success: success, errorMessage: success ? null : "Serial command failed");
+
+                if (success)
+                {
+                    var response = new MethodResponseDto(
+                        Cid: cid,
+                        Ok: true,
+                        Message: "Price updated",
+                        Data: new { new_price = envelope.Payload.Price }
+                    );
+                    return new MethodResponse(
+                        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response)),
+                        200);
+                }
+                else
+                {
+                    var errorResponse = new MethodResponseDto(
+                        Cid: cid,
+                        Ok: false,
+                        ErrorCode: ErrorCodes.SerialCommandFailed,
+                        Message: "Serial command failed"
+                    );
+                    return new MethodResponse(
+                        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(errorResponse)),
+                        500);
+                }
             }
             catch (Exception ex)
             {
-                return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes($"{{ \"error\": \"{ex.Message}\" }}"), 500));
+                Console.WriteLine($"[SetPrice] Exception: {ex.Message}");
+                var errorResponse = new MethodResponseDto(
+                    Cid: Guid.NewGuid().ToString(),
+                    Ok: false,
+                    ErrorCode: ErrorCodes.Unknown,
+                    Message: ex.Message
+                );
+                return new MethodResponse(
+                    Encoding.UTF8.GetBytes(JsonSerializer.Serialize(errorResponse)),
+                    500);
             }
         }
 
-        private static Task<MethodResponse> UnlockHandler(MethodRequest methodRequest, object userContext)
+        private static async Task<MethodResponse> UnlockHandler(MethodRequest methodRequest, object userContext)
         {
-            bool success = _serial.Unlock();
-            if (success)
+            try
             {
-                 // Optimistic update
-                _state.IsLocked = false;
-                return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes("{\"result\": \"Pump unlocked command sent\"}"), 200));
-            }
-            return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes("{\"error\": \"Unlock command failed\"}"), 500));
-        }
+                var (envelope, isLegacy) = ContractParser.ParseMethodRequest<EmptyPayload>(methodRequest.DataAsJson);
+                var (cid, _) = ContractParser.ValidateOrGenerateCid(envelope.Cid);
 
-        private static Task<MethodResponse> LockHandler(MethodRequest methodRequest, object userContext)
-        {
-            bool success = _serial.Lock();
-            if (success)
+                bool success = _serial != null && _serial.Unlock();
+
+                if (success)
+                {
+                    State.IsLocked = false; // Optimistic update
+                }
+
+                await SendMethodTelemetryAsync(cid, envelope.Side, envelope.Actor, "Unlock",
+                    success: success, errorMessage: success ? null : "Unlock command failed");
+
+                if (success)
+                {
+                    var response = new MethodResponseDto(
+                        Cid: cid,
+                        Ok: true,
+                        Message: "Pump unlocked command sent"
+                    );
+                    return new MethodResponse(
+                        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response)),
+                        200);
+                }
+                else
+                {
+                    var errorResponse = new MethodResponseDto(
+                        Cid: cid,
+                        Ok: false,
+                        ErrorCode: ErrorCodes.SerialCommandFailed,
+                        Message: "Unlock command failed"
+                    );
+                    return new MethodResponse(
+                        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(errorResponse)),
+                        500);
+                }
+            }
+            catch (Exception ex)
             {
-                _state.IsLocked = true;
-                return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes("{\"result\": \"Pump locked command sent\"}"), 200));
+                Console.WriteLine($"[Unlock] Exception: {ex.Message}");
+                var errorResponse = new MethodResponseDto(
+                    Cid: Guid.NewGuid().ToString(),
+                    Ok: false,
+                    ErrorCode: ErrorCodes.Unknown,
+                    Message: ex.Message
+                );
+                return new MethodResponse(
+                    Encoding.UTF8.GetBytes(JsonSerializer.Serialize(errorResponse)),
+                    500);
             }
-            return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes("{\"error\": \"Lock command failed\"}"), 500));
         }
 
-        private static Task<MethodResponse> ResetHandler(MethodRequest methodRequest, object userContext)
+        private static async Task<MethodResponse> LockHandler(MethodRequest methodRequest, object userContext)
         {
-             bool success = _serial.Reset();
-             if (success)
-             {
-                 return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes("{\"result\": \"Pump reset command sent\"}"), 200));
-             }
-             return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes("{\"error\": \"Reset command failed\"}"), 500));
+            try
+            {
+                var (envelope, isLegacy) = ContractParser.ParseMethodRequest<EmptyPayload>(methodRequest.DataAsJson);
+                var (cid, _) = ContractParser.ValidateOrGenerateCid(envelope.Cid);
+
+                bool success = _serial != null && _serial.Lock();
+
+                if (success)
+                {
+                    State.IsLocked = true; // Optimistic update
+                }
+
+                await SendMethodTelemetryAsync(cid, envelope.Side, envelope.Actor, "Lock",
+                    success: success, errorMessage: success ? null : "Lock command failed");
+
+                if (success)
+                {
+                    var response = new MethodResponseDto(
+                        Cid: cid,
+                        Ok: true,
+                        Message: "Pump locked command sent"
+                    );
+                    return new MethodResponse(
+                        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response)),
+                        200);
+                }
+                else
+                {
+                    var errorResponse = new MethodResponseDto(
+                        Cid: cid,
+                        Ok: false,
+                        ErrorCode: ErrorCodes.SerialCommandFailed,
+                        Message: "Lock command failed"
+                    );
+                    return new MethodResponse(
+                        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(errorResponse)),
+                        500);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Lock] Exception: {ex.Message}");
+                var errorResponse = new MethodResponseDto(
+                    Cid: Guid.NewGuid().ToString(),
+                    Ok: false,
+                    ErrorCode: ErrorCodes.Unknown,
+                    Message: ex.Message
+                );
+                return new MethodResponse(
+                    Encoding.UTF8.GetBytes(JsonSerializer.Serialize(errorResponse)),
+                    500);
+            }
+        }
+
+        private static async Task<MethodResponse> ResetHandler(MethodRequest methodRequest, object userContext)
+        {
+            try
+            {
+                var (envelope, isLegacy) = ContractParser.ParseMethodRequest<EmptyPayload>(methodRequest.DataAsJson);
+                var (cid, _) = ContractParser.ValidateOrGenerateCid(envelope.Cid);
+
+                bool success = _serial != null && _serial.Reset();
+
+                await SendMethodTelemetryAsync(cid, envelope.Side, envelope.Actor, "Reset",
+                    success: success, errorMessage: success ? null : "Reset command failed");
+
+                if (success)
+                {
+                    var response = new MethodResponseDto(
+                        Cid: cid,
+                        Ok: true,
+                        Message: "Pump reset command sent"
+                    );
+                    return new MethodResponse(
+                        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response)),
+                        200);
+                }
+                else
+                {
+                    var errorResponse = new MethodResponseDto(
+                        Cid: cid,
+                        Ok: false,
+                        ErrorCode: ErrorCodes.SerialCommandFailed,
+                        Message: "Reset command failed"
+                    );
+                    return new MethodResponse(
+                        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(errorResponse)),
+                        500);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Reset] Exception: {ex.Message}");
+                var errorResponse = new MethodResponseDto(
+                    Cid: Guid.NewGuid().ToString(),
+                    Ok: false,
+                    ErrorCode: ErrorCodes.Unknown,
+                    Message: ex.Message
+                );
+                return new MethodResponse(
+                    Encoding.UTF8.GetBytes(JsonSerializer.Serialize(errorResponse)),
+                    500);
+            }
+        }
+
+        // Helper to send method telemetry
+        private static async Task SendMethodTelemetryAsync(
+            string cid,
+            string side,
+            Actor actor,
+            string method,
+            bool success,
+            string? errorMessage = null)
+        {
+            try
+            {
+                TelemetryEnvelope telemetry;
+
+                if (success)
+                {
+                    telemetry = TelemetryFactory.CreateEhlResponseTelemetry(
+                        cid: cid,
+                        side: side,
+                        actor: actor,
+                        method: method,
+                        address: _address,
+                        price: State.Price,
+                        volume: State.Volume,
+                        isLocked: State.IsLocked,
+                        isOpenForDelivery: State.IsOpenForDelivery
+                    );
+                }
+                else
+                {
+                    telemetry = TelemetryFactory.CreateErrorTelemetry(
+                        cid: cid,
+                        side: side,
+                        actor: actor,
+                        method: method,
+                        address: _address,
+                        errorMessage: errorMessage ?? "Unknown error"
+                    );
+                }
+
+                string messageString = JsonSerializer.Serialize(telemetry);
+                var message = new Message(Encoding.UTF8.GetBytes(messageString));
+                message.ContentType = "application/json";
+                message.ContentEncoding = "utf-8";
+
+                await _deviceClient?.SendEventAsync(message)!;
+                Console.WriteLine($"[Telemetry] Method result sent: {method} (cid={cid}, success={success})");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Telemetry] Failed to send method telemetry: {ex.Message}");
+            }
         }
     }
 }

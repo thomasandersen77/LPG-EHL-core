@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.IO.Ports;
-using System.Linq;
-using System.Threading;
 
-namespace PumpSteering
+namespace pump_steering
 {
     public class SerialConfig
     {
@@ -15,32 +11,31 @@ namespace PumpSteering
         public int InterCommandDelayMs { get; set; } = 120;
     }
 
-    public class SerialService : IDisposable
+    public class SerialService(SerialConfig config, SerialPort port) : IDisposable
     {
-        private readonly SerialConfig _config;
-        private SerialPort _port;
+        private SerialPort _port = port;
         private readonly object _lock = new object();
         private byte[] _rxBuffer = new byte[1024];
         private int _rxBufferCount = 0;
 
-        public SerialService(SerialConfig config)
+        public SerialService(SerialConfig serialConfig) : this(serialConfig, new SerialPort())
         {
-            _config = config;
+            throw new NotImplementedException("Missing implementation for SerialService constructor with SerialConfig and SerialPort parameters");
         }
 
         public void Open()
         {
             lock (_lock)
             {
-                if (_port != null && _port.IsOpen) return;
+                if (_port.IsOpen) return;
 
-                _port = new SerialPort(_config.PortName, _config.BaudRate, Parity.None, 8, StopBits.One);
+                _port = new SerialPort(config.PortName, config.BaudRate, Parity.None, 8, StopBits.One);
                 _port.ReadTimeout = 100; // fast read timeout for polling loop
                 _port.WriteTimeout = 500;
                 try 
                 {
                     _port.Open();
-                    Console.WriteLine($"[Serial] Opened {_config.PortName} at {_config.BaudRate} baud.");
+                    Console.WriteLine($"[Serial] Opened {config.PortName} at {config.BaudRate} baud.");
                 }
                 catch (Exception ex)
                 {
@@ -54,7 +49,7 @@ namespace PumpSteering
         {
             lock (_lock)
             {
-                if (_port != null && _port.IsOpen)
+                if (_port.IsOpen)
                 {
                     _port.Close();
                     Console.WriteLine("[Serial] Closed.");
@@ -69,16 +64,16 @@ namespace PumpSteering
 
         // Low-level Exchange
 
-        public EhlFrame Exchange(byte cmd, byte[] data = null, byte? expectedCmd = null)
+        public EhlFrame? Exchange(byte cmd, byte[]? data = null, byte? expectedCmd = null)
         {
             lock (_lock)
             {
-                if (_port == null || !_port.IsOpen) Open();
+                if (!_port.IsOpen) Open();
 
-                Thread.Sleep(_config.InterCommandDelayMs);
+                Thread.Sleep(config.InterCommandDelayMs);
 
                 // Build Request
-                byte[] frameBytes = EhlProtocol.BuildFrame(_config.Address, cmd, data);
+                byte[] frameBytes = EhlProtocol.BuildFrame(config.Address, cmd, data);
                 
                 // Clear RX buffer? Maybe good to clear old junk if we are strictly half-duplex request-response
                 // But if the device streams data (it doesn't seem to), we might lose it.
@@ -101,7 +96,7 @@ namespace PumpSteering
                 // Read Response
                 byte waitForCmd = expectedCmd ?? cmd;
                 
-                DateTime deadline = DateTime.UtcNow.AddMilliseconds(_config.TimeoutMs);
+                DateTime deadline = DateTime.UtcNow.AddMilliseconds(config.TimeoutMs);
                 while (DateTime.UtcNow < deadline)
                 {
                     // Read available
@@ -148,7 +143,7 @@ namespace PumpSteering
                             
                             // Check compatibility
                             if (frame.Stx == EhlProtocol.STX_DISPENSER && 
-                                frame.Addr == _config.Address && 
+                                frame.Addr == config.Address && 
                                 frame.Cmd == waitForCmd)
                             {
                                 return frame;
@@ -206,17 +201,17 @@ namespace PumpSteering
             return null;
         }
 
-        public string PollVolume()
+        public string? PollVolume()
         {
             var frame = Exchange(EhlProtocol.CMD_VOLUME, null, EhlProtocol.CMD_VOLUME);
             if (frame != null)
             {
-                return EhlProtocol.InterpretVolume(frame.Data);
+                return EhlProtocol.InterpretVolume(frame.Data) ?? string.Empty;
             }
             return null;
         }
 
-        public string PollPrice()
+        public string? PollPrice()
         {
             var frame = Exchange(EhlProtocol.CMD_PRICE, null, EhlProtocol.CMD_PRICE);
             if (frame != null)
