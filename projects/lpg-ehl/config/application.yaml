@@ -1,52 +1,40 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# EKSTERN KONFIGURASJON - Plasseres ved siden av JAR-filen
+# FIELD PROFIL - Produksjon med ekte dispenser
 # ═══════════════════════════════════════════════════════════════════════════════
+# Bruk: java -jar lpg-ehl-webapp.jar --spring.profiles.active=field
 #
-# Denne filen overstyrer innebygd konfigurasjon.
-# Kopier til samme mappe som JAR-filen og tilpass verdier.
-#
-# BRUK:
-#   java -jar lpg-ehl-webapp.jar --spring.config.additional-location=file:./config/
-#
-# ELLER automatisk hvis config/application.yaml ligger i samme mappe som JAR.
-#
+# Arver alt fra application.yaml, overstyrer kun:
+# - Seriell port til ekte enhet
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Seriell port - endre etter behov
+lpg:
+  dispenser:
+    address: 33
 ehl:
   serial:
-    port: ${EHL_SERIAL_PORT:/dev/ttyS3}
-    #port: /tmp/vserial1  # For emulator/testing
+    port: /dev/ttyS3
     baud-rate: 9600
     parity: NONE
+    data-bits: 8
+    stop-bits: 1
 
-# Stasjon
-lpg:
-  station:
-    id: STATION-001
-    name: Min Stasjon
-  price:
-    per-liter: 15.90
+payment:
+  terminal:
+    enabled: true
+  provider: nets-cloud-connect
 
-# Azure (aktiver for sky-synkronisering)
-#azure:
-#  enabled: true
-#  storage:
-#    connection-string: ${AZURE_CONNECTION_STRING}
-#    queue-name: lpg-transactions
-
-# Logging (aktiver debug ved behov)
-#logging:
-#  level:
-#    no.cloudberries.lpg.protocol: DEBUG
-
----
-spring:
-  config:
-    activate:
-      on-profile: field
-
-# Field profile defaults (SOCAT/simulator). Override with EHL_SERIAL_PORT for real hardware.
-ehl:
-  serial:
-    port: ${EHL_SERIAL_PORT:/tmp/vserial1}
+nets:
+  cloud:
+    base-url: https://connectcloud.aws.nets.eu
+    username: cloudberries_shared
+    password: B8PnVjmVq-SMM9QD
+    terminal-id: "42696609"
+    websocket:
+      ping-interval-ms: 20000
+      reconnect-delay-ms: 5000
+      max-reconnect-attempts: 10
+    timeouts:
+      login-timeout-ms: 10000
+      open-terminal-timeout-ms: 30000
+      purchase-timeout-ms: 60000
+      reversal-timeout-ms: 60000

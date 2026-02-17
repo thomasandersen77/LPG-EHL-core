@@ -105,7 +105,7 @@ class NetsCloudConnectTerminalClientTestManual {
         logger.info("TEST: Get Health (Before Opening)")
         logger.info("=" * 80)
 
-        val health = terminalClient.getHealth()
+            val health = terminalClient.getHealth()
 
         logger.info("Health Status: ${health.status}")
         logger.info("Config Loaded: ${health.configLoaded}")

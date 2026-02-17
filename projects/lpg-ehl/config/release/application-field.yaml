@@ -12,7 +12,7 @@ lpg:
     address: 33
 ehl:
   serial:
-    port: /tmp/vserial1
+    port: /dev/ttyS3
     baud-rate: 9600
     parity: NONE
     data-bits: 8
@@ -21,4 +21,20 @@ ehl:
 payment:
   terminal:
     enabled: true
-    base-url: ${PAYMENT_TERMINAL_BASE_URL:http://192.168.0.9:18080}
+  provider: nets-cloud-connect
+
+nets:
+  cloud:
+    base-url: https://connectcloud.aws.nets.eu
+    username: cloudberries_shared
+    password: B8PnVjmVq-SMM9QD
+    terminal-id: "42696609"
+    websocket:
+      ping-interval-ms: 20000
+      reconnect-delay-ms: 5000
+      max-reconnect-attempts: 10
+    timeouts:
+      login-timeout-ms: 10000
+      open-terminal-timeout-ms: 30000
+      purchase-timeout-ms: 60000
+      reversal-timeout-ms: 60000
