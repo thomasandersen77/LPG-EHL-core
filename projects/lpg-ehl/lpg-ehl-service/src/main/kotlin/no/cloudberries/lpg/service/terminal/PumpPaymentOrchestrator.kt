@@ -1,5 +1,8 @@
 package no.cloudberries.lpg.service.terminal
 
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import no.cloudberries.lpg.service.price.PriceService
 import no.cloudberries.lpg.service.pump.FuelPumpService
 import no.cloudberries.lpg.service.pump.PumpStateService
@@ -8,15 +11,17 @@ import no.cloudberries.lpg.service.transaction.TransactionService
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
+import jakarta.annotation.PostConstruct
+import jakarta.annotation.PreDestroy
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Orkestrerer koblingen mellom betaling og pumping.
  *
- * Flow (station owner):
- * 1. Open terminal
- * 2. Purchase approved
- * 3. Start fueling
- * 4. If pump fails -> reversal on terminal
+ * Støtter to flyter:
+ * A) Kortstyrt flyt (CARD_EVENT): Kunde tapper kort → reserve → frigjør pumpe → fylling → capture
+ * B) Manuell flyt (MANUAL_RELEASE): Stasjonseier frigjør pumpe → fylling → manuell betaling
  */
 @Service
 @ConditionalOnProperty(name = ["payment.terminal.enabled"], havingValue = "true")
@@ -25,12 +30,227 @@ class PumpPaymentOrchestrator(
     private val pumpStateService: PumpStateService,
     private val transactionService: TransactionService,
     private val priceService: PriceService,
-    private val terminalClient: TerminalClient?
+    private val paymentTerminalClient: PaymentTerminalClient,
+    private val terminalClient: TerminalClient? = null  // Legacy support
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    private val orchestratorScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val activeAuthorizations = ConcurrentHashMap<Int, PaymentAuthorization>()  // dispenserAddress -> auth
+
+    companion object {
+        private const val DEFAULT_RESERVE_AMOUNT_MINOR = 150_000  // 1500 NOK
+        private const val DISPENSER_ADDRESS = 33  // TODO: from config
+    }
+
+    @PostConstruct
+    fun init() {
+        log.info("🚀 PumpPaymentOrchestrator initializing - subscribing to terminal events")
+
+        orchestratorScope.launch {
+            try {
+                paymentTerminalClient.open()
+                log.info("✅ Payment terminal opened successfully")
+            } catch (e: Exception) {
+                log.error("❌ Failed to open payment terminal on startup", e)
+            }
+        }
+
+        // Subscribe to card events
+        paymentTerminalClient.terminalEvents()
+            .onEach { event ->
+                when (event) {
+                    is TerminalEvent.CardPresented -> handleCardPresented(event)
+                    is TerminalEvent.TerminalReady -> log.info("✅ Terminal ready: ${event.terminalId}")
+                    is TerminalEvent.Error -> log.error("❌ Terminal error: ${event.message}")
+                    is TerminalEvent.TransactionResult -> log.info("💳 Transaction result: approved=${event.approved}, amount=${event.amountMinor / 100.0} kr")
+                    is TerminalEvent.InteractivePrompt -> log.info("💬 Interactive prompt: ${event.message}")
+                }
+            }
+            .launchIn(orchestratorScope)
+    }
+
+    @PreDestroy
+    fun cleanup() {
+        log.info("🛑 PumpPaymentOrchestrator shutting down")
+        runBlocking {
+            try {
+                paymentTerminalClient.close()
+            } catch (e: Exception) {
+                log.warn("Error closing terminal on shutdown", e)
+            }
+        }
+        orchestratorScope.cancel()
+    }
+
     /**
-     * Station owner flow: open terminal then purchase before starting pump.
+     * Del 2A: Kortstyrt flyt - håndter kort-tap event
+     */
+    private suspend fun handleCardPresented(event: TerminalEvent.CardPresented) {
+        val correlationId = UUID.randomUUID().toString()
+        log.info("💳 FLOW=CARD_EVENT | Card presented (correlationId={}, cardType={}, maskedPan={})",
+            correlationId, event.cardType, event.maskedPan)
+
+        try {
+            // Opprett authorization record
+            val auth = PaymentAuthorization(
+                authId = UUID.randomUUID().toString(),
+                correlationId = correlationId,
+                dispenserAddress = DISPENSER_ADDRESS,
+                reservedAmountMinor = DEFAULT_RESERVE_AMOUNT_MINOR,
+                capturedAmountMinor = null,
+                status = AuthStatus.AUTH_PENDING,
+                flow = PaymentFlow.CARD_EVENT
+            )
+            activeAuthorizations[DISPENSER_ADDRESS] = auth
+
+            log.info("📝 FLOW=CARD_EVENT | Created authorization (authId={}, dispenser={}, amount={} kr)",
+                auth.authId, DISPENSER_ADDRESS, DEFAULT_RESERVE_AMOUNT_MINOR / 100.0)
+
+            // Reserve beløp på terminal
+            val reserveResponse = paymentTerminalClient.reserve(DEFAULT_RESERVE_AMOUNT_MINOR, correlationId)
+
+            if (reserveResponse.success) {
+                auth.status = AuthStatus.AUTHORIZED
+                log.info("✅ FLOW=CARD_EVENT | Reserve successful (correlationId={}, amount={} kr)",
+                    correlationId, DEFAULT_RESERVE_AMOUNT_MINOR / 100.0)
+
+                // Frigi pumpe
+                releasePumpAfterReserve(DISPENSER_ADDRESS, correlationId)
+            } else {
+                auth.status = AuthStatus.FAILED
+                log.error("❌ FLOW=CARD_EVENT | Reserve failed (correlationId={}, error={})",
+                    correlationId, reserveResponse.error ?: reserveResponse.errorCode)
+                activeAuthorizations.remove(DISPENSER_ADDRESS)
+            }
+        } catch (e: Exception) {
+            log.error("💥 FLOW=CARD_EVENT | Exception during card event handling (correlationId={})", correlationId, e)
+            activeAuthorizations.remove(DISPENSER_ADDRESS)
+        }
+    }
+
+    /**
+     * Frigjør pumpe etter vellykket reserve
+     */
+    private suspend fun releasePumpAfterReserve(dispenserAddress: Int, correlationId: String) {
+        log.info("⛽ FLOW=CARD_EVENT | Releasing pump (dispenser={}, correlationId={})",
+            dispenserAddress, correlationId)
+
+        try {
+            val priceHistory = priceService.getCurrentPrice()
+            val pricePerLitre = priceHistory?.pricePerLiter?.toDouble() ?: 15.90
+
+            val transaction = transactionService.createStartedTransaction(
+                dispenserAddress = dispenserAddress,
+                pricePerLiterKr = pricePerLitre
+            )
+
+            log.info("📝 FLOW=CARD_EVENT | Created transaction (ID={}, dispenser={}, price={} kr/L, correlationId={})",
+                transaction.transactionId, dispenserAddress, pricePerLitre, correlationId)
+
+            val result = fuelPumpService.startFueling(
+                pumpId = dispenserAddress,
+                productId = 1,  // TODO: configurable
+                pricePerLitre = pricePerLitre
+            )
+
+            when (result) {
+                is StartFuelingResult.Success -> {
+                    log.info("✅ FLOW=CARD_EVENT | Pump released - ready to pump (dispenser={}, correlationId={})",
+                        dispenserAddress, correlationId)
+                }
+                else -> {
+                    log.error("❌ FLOW=CARD_EVENT | Pump release failed (dispenser={}, result={}, correlationId={})",
+                        dispenserAddress, result, correlationId)
+                    // Reversal on pump failure
+                    performReversal(correlationId, "Pump release failed: $result")
+                    activeAuthorizations[dispenserAddress]?.status = AuthStatus.PAYMENT_FAILED
+                }
+            }
+        } catch (e: Exception) {
+            log.error("💥 FLOW=CARD_EVENT | Exception during pump release (correlationId={})", correlationId, e)
+            performReversal(correlationId, "Exception: ${e.message}")
+            activeAuthorizations[dispenserAddress]?.status = AuthStatus.PAYMENT_FAILED
+        }
+    }
+
+    /**
+     * Del 2A: Når pumping stopper - capture faktisk beløp
+     */
+    suspend fun onPumpingStopped(dispenserAddress: Int, actualAmountMinor: Int, actualLitres: Double) {
+        val auth = activeAuthorizations[dispenserAddress]
+
+        if (auth == null) {
+            log.warn("⚠️  Settle pending transaction without active auth (dispenser={}, amount={} kr) - FLOW=MANUAL_RELEASE",
+                dispenserAddress, actualAmountMinor / 100.0)
+            return
+        }
+
+        log.info("🛑 FLOW={} | Pumping stopped (dispenser={}, correlationId={}, actualAmount={} kr, litres={} L)",
+            auth.flow, dispenserAddress, auth.correlationId, actualAmountMinor / 100.0, actualLitres)
+
+        if (auth.flow == PaymentFlow.CARD_EVENT) {
+            handleCardFlowCapture(auth, actualAmountMinor)
+        } else {
+            log.info("ℹ️  FLOW=MANUAL_RELEASE | Manual payment pending (dispenser={}, amount={} kr)",
+                dispenserAddress, actualAmountMinor / 100.0)
+        }
+    }
+
+    private suspend fun handleCardFlowCapture(auth: PaymentAuthorization, actualAmountMinor: Int) {
+        auth.status = AuthStatus.PENDING_CAPTURE
+        auth.capturedAmountMinor = actualAmountMinor
+
+        log.info("💰 FLOW=CARD_EVENT | Capturing actual amount (correlationId={}, amount={} kr)",
+            auth.correlationId, actualAmountMinor / 100.0)
+
+        try {
+            val captureResponse = paymentTerminalClient.capture(actualAmountMinor, auth.correlationId)
+
+            if (captureResponse.success) {
+                auth.status = AuthStatus.PAID
+                log.info("✅ FLOW=CARD_EVENT | Capture successful (correlationId={}, amount={} kr)",
+                    auth.correlationId, actualAmountMinor / 100.0)
+                activeAuthorizations.remove(auth.dispenserAddress)
+            } else {
+                log.error("❌ FLOW=CARD_EVENT | Capture failed (correlationId={}, error={}) - attempting reversal",
+                    auth.correlationId, captureResponse.error ?: captureResponse.errorCode)
+
+                // Attempt reversal on capture failure
+                performReversal(auth.correlationId, "Capture failed: ${captureResponse.error}")
+                auth.status = AuthStatus.PAYMENT_FAILED
+            }
+        } catch (e: Exception) {
+            log.error("💥 FLOW=CARD_EVENT | Exception during capture (correlationId={})", auth.correlationId, e)
+            performReversal(auth.correlationId, "Capture exception: ${e.message}")
+            auth.status = AuthStatus.PAYMENT_FAILED
+        }
+    }
+
+    private suspend fun performReversal(correlationId: String, reason: String) {
+        log.warn("🔄 Performing reversal (correlationId={}, reason={})", correlationId, reason)
+
+        try {
+            val reversalResponse = paymentTerminalClient.reversal(correlationId)
+
+            if (reversalResponse.success) {
+                log.info("✅ Reversal successful (correlationId={})", correlationId)
+            } else {
+                log.error("❌ Reversal failed! Manual intervention required (correlationId={}, error={})",
+                    correlationId, reversalResponse.error ?: reversalResponse.errorCode)
+            }
+        } catch (e: Exception) {
+            log.error("💥 Reversal exception! Manual intervention required (correlationId={})", correlationId, e)
+        }
+    }
+
+    // ========================================
+    // Del 2B: Manuell flyt (legacy support)
+    // ========================================
+
+    /**
+     * Del 2B: Station owner manual flow - purchase then start pump.
+     * This creates a MANUAL_RELEASE authorization.
      */
     fun openTerminalAndPurchase(
         amountMinor: Int,
@@ -40,11 +260,25 @@ class PumpPaymentOrchestrator(
         clientRequestId: String? = null
     ): TerminalOperationResponse {
         if (terminalClient == null) {
-            log.warn("Terminal client not configured; cannot perform purchase")
+            log.warn("FLOW=MANUAL_RELEASE | Terminal client not configured; cannot perform purchase")
             return TerminalOperationResponse(success = false, error = "Terminal client not configured")
         }
 
-        log.info("Preparing terminal for purchase (pumpId={}, amountMinor={})", pumpId, amountMinor)
+        val correlationId = clientRequestId ?: UUID.randomUUID().toString()
+        log.info("FLOW=MANUAL_RELEASE | Preparing terminal for purchase (pumpId={}, amountMinor={}, correlationId={})",
+            pumpId, amountMinor, correlationId)
+
+        // Create manual flow authorization
+        val auth = PaymentAuthorization(
+            authId = UUID.randomUUID().toString(),
+            correlationId = correlationId,
+            dispenserAddress = pumpId,
+            reservedAmountMinor = amountMinor,
+            capturedAmountMinor = null,
+            status = AuthStatus.AUTH_PENDING,
+            flow = PaymentFlow.MANUAL_RELEASE
+        )
+        activeAuthorizations[pumpId] = auth
         if (!prepareTerminalForPurchase()) {
             return TerminalOperationResponse(
                 success = false,
@@ -63,6 +297,10 @@ class PumpPaymentOrchestrator(
 
         purchaseResponse.operationId?.let { opId ->
             if (purchaseResponse.success) {
+                auth.status = AuthStatus.AUTHORIZED
+                log.info("✅ FLOW=MANUAL_RELEASE | Purchase approved (correlationId={}, operationId={})",
+                    correlationId, opId)
+
                 startPumpingAfterPayment(
                     amountCents = amountMinor.toLong(),
                     pumpId = pumpId,
@@ -70,13 +308,20 @@ class PumpPaymentOrchestrator(
                     operationId = opId
                 )
             } else {
-                log.error("Purchase failed: {}", purchaseResponse.error ?: purchaseResponse.errorCode)
+                auth.status = AuthStatus.FAILED
+                activeAuthorizations.remove(pumpId)
+                log.error("❌ FLOW=MANUAL_RELEASE | Purchase failed (correlationId={}, error={})",
+                    correlationId, purchaseResponse.error ?: purchaseResponse.errorCode)
             }
         } ?: run {
             if (purchaseResponse.success) {
-                log.warn("Purchase succeeded but no operationId returned")
+                log.warn("⚠️  FLOW=MANUAL_RELEASE | Purchase succeeded but no operationId returned (correlationId={})",
+                    correlationId)
             } else {
-                log.error("Purchase failed: {}", purchaseResponse.error ?: purchaseResponse.errorCode)
+                auth.status = AuthStatus.FAILED
+                activeAuthorizations.remove(pumpId)
+                log.error("❌ FLOW=MANUAL_RELEASE | Purchase failed (correlationId={}, error={})",
+                    correlationId, purchaseResponse.error ?: purchaseResponse.errorCode)
             }
         }
 
