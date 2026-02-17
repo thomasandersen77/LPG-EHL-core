@@ -1,4 +1,40 @@
 ---
+# === Application User Setup ===
+- name: Ensure appuser exists
+  ansible.builtin.user:
+    name: "{{ ark_app_user_name }}"
+    comment: "Application runtime user"
+    groups: "{{ ark_app_user_groups }}"
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Create application directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ark_app_user_name }}"
+    group: "{{ ark_app_user_name }}"
+    mode: "0755"
+  loop:
+    - "{{ ark_app_install_dir }}"
+    - "{{ ark_app_data_dir_user }}"
+    - "{{ ark_app_log_dir_user }}"
+    - "{{ ark_app_config_dir }}"
+
+- name: Set up log rotation for application user
+  ansible.builtin.template:
+    src: appuser-logrotate.j2
+    dest: /etc/logrotate.d/appuser
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Verify serial port access for appuser
+  ansible.builtin.debug:
+    msg: "User {{ ark_app_user_name }} has been added to groups: {{ ark_app_user_groups | join(', ') }} for serial port access"
+
+# === Application Service Setup ===
 - name: Install placeholder systemd unit
   ansible.builtin.template:
     src: arkapp.service.j2

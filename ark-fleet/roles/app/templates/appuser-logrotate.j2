@@ -1,0 +1,17 @@
+# Log rotation for application user logs
+# Managed by Ansible
+
+{{ ark_app_log_dir_user }}/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 {{ ark_app_user_name }} {{ ark_app_user_name }}
+    sharedscripts
+    postrotate
+        # Optionally signal application to reopen log files
+        # systemctl reload {{ ark_app_service_name }} || true
+    endscript
+}
