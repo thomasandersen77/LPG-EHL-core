@@ -1,3 +1,12 @@
 ---
 # Defaults for hardening role
 
+# Storage hardening
+ark_root_device: "/dev/sda1"  # Root filesystem device
+ark_root_disk: "/dev/sda"     # Root disk device (for hdparm)
+ark_disable_write_cache: true  # Disable disk write cache for data integrity
+
+# Locale configuration
+ark_locale: "en_US.UTF-8"
+ark_locale_lang: "en_US.UTF-8"
+

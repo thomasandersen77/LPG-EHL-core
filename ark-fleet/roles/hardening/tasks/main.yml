@@ -1,4 +1,72 @@
 ---
+# === Locale Configuration ===
+- name: Ensure locales package is installed
+  ansible.builtin.apt:
+    name: locales
+    state: present
+
+- name: Configure locale in /etc/locale.gen
+  ansible.builtin.lineinfile:
+    path: /etc/locale.gen
+    regexp: '^#?\s*{{ ark_locale }}\s+UTF-8'
+    line: '{{ ark_locale }} UTF-8'
+    state: present
+  notify: Regenerate locales
+
+- name: Generate locales
+  ansible.builtin.command:
+    cmd: locale-gen
+  changed_when: false
+
+- name: Set default locale
+  ansible.builtin.command:
+    cmd: "update-locale LANG={{ ark_locale_lang }}"
+  changed_when: false
+
+# === Storage Hardening ===
+- name: Install hdparm for disk management
+  ansible.builtin.apt:
+    name:
+      - hdparm
+      - powermgmt-base
+    state: present
+
+- name: Set filesystem error behavior to remount-ro
+  ansible.builtin.command:
+    cmd: "tune2fs -e remount-ro {{ ark_root_device }}"
+  changed_when: false
+  failed_when: false
+  when: ark_root_device is defined
+
+- name: Disable disk write cache for data integrity
+  ansible.builtin.lineinfile:
+    path: /etc/hdparm.conf
+    regexp: '^#?\s*write_cache\s*='
+    line: 'write_cache = off'
+    create: true
+    mode: "0644"
+  when: ark_disable_write_cache | bool
+
+- name: Configure hdparm settings for root disk
+  ansible.builtin.blockinfile:
+    path: /etc/hdparm.conf
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - ARK DISK SETTINGS"
+    block: |
+      {{ ark_root_disk }} {
+          write_cache = off
+      }
+    create: true
+    mode: "0644"
+  when: ark_disable_write_cache | bool and ark_root_disk is defined
+
+- name: Apply hdparm settings immediately
+  ansible.builtin.command:
+    cmd: "hdparm -W0 {{ ark_root_disk }}"
+  changed_when: false
+  failed_when: false
+  when: ark_disable_write_cache | bool and ark_root_disk is defined
+
+# === SSH Hardening ===
 - name: Ensure OpenSSH server is installed
   ansible.builtin.apt:
     name: openssh-server
