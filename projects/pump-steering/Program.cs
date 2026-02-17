@@ -160,7 +160,7 @@ namespace PumpSteering
                     Console.WriteLine($"[Telemetry] Send Error: {ex.Message}");
                 }
 
-                await Task.Delay(1000, ct); // Send every second
+                await Task.Delay(10000, ct); // Send every 10 seconds
             }
         }
 
