@@ -1,7 +1,7 @@
 ---
 # Global defaults (preprod)
 
-timezone: Europe/Oslo
+timezone: US/Eastern
 
 # Placeholder admin user. This is the account you SSH as.
 ark_admin_user: alejandro
