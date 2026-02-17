@@ -115,6 +115,12 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Apache HttpClient 5 - Required by Spring Boot HTTP client autoconfiguration -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+        </dependency>
+        
         <!-- Test Dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

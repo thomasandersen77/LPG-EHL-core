@@ -19,6 +19,20 @@ spring:
   application:
     name: lpg-ehl-webapp
   
+  # Allow bean definition overriding for RestClient auto-configuration
+  main:
+    allow-bean-definition-overriding: true
+
+  # Exclude HTTP client autoconfiguration (avoids NoClassDefFoundError TlsSocketStrategy)
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.http.client.autoconfigure.imperative.ImperativeHttpClientAutoConfiguration
+      - org.springframework.boot.http.client.autoconfigure.HttpClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration
+      - org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.gson.GsonAutoConfiguration
+      - org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration
+
   # H2 File Database - persisterer data mellom restarts
   datasource:
     url: jdbc:h2:file:./data/lpgdb;MODE=PostgreSQL;AUTO_SERVER=TRUE
