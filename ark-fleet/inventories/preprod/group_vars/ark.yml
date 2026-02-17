@@ -33,6 +33,8 @@ ark_base_packages:
   - htop
   - lsof
   - dmidecode
+  - hdparm
+  - powermgmt-base
   # File utilities
   - bzip2
   - gzip
@@ -80,4 +82,10 @@ ark_terminal_network: "192.168.50.1/24"
 
 # dnsmasq configuration (if needed for local DNS/DHCP)
 ark_dnsmasq_enabled: false
+
+# Storage hardening (based on reference ARK 3360)
+# Root filesystem device - adjust per device if needed
+ark_root_device: "/dev/sda1"
+ark_root_disk: "/dev/sda"
+ark_disable_write_cache: true  # Disable disk write cache for data integrity on power loss
 

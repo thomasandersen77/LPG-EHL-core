@@ -46,7 +46,7 @@ The playbook includes the following roles (in execution order):
 3. **networking**: systemd-networkd configuration for primary and terminal interfaces
 4. **time**: Timezone and NTP configuration (systemd-timesyncd)
 5. **logging**: journald configuration
-6. **hardening**: Security hardening
+6. **hardening**: Security hardening (SSH, storage/filesystem, locale)
 7. **java**: Java runtime installation
 8. **app**: Application-specific setup
 
@@ -85,6 +85,8 @@ See `inventories/preprod/group_vars/ark.yml` for the complete list. Key variable
 - `ark_terminal_network`: Terminal network address (default: 192.168.50.1/24)
 - `timezone`: System timezone (default: US/Eastern)
 - `ark_admin_users`: List of admin users to create
+- `ark_disable_write_cache`: Disable disk write cache for data integrity (default: true)
+- `ark_root_device`: Root filesystem device for hardening (default: /dev/sda1)
 
 ## Future: ansible-pull
 

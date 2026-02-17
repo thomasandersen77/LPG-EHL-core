@@ -141,6 +141,7 @@ ssh alejandro@192.168.1.101
 # Verify system information
 hostnamectl
 timedatectl
+locale
 
 # Check network interfaces
 ip addr show
@@ -151,7 +152,14 @@ systemctl status systemd-timesyncd
 systemctl status dnsmasq
 
 # Check installed packages
-dpkg -l | grep -E "temurin|dotnet|mono"
+dpkg -l | grep -E "temurin|dotnet|mono|hdparm"
+
+# Verify storage hardening
+sudo tune2fs -l /dev/sda1 | grep "Errors behavior"
+sudo hdparm -W /dev/sda
+
+# Check filesystem mount options
+findmnt -no OPTIONS /
 ```
 
 ## Common Deployment Scenarios
