@@ -299,16 +299,41 @@ sudo systemctl edit arkapp
 sudo systemctl restart arkapp
 ```
 
-### Need to Run Command as appuser
+### Accessing appuser from Admin Accounts
 
+Admin users can easily switch to appuser or run commands as appuser:
+
+**Option 1: Use helper script**
 ```bash
-# As admin
-sudo -u appuser bash
-# Now in appuser shell
+# SSH as admin
+ssh arkadmin@ark-device
 
-# Or run single command
-sudo -u appuser /opt/app/my-application --test
+# Switch to appuser (one command)
+become-appuser
+
+# Now running as appuser
+whoami
+# Output: appuser
 ```
+
+**Option 2: Use sudo directly**
+```bash
+# Switch to appuser shell
+sudo -u appuser bash
+
+# Or with full login environment
+sudo su - appuser
+
+# Or run single command as appuser
+sudo -u appuser /opt/app/my-application --test
+sudo -u appuser cat /dev/ttyS0
+```
+
+**Why this is useful:**
+- Test application with exact same permissions
+- Debug serial port access issues
+- Verify what the application can/cannot do
+- Run the application manually for testing
 
 ## Best Practices
 

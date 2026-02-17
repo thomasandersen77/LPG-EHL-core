@@ -34,6 +34,14 @@
   ansible.builtin.debug:
     msg: "User {{ ark_app_user_name }} has been added to groups: {{ ark_app_user_groups | join(', ') }} for serial port access"
 
+- name: Install helper script to switch to appuser
+  ansible.builtin.copy:
+    src: become-appuser.sh
+    dest: /usr/local/bin/become-appuser
+    owner: root
+    group: root
+    mode: "0755"
+
 # === Application Service Setup ===
 - name: Install placeholder systemd unit
   ansible.builtin.template:
