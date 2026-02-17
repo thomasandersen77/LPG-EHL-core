@@ -32,7 +32,8 @@ import org.springframework.scheduling.annotation.EnableScheduling
         "no.cloudberries.lpg.payment",        // Payment controllers
         "no.cloudberries.lpg.credit",         // Credit controllers
         "no.cloudberries.lpg.communication",  // EhlCommunicator fra transport
-        "no.cloudberries.lpg.transport"       // Serial port transport
+        "no.cloudberries.lpg.transport",       // Serial port transport
+        "no.cloudberries.lpg.netscloud"
         // NOTE: no.cloudberries.lpg.emulator is NOT scanned here.
         // Emulator beans are conditionally created in CommunicationConfig based on lpg.mode property.
     ]

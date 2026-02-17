@@ -7,6 +7,7 @@ import jakarta.annotation.PreDestroy
 import no.cloudberries.lpg.service.pump.PumpStateService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
@@ -19,9 +20,14 @@ import java.time.Duration
 /**
  * Consumes events from the Payment Terminal Simulator.
  * Triggers pump release on CARD_RESERVED events.
+ *
+ * IMPORTANT: This consumer is ONLY for legacy terminal simulators.
+ * When using Nets Cloud Connect (terminal.provider=nets-cloud-connect),
+ * events are handled via PaymentTerminalClient.terminalEvents() in PumpPaymentOrchestrator.
  */
 @Component
 @ConditionalOnProperty(name = ["payment.events.enabled"], havingValue = "true", matchIfMissing = true)
+@ConditionalOnExpression("'\${terminal.provider:simulator}' != 'nets-cloud-connect'")
 class PaymentTerminalEventConsumer(
     private val pumpStateService: PumpStateService,
     private val objectMapper: ObjectMapper,

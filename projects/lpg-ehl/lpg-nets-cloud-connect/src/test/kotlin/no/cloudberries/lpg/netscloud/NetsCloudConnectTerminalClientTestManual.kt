@@ -1,6 +1,8 @@
 package no.cloudberries.lpg.netscloud
 
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
@@ -85,16 +87,18 @@ class NetsCloudConnectTerminalClientTestManual {
     }
 
     @AfterEach
-    fun teardown() = runTest {
+    fun teardown() = runBlocking {
         logger.info("=" * 80)
         logger.info("Cleaning up after test")
         logger.info("=" * 80)
 
         try {
-            terminalClient.closeTerminal()
+            withTimeoutOrNull(5_000) {
+                terminalClient.closeTerminal()
+            }
             authClient.close()
         } catch (e: Exception) {
-            logger.warn("Error during cleanup: ${e.message}")
+            logger.warn("Error during cleanup (expected for some tests): ${e.message}")
         }
     }
 
@@ -134,7 +138,7 @@ class NetsCloudConnectTerminalClientTestManual {
 
     @Test
     @Order(3)
-    fun `test openTerminal with real hardware`() = runTest {
+    fun `test openTerminal with real hardware`(): Unit = runBlocking {
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Open Terminal")
         logger.info("=" * 80)
@@ -193,7 +197,7 @@ class NetsCloudConnectTerminalClientTestManual {
 
     @Test
     @Order(6)
-    fun `test purchase with real card - 1 NOK`() = runTest {
+    fun `test purchase with real card - 1 NOK`(): Unit = runBlocking {
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Purchase Transaction (1 NOK)")
         logger.info("=" * 80)
@@ -203,6 +207,10 @@ class NetsCloudConnectTerminalClientTestManual {
         // First open the terminal
         val openResponse = terminalClient.openTerminal()
         assertTrue(openResponse.success, "Terminal should open: ${openResponse.error}")
+
+        // Wait for terminal to settle after opening
+        logger.info("⏳ Waiting 800ms for terminal to settle...")
+        delay(800)
 
         // Attempt purchase of 1 NOK (100 øre)
         val request = TerminalPurchaseRequest(
@@ -241,7 +249,7 @@ class NetsCloudConnectTerminalClientTestManual {
 
     @Test
     @Order(7)
-    fun `test reversal of last transaction`() = runTest {
+    fun `test reversal of last transaction`() = runBlocking {
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Reversal of Last Transaction")
         logger.info("=" * 80)
@@ -251,6 +259,10 @@ class NetsCloudConnectTerminalClientTestManual {
         // First open the terminal
         val openResponse = terminalClient.openTerminal()
         assertTrue(openResponse.success, "Terminal should open: ${openResponse.error}")
+
+        // Wait for terminal to settle after opening
+        logger.info("⏳ Waiting 800ms for terminal to settle...")
+        delay(800)
 
         // First do a purchase
         logger.info("Performing purchase to reverse...")
@@ -287,7 +299,7 @@ class NetsCloudConnectTerminalClientTestManual {
 
     @Test
     @Order(8)
-    fun `test purchase timeout scenario`() = runTest {
+    fun `test purchase timeout scenario`() = runBlocking {
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Purchase Timeout (DO NOT TAP CARD)")
         logger.info("=" * 80)
@@ -298,6 +310,10 @@ class NetsCloudConnectTerminalClientTestManual {
         // First open the terminal
         val openResponse = terminalClient.openTerminal()
         assertTrue(openResponse.success, "Terminal should open: ${openResponse.error}")
+
+        // Wait for terminal to settle after opening
+        logger.info("⏳ Waiting 800ms for terminal to settle...")
+        delay(800)
 
         // Set a shorter timeout for this test
         config.timeouts.purchaseTimeoutMs = 5_000L
@@ -326,7 +342,7 @@ class NetsCloudConnectTerminalClientTestManual {
 
     @Test
     @Order(9)
-    fun `test closeTerminal`() = runTest {
+    fun `test closeTerminal`(): Unit = runBlocking {
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Close Terminal")
         logger.info("=" * 80)
@@ -347,7 +363,7 @@ class NetsCloudConnectTerminalClientTestManual {
 
     @Test
     @Order(10)
-    fun `test workflow - open and purchase only`() = runTest {
+    fun `test workflow - open and purchase only`() = runBlocking {
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Workflow - Open and Purchase")
         logger.info("=" * 80)
@@ -359,6 +375,10 @@ class NetsCloudConnectTerminalClientTestManual {
         val openResponse = terminalClient.openTerminal()
         assertTrue(openResponse.success, "Step 1 failed - Terminal open: ${openResponse.error}")
         logger.info("✓ Terminal opened successfully")
+
+        // Wait for terminal to settle after opening
+        logger.info("⏳ Waiting 800ms for terminal to settle...")
+        delay(800)
 
         // Step 2: Purchase
         logger.info("\n[STEP 2/2] Performing purchase (1 NOK)...")
@@ -385,7 +405,7 @@ class NetsCloudConnectTerminalClientTestManual {
 
     @Test
     @Order(11)
-    fun `test full workflow - open, purchase, reversal, close`() = runTest {
+    fun `test full workflow - open, purchase, reversal, close`() = runBlocking {
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Full Workflow - Open, Purchase, Reversal, Close")
         logger.info("=" * 80)
@@ -398,11 +418,15 @@ class NetsCloudConnectTerminalClientTestManual {
         assertTrue(openResponse.success, "Step 1 failed - Terminal open: ${openResponse.error}")
         logger.info("✓ Terminal opened successfully")
 
+        // Wait for terminal to settle after opening
+        logger.info("⏳ Waiting 800ms for terminal to settle...")
+        delay(800)
+
         // Step 2: Purchase
         logger.info("\n[STEP 2/4] Performing purchase (50 NOK)...")
         logger.info("⚠️  PLEASE TAP YOUR CARD NOW")
         val purchaseRequest = TerminalPurchaseRequest(
-            amountMinor = 5_000,  // 50 NOK in øre
+            amountMinor = 100,  // 1 NOK in øre
             operatorId = "TEST"
         )
         val purchaseResponse = terminalClient.purchase(purchaseRequest)
