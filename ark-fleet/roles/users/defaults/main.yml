@@ -11,7 +11,16 @@ ark_admin_users:
     comment: "Thomas"
     groups: ["sudo"]
     shell: /bin/bash
+  - name: arkadmin
+    comment: "ARK Admin (shared developer account)"
+    groups: ["sudo"]
+    shell: /bin/bash
+    # Multiple SSH keys for shared account
+    ssh_keys:
+      - arkadmin-dev1.pub
+      - arkadmin-dev2.pub
 
 # SSH authorized keys directory (for deployment)
 # Place public keys in roles/users/files/ssh-keys/<username>.pub
+# For users with multiple keys, list them in the ssh_keys array
 ark_ssh_keys_dir: "ssh-keys"

@@ -1,0 +1,6 @@
+# SSH authorized keys for {{ item.name }}
+# Managed by Ansible - changes will be overwritten
+
+{% for key in item.ssh_keys %}
+{{ lookup('file', ark_ssh_keys_dir + '/' + key) }}
+{% endfor %}

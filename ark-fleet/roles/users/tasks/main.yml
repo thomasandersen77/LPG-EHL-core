@@ -22,7 +22,7 @@
   loop_control:
     label: "{{ item.name }}"
 
-- name: Deploy SSH authorized keys for admin users
+- name: Deploy SSH authorized keys for admin users (single key)
   ansible.builtin.copy:
     src: "{{ ark_ssh_keys_dir }}/{{ item.name }}.pub"
     dest: "/home/{{ item.name }}/.ssh/authorized_keys"
@@ -32,8 +32,24 @@
   loop: "{{ ark_admin_users }}"
   loop_control:
     label: "{{ item.name }}"
-  when: ark_ssh_keys_dir is defined
+  when:
+    - ark_ssh_keys_dir is defined
+    - item.ssh_keys is not defined
   ignore_errors: true
+
+- name: Deploy multiple SSH authorized keys for admin users
+  ansible.builtin.template:
+    src: authorized_keys.j2
+    dest: "/home/{{ item.name }}/.ssh/authorized_keys"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0600"
+  loop: "{{ ark_admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - item.ssh_keys is defined
+    - item.ssh_keys | length > 0
 
 - name: Ensure sudo group has passwordless sudo
   ansible.builtin.lineinfile:
