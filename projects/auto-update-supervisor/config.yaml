@@ -1,0 +1,15 @@
+manifestUrl: "https://example.blob.core.windows.net/manifests/manifest.json?sas=..."
+iotHubConnectionString: "HostName=example.azure-devices.net;DeviceId=myDevice;SharedAccessKey=..."
+scheduleTime: "03:00"
+drainTimeoutSeconds: 60
+startupTimeoutSeconds: 180
+healthCheckMethod: "file"
+stationAppServiceName: "station-app.service"
+stationAppRootPath: "/opt/station"
+runDirectory: "/run"
+maxUpdateAttemptsPerDay: 3
+retryCutoffTime: "06:00"
+httpHealthCheck:
+  port: 8080
+  busyPath: "/internal/busy"
+  healthPath: "/internal/health"
