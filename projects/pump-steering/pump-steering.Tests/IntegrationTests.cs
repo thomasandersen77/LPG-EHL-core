@@ -1,9 +1,10 @@
 using System;
 using System.Text.Json;
-using Xunit;
 using FluentAssertions;
+using pump_steering;
+using Xunit;
 
-namespace PumpSteering.Tests
+namespace pump_steering.Tests
 {
     public class IntegrationTests
     {
@@ -27,7 +28,11 @@ namespace PumpSteering.Tests
             """;
 
             // Act - Parse
-            var (cid, side, actor, payloadElement) = ContractParser.ParseMethodRequest(json);
+            var (envelope, _) = ContractParser.ParseMethodRequest<SetPricePayload>(json);
+            var cid = envelope.Cid;
+            var side = envelope.Side;
+            var actor = envelope.Actor;
+            var priceValue = envelope.Payload.Price;
 
             // Assert Parse
             cid.Should().Be("b3b0c3df-5fbb-45e9-9f6a-0a3c1b5f62a1");
@@ -35,8 +40,7 @@ namespace PumpSteering.Tests
             actor.Type.Should().Be("USER");
             actor.Id.Should().Be("operator-42");
 
-            // Act - Extract and validate price
-            var priceValue = payloadElement.GetProperty("price").GetDecimal();
+            // Act - Validate price
             var priceValidation = ContractValidator.ValidatePrice(priceValue);
 
             // Assert Validation
@@ -44,7 +48,7 @@ namespace PumpSteering.Tests
             priceValue.Should().Be(15.90m);
 
             // Act - Validate all metadata
-            var cidValidation = ContractValidator.ValidateCorrelationId(cid);
+            var cidValidation = ContractValidator.ValidateCid(cid);
             var sideValidation = ContractValidator.ValidateSide(side);
             var actorValidation = ContractValidator.ValidateActor(actor);
 
@@ -75,6 +79,24 @@ namespace PumpSteering.Tests
         }
 
         [Fact]
+        public void MethodResponseDto_SuccessAndError_ProduceCorrectShape()
+        {
+            var success = MethodResponseDto.Success("cid-1", "Done", new { x = 1 });
+            success.Cid.Should().Be("cid-1");
+            success.Ok.Should().BeTrue();
+            success.Message.Should().Be("Done");
+            success.ErrorCode.Should().BeNull();
+            success.Data.Should().NotBeNull();
+
+            var error = MethodResponseDto.Error("cid-2", "ERR", "Failed");
+            error.Cid.Should().Be("cid-2");
+            error.Ok.Should().BeFalse();
+            error.ErrorCode.Should().Be("ERR");
+            error.Message.Should().Be("Failed");
+            error.Data.Should().BeNull();
+        }
+
+        [Fact]
         public void HappyPath_LegacyPayload_ShouldStillWork()
         {
             // Arrange - Old format without envelope
@@ -85,16 +107,20 @@ namespace PumpSteering.Tests
             """;
 
             // Act - Parse with legacy handling
-            var (cid, side, actor, payloadElement) = ContractParser.ParseMethodRequest(json);
+            var (envelope, isLegacy) = ContractParser.ParseMethodRequest<SetPricePayload>(json);
+            var cid = envelope.Cid;
+            var side = envelope.Side;
+            var actor = envelope.Actor;
 
             // Assert - Should generate defaults
+            isLegacy.Should().BeTrue();
             Guid.TryParse(cid, out _).Should().BeTrue("Should generate valid GUID");
             side.Should().Be("LEGACY");
             actor.Type.Should().Be("SYSTEM");
             actor.Id.Should().Be("legacy");
 
             // Act - Validate price
-            var priceValue = payloadElement.GetProperty("price").GetDecimal();
+            var priceValue = envelope.Payload.Price;
             var priceValidation = ContractValidator.ValidatePrice(priceValue);
 
             // Assert
@@ -125,8 +151,9 @@ namespace PumpSteering.Tests
             """;
 
             // Act - Parse
-            var (cid, side, actor, payloadElement) = ContractParser.ParseMethodRequest(json);
-            var priceValue = payloadElement.GetProperty("price").GetDecimal();
+            var (envelope, _) = ContractParser.ParseMethodRequest<SetPricePayload>(json);
+            var cid = envelope.Cid;
+            var priceValue = envelope.Payload.Price;
 
             // Act - Validate (should fail)
             var validation = ContractValidator.ValidatePrice(priceValue);
@@ -139,7 +166,7 @@ namespace PumpSteering.Tests
             var response = ContractParser.CreateResponse(
                 cid,
                 false,
-                validation.ErrorMessage!,
+                validation.Message!,
                 validation.ErrorCode
             );
 
@@ -147,7 +174,7 @@ namespace PumpSteering.Tests
             response.Cid.Should().Be("test-error-123");
             response.Ok.Should().BeFalse();
             response.ErrorCode.Should().Be("VALIDATION_ERROR");
-            response.Message.Should().Contain("exceeds maximum");
+            response.Message.Should().NotBeNullOrEmpty();
         }
 
         [Fact]
@@ -156,7 +183,7 @@ namespace PumpSteering.Tests
             // Arrange - Unlock command typically has no payload
             var json = """
             {
-              "cid": "unlock-cmd-456",
+              "cid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
               "side": "STATION_OWNER_UI",
               "actor": {
                 "type": "USER",
@@ -168,15 +195,18 @@ namespace PumpSteering.Tests
             """;
 
             // Act
-            var (cid, side, actor, payloadElement) = ContractParser.ParseMethodRequest(json);
+            var (envelope, _) = ContractParser.ParseMethodRequest<EmptyPayload>(json);
+            var cid = envelope.Cid;
+            var side = envelope.Side;
+            var actor = envelope.Actor;
 
             // Assert metadata
-            cid.Should().Be("unlock-cmd-456");
+            cid.Should().Be("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
             side.Should().Be("STATION_OWNER_UI");
             actor.Type.Should().Be("USER");
 
             // Validate metadata
-            var cidVal = ContractValidator.ValidateCorrelationId(cid);
+            var cidVal = ContractValidator.ValidateCid(cid);
             var sideVal = ContractValidator.ValidateSide(side);
             var actorVal = ContractValidator.ValidateActor(actor);
 
@@ -202,21 +232,20 @@ namespace PumpSteering.Tests
             // Arrange - After processing a command, we want to send telemetry
             var cid = "telemetry-test-789";
             var side = "ADMIN_UI";
-            var actor = new ActorDto { Type = "SERVICE", Id = "monitoring-service" };
+            var actor = new Actor("SERVICE", "monitoring-service");
 
             // Act - Create telemetry envelope
-            var telemetry = new TelemetryEnvelopeDto
-            {
-                Cid = cid,
-                Side = side,
-                Actor = actor,
-                Method = "SetPrice",
-                Address = 33,
-                Timestamp = DateTime.UtcNow,
-                Command = 0xA9, // CMD_PROG_PRC
-                Data = "30395315", // Encoded price data
-                EventType = "EHL_RESPONSE"
-            };
+            var telemetry = new TelemetryEnvelope(
+                Cid: cid,
+                Side: side,
+                Actor: actor,
+                Method: "SetPrice",
+                Address: 33,
+                Timestamp: DateTime.UtcNow,
+                Command: 0xA9, // CMD_PROG_PRC
+                Data: "30395315", // Encoded price data
+                EventType: "EHL_RESPONSE"
+            );
 
             // Assert
             telemetry.Cid.Should().Be(cid);

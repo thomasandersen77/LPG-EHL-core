@@ -1,4 +1,5 @@
 using System.IO.Ports;
+using Microsoft.Extensions.Logging;
 
 namespace pump_steering
 {
@@ -9,23 +10,24 @@ namespace pump_steering
         public byte Address { get; set; } = 33;
         public int TimeoutMs { get; set; } = 1200;
         public int InterCommandDelayMs { get; set; } = 120;
+        public ILogger? Logger { get; set; }
     }
 
     public class SerialService(SerialConfig config, SerialPort port) : IDisposable
     {
         private SerialPort _port = port;
-        private readonly object _lock = new object();
+        private readonly object _openCloseLock = new object();
+        private readonly SemaphoreSlim _exchangeSemaphore = new(1, 1);
         private byte[] _rxBuffer = new byte[1024];
         private int _rxBufferCount = 0;
 
         public SerialService(SerialConfig serialConfig) : this(serialConfig, new SerialPort())
         {
-            throw new NotImplementedException("Missing implementation for SerialService constructor with SerialConfig and SerialPort parameters");
         }
 
         public void Open()
         {
-            lock (_lock)
+            lock (_openCloseLock)
             {
                 if (_port.IsOpen) return;
 
@@ -35,11 +37,11 @@ namespace pump_steering
                 try 
                 {
                     _port.Open();
-                    Console.WriteLine($"[Serial] Opened {config.PortName} at {config.BaudRate} baud.");
+                    config.Logger?.LogInformation("Serial port opened: {PortName} at {BaudRate} baud", config.PortName, config.BaudRate);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Serial] Error opening port: {ex.Message}");
+                    config.Logger?.LogError(ex, "Error opening serial port: {Message}", ex.Message);
                     throw;
                 }
             }
@@ -47,12 +49,12 @@ namespace pump_steering
 
         public void Close()
         {
-            lock (_lock)
+            lock (_openCloseLock)
             {
                 if (_port.IsOpen)
                 {
                     _port.Close();
-                    Console.WriteLine("[Serial] Closed.");
+                    config.Logger?.LogInformation("Serial port closed");
                 }
             }
         }
@@ -62,75 +64,64 @@ namespace pump_steering
             Close();
         }
 
-        // Low-level Exchange
+        // Low-level Exchange (async, non-blocking)
 
-        public EhlFrame? Exchange(byte cmd, byte[]? data = null, byte? expectedCmd = null)
+        public async Task<EhlFrame?> ExchangeAsync(byte cmd, byte[]? data = null, byte? expectedCmd = null, CancellationToken ct = default)
         {
-            lock (_lock)
+            await _exchangeSemaphore.WaitAsync(ct).ConfigureAwait(false);
+            try
             {
                 if (!_port.IsOpen) Open();
 
-                Thread.Sleep(config.InterCommandDelayMs);
+                await Task.Delay(config.InterCommandDelayMs, ct).ConfigureAwait(false);
 
                 // Build Request
                 byte[] frameBytes = EhlProtocol.BuildFrame(config.Address, cmd, data);
-                
-                // Clear RX buffer? Maybe good to clear old junk if we are strictly half-duplex request-response
-                // But if the device streams data (it doesn't seem to), we might lose it.
-                // For this protocol, request-response is the norm.
                 _port.DiscardInBuffer();
                 _rxBufferCount = 0;
 
                 // Send
-                try 
+                try
                 {
                     _port.Write(frameBytes, 0, frameBytes.Length);
-                    // Console.WriteLine($"[Serial] TX: {BitConverter.ToString(frameBytes).Replace("-", " ")}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Serial] TX Error: {ex.Message}");
+                    config.Logger?.LogError(ex, "Serial TX error: {Message}", ex.Message);
                     return null;
                 }
 
-                // Read Response
                 byte waitForCmd = expectedCmd ?? cmd;
-                
                 DateTime deadline = DateTime.UtcNow.AddMilliseconds(config.TimeoutMs);
                 while (DateTime.UtcNow < deadline)
                 {
-                    // Read available
-                    try 
+                    ct.ThrowIfCancellationRequested();
+                    try
                     {
                         int bytesToRead = _port.BytesToRead;
                         if (bytesToRead > 0)
                         {
-                            // Ensure capacity
                             if (_rxBufferCount + bytesToRead > _rxBuffer.Length)
                             {
-                                // Simple expansion or discard?
-                                // Let's discard if overflow, as frames are small (<255).
-                                // If buffer is full of garbage, we need to clear it.
-                                if (_rxBuffer.Length < 4096) 
-                                {
+                                if (_rxBuffer.Length < 4096)
                                     Array.Resize(ref _rxBuffer, _rxBuffer.Length * 2);
-                                }
                                 else
                                 {
-                                    // Too big, reset
-                                    _rxBufferCount = 0; 
-                                    Console.WriteLine("[Serial] Buffer overflow, resetting.");
+                                    _rxBufferCount = 0;
+                                    config.Logger?.LogWarning("Serial RX buffer overflow, resetting");
                                 }
                             }
-                            
                             int bytesRead = _port.Read(_rxBuffer, _rxBufferCount, _rxBuffer.Length - _rxBufferCount);
                             _rxBufferCount += bytesRead;
                         }
                     }
-                    catch (TimeoutException) { /* ignore */ }
-                    catch (Exception ex) { Console.WriteLine($"[Serial] RX Error: {ex.Message}"); break; }
+                    catch (TimeoutException) { }
+                    catch (Exception ex)
+                    {
+                        config.Logger?.LogError(ex, "Serial RX error: {Message}", ex.Message);
+                        break;
+                    }
 
-                    // Process buffer
                     bool bufferChanged = true;
                     while (bufferChanged && _rxBufferCount > 0)
                     {
@@ -140,38 +131,31 @@ namespace pump_steering
                         if (result == ParseResult.Success)
                         {
                             ShiftBuffer(consumed);
-                            
-                            // Check compatibility
-                            if (frame.Stx == EhlProtocol.STX_DISPENSER && 
-                                frame.Addr == config.Address && 
+                            if (frame.Stx == EhlProtocol.STX_DISPENSER &&
+                                frame.Addr == config.Address &&
                                 frame.Cmd == waitForCmd)
-                            {
                                 return frame;
-                            }
-                            else 
-                            {
-                                Console.WriteLine($"[Serial] RX Ignored frame: CMD=0x{frame.Cmd:X2} ADDR={frame.Addr}");
-                                bufferChanged = true; // Try next frame
-                            }
+                            config.Logger?.LogDebug("Serial RX ignored frame: CMD=0x{Cmd:X2} ADDR={Addr}", frame.Cmd, frame.Addr);
+                            bufferChanged = true;
                         }
                         else if (result == ParseResult.Incomplete)
-                        {
-                            // Wait for more data
                             break;
-                        }
-                        else // Invalid
+                        else
                         {
-                            // Corrupt start or checksum. Shift 1 byte to resync.
                             ShiftBuffer(1);
                             bufferChanged = true;
                         }
                     }
 
-                    Thread.Sleep(10);
+                    await Task.Delay(10, ct).ConfigureAwait(false);
                 }
-                
-                Console.WriteLine($"[Serial] Timeout waiting for CMD 0x{waitForCmd:X2}");
+
+                config.Logger?.LogWarning("Serial timeout waiting for CMD 0x{Cmd:X2}", waitForCmd);
                 return null;
+            }
+            finally
+            {
+                _exchangeSemaphore.Release();
             }
         }
 
@@ -189,81 +173,60 @@ namespace pump_steering
             }
         }
 
-        // High-level API
+        // High-level API (async)
 
-        public (bool OpenForDelivery, bool StartButtonPressed, bool AutoMode)? PollState()
+        public async Task<(bool OpenForDelivery, bool StartButtonPressed, bool AutoMode)?> PollStateAsync(CancellationToken ct = default)
         {
-            var frame = Exchange(EhlProtocol.CMD_STATE, null, EhlProtocol.CMD_STATE);
+            var frame = await ExchangeAsync(EhlProtocol.CMD_STATE, null, EhlProtocol.CMD_STATE, ct).ConfigureAwait(false);
             if (frame != null && frame.Data.Length >= 1)
-            {
                 return EhlProtocol.InterpretState(frame.Data[0]);
-            }
             return null;
         }
 
-        public string? PollVolume()
+        public async Task<string?> PollVolumeAsync(CancellationToken ct = default)
         {
-            var frame = Exchange(EhlProtocol.CMD_VOLUME, null, EhlProtocol.CMD_VOLUME);
-            if (frame != null)
-            {
-                return EhlProtocol.InterpretVolume(frame.Data) ?? string.Empty;
-            }
-            return null;
+            var frame = await ExchangeAsync(EhlProtocol.CMD_VOLUME, null, EhlProtocol.CMD_VOLUME, ct).ConfigureAwait(false);
+            return frame != null ? (EhlProtocol.InterpretVolume(frame.Data) ?? string.Empty) : null;
         }
 
-        public string? PollPrice()
+        public async Task<string?> PollPriceAsync(CancellationToken ct = default)
         {
-            var frame = Exchange(EhlProtocol.CMD_PRICE, null, EhlProtocol.CMD_PRICE);
-            if (frame != null)
-            {
-                return EhlProtocol.InterpretPrice(frame.Data);
-            }
-            return null;
+            var frame = await ExchangeAsync(EhlProtocol.CMD_PRICE, null, EhlProtocol.CMD_PRICE, ct).ConfigureAwait(false);
+            return frame != null ? EhlProtocol.InterpretPrice(frame.Data) : null;
         }
 
-        public bool Unlock()
+        public async Task<bool> UnlockAsync(CancellationToken ct = default)
         {
-            // CMD_UNBLOCK (0x77)
-            var frame = Exchange(EhlProtocol.CMD_UNBLOCK, null, EhlProtocol.CMD_UNBLOCK);
-            // Verify by seeing if we get a response (any response is usually ACK for void commands, or echo)
-            // Python implementation: exchange() returns any frame seen.
-            // "We prefer a response matching ... but will also return any frames seen."
-            // If we get a matching frame, success.
+            var frame = await ExchangeAsync(EhlProtocol.CMD_UNBLOCK, null, EhlProtocol.CMD_UNBLOCK, ct).ConfigureAwait(false);
             return frame != null;
         }
 
-        public bool Lock()
+        public async Task<bool> LockAsync(CancellationToken ct = default)
         {
-            // CMD_BLOCK (0x69)
-            var frame = Exchange(EhlProtocol.CMD_BLOCK, null, EhlProtocol.CMD_BLOCK);
+            var frame = await ExchangeAsync(EhlProtocol.CMD_BLOCK, null, EhlProtocol.CMD_BLOCK, ct).ConfigureAwait(false);
             return frame != null;
         }
 
-        public bool SetPrice(string price)
+        public async Task<bool> SetPriceAsync(string price, CancellationToken ct = default)
         {
-            // 1. Product Select (0xC3) -> default 0x30 ('0')?
-            // Config says default 0x30.
             byte productByte = 0x30;
-            Exchange(EhlProtocol.CMD_PRODUCT_SELECT, new byte[] { productByte }, EhlProtocol.CMD_PRODUCT_SELECT);
-
-            // 2. Program Price (0xA9)
-            try 
+            await ExchangeAsync(EhlProtocol.CMD_PRODUCT_SELECT, [productByte], EhlProtocol.CMD_PRODUCT_SELECT, ct).ConfigureAwait(false);
+            try
             {
                 byte[] payload = EhlProtocol.EncodePrice(price);
-                var frame = Exchange(EhlProtocol.CMD_PROG_PRC, payload, EhlProtocol.CMD_PROG_PRC);
+                var frame = await ExchangeAsync(EhlProtocol.CMD_PROG_PRC, payload, EhlProtocol.CMD_PROG_PRC, ct).ConfigureAwait(false);
                 return frame != null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Serial] SetPrice Error: {ex.Message}");
+                config.Logger?.LogError(ex, "Serial SetPrice error: {Message}", ex.Message);
                 return false;
             }
         }
 
-        public bool Reset()
+        public async Task<bool> ResetAsync(CancellationToken ct = default)
         {
-            // CMD_RESET (0x81)
-            var frame = Exchange(EhlProtocol.CMD_RESET, null, EhlProtocol.CMD_RESET);
+            var frame = await ExchangeAsync(EhlProtocol.CMD_RESET, null, EhlProtocol.CMD_RESET, ct).ConfigureAwait(false);
             return frame != null;
         }
     }

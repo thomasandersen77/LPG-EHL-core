@@ -33,7 +33,14 @@ public record MethodResponseDto(
     [property: JsonPropertyName("errorCode")] string? ErrorCode = null,
     [property: JsonPropertyName("message")] string? Message = null,
     [property: JsonPropertyName("data")] object? Data = null
-);
+)
+{
+    public static MethodResponseDto Success(string cid, string? message = null, object? data = null) =>
+        new(Cid: cid, Ok: true, ErrorCode: null, Message: message, Data: data);
+
+    public static MethodResponseDto Error(string cid, string? errorCode = null, string? message = null) =>
+        new(Cid: cid, Ok: false, ErrorCode: errorCode, Message: message, Data: null);
+}
 
 // ===== TELEMETRY ENVELOPE (Device-to-Cloud) =====
 

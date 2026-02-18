@@ -18,11 +18,32 @@ dotnet build
 
 ## Running
 
-Run the application with the device connection string as an argument:
+**Recommended (production):** Set the device connection string in an environment variable so it is not exposed in process list or shell history:
+
+```bash
+export IOT_DEVICE_CONNECTION_STRING="HostName=...;DeviceId=...;SharedAccessKey=..."
+dotnet run
+```
+
+**Optional:** Pass the connection string as the first argument (overrides the env var if both are set):
 
 ```bash
 dotnet run -- "<your_device_connection_string>"
 ```
+
+**Mock mode** (no serial port, no IoT Hub required for testing):
+
+```bash
+dotnet run -- --mock
+```
+
+**With serial port and EHL address:** Pass serial port and optional EHL address after the connection string (or after `--mock`):
+
+```bash
+dotnet run -- "<connection_string>" "/dev/ttyS3" 33
+```
+
+The application uses structured logging (Microsoft.Extensions.Logging) to the console. Log levels can be adjusted for diagnostics.
 
 ## Features
 

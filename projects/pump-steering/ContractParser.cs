@@ -75,4 +75,15 @@ public static class ContractParser
         // Invalid UUID format, generate new one
         return (Guid.NewGuid().ToString(), WasGenerated: true);
     }
+
+    /// <summary>
+    /// Create a method response DTO for device-to-cloud replies.
+    /// </summary>
+    public static MethodResponseDto CreateResponse(
+        string cid,
+        bool ok,
+        string? message = null,
+        string? errorCode = null,
+        object? data = null) =>
+        new MethodResponseDto(cid, ok, errorCode, message, data);
 }
