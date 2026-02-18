@@ -1,23 +1,22 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace PumpSteering
+namespace pump_steering
 {
-    public class EhlFrame
+    public class EhlFrame(byte[] data)
     {
-        public byte Stx { get; set; }
-        public byte Length { get; set; }
-        public byte Addr { get; set; }
-        public byte Cmd { get; set; }
-        public byte[] Data { get; set; }
-        public byte Checksum { get; set; }
-        public byte Etx { get; set; }
+        public EhlFrame() : this(data: [])
+        {
+        }
+
+        public byte Stx { get; init; }
+        public byte Length { get; init; }
+        public byte Addr { get; init; }
+        public byte Cmd { get; init; }
+        public byte[] Data { get; set; } = data;
+        public byte Checksum { get; init; }
+        public byte Etx { get; init; }
 
         public override string ToString()
         {
-            string dataHex = Data != null && Data.Length > 0 ? BitConverter.ToString(Data).Replace("-", " ") : "<none>";
+            string dataHex = Data.Length > 0 ? BitConverter.ToString(Data).Replace("-", " ") : "<none>";
             return $"STX=0x{Stx:X2} LEN={Length} ADDR={Addr} CMD=0x{Cmd:X2} DATA={dataHex} CHK=0x{Checksum:X2} ETX=0x{Etx:X2}";
         }
     }
@@ -31,9 +30,9 @@ namespace PumpSteering
 
     public static class EhlProtocol
     {
-        public const byte STX_CONTROLLER = 0x10;
+        private const byte STX_CONTROLLER = 0x10;
         public const byte STX_DISPENSER = 0x20;
-        public const byte ETX = 0x36;
+        private const byte ETX = 0x36;
 
         public const byte CMD_STATE = 0x4B;
         public const byte CMD_VOLUME = 0x45;
@@ -45,7 +44,7 @@ namespace PumpSteering
         public const byte CMD_BLOCK = 0x69;
         public const byte CMD_RESET = 0x81;
 
-        public static byte ComputeChecksum(byte[] buffer, int length)
+        private static byte ComputeChecksum(byte[] buffer, int length)
         {
             byte x = 0;
             // XOR from start (STX) up to the byte before checkum
@@ -56,13 +55,13 @@ namespace PumpSteering
             return x;
         }
 
-        public static byte[] BuildFrame(byte addr, byte cmd, byte[] data = null)
+        public static byte[] BuildFrame(byte addr, byte cmd, byte[]? data = null)
         {
-            data ??= Array.Empty<byte>();
+            data ??= [];
             
             // Frame structure: STX (1) + LEN (1) + ADDR (1) + CMD (1) + DATA (N) + CHK (1) + ETX (1)
             
-            int frameLen = 6 + data.Length;
+            var frameLen = 6 + data.Length;
             if (frameLen > 255) throw new ArgumentException("Frame too long");
 
             byte[] frame = new byte[frameLen];
@@ -85,27 +84,27 @@ namespace PumpSteering
 
         public static (ParseResult Result, EhlFrame Frame, int Consumed) ParseOneFrame(byte[] buffer, int offset, int count)
         {
-            if (count < 6) return (ParseResult.Incomplete, null, 0);
+            if (count < 6) return (ParseResult.Incomplete, null, 0)!;
 
             byte stx = buffer[offset];
-            if (stx != STX_CONTROLLER && stx != STX_DISPENSER) return (ParseResult.Invalid, null, 0); 
+            if (stx != STX_CONTROLLER && stx != STX_DISPENSER) return (ParseResult.Invalid, null, 0)!; 
 
             byte length = buffer[offset + 1];
-            if (length < 6) return (ParseResult.Invalid, null, 0); // Invalid length byte
-            if (count < length) return (ParseResult.Incomplete, null, 0); // Need more bytes
+            if (length < 6) return (ParseResult.Invalid, null, 0)!; // Invalid length byte
+            if (count < length) return (ParseResult.Incomplete, null, 0)!; // Need more bytes
 
-            if (buffer[offset + length - 1] != ETX) return (ParseResult.Invalid, null, 0); 
+            if (buffer[offset + length - 1] != ETX) return (ParseResult.Invalid, null, 0)!; 
 
             byte checksum = buffer[offset + length - 2];
             
-            // Validate checksum (XOR of 0 .. length-3)
+            // Validate checksum (XOR of 0 ... length-3)
             byte calculated = 0;
             for (int i = 0; i < length - 2; i++)
             {
                 calculated ^= buffer[offset + i];
             }
 
-            if (calculated != checksum) return (ParseResult.Invalid, null, 0);
+            if (calculated != checksum) return (ParseResult.Invalid, null, 0)!;
 
             var frame = new EhlFrame
             {
@@ -126,12 +125,12 @@ namespace PumpSteering
 
         // Data Interpretation Helpers
 
-        public static string InterpretVolume(byte[] data)
+        public static string? InterpretVolume(byte[]? data)
         {
             if (data == null || data.Length < 5) return null;
             try 
             {
-                char[] chars = new char[6];
+                var chars = new char[6];
                 chars[0] = (char)data[4];
                 chars[1] = (char)data[3];
                 chars[2] = (char)data[2];
@@ -143,12 +142,12 @@ namespace PumpSteering
             catch { return null; }
         }
 
-        public static string InterpretPrice(byte[] data)
+        public static string? InterpretPrice(byte[]? data)
         {
             if (data == null || data.Length < 4) return null;
             try
             {
-                char[] chars = new char[5];
+                var chars = new char[5];
                 chars[0] = (char)data[3];
                 chars[1] = (char)data[2];
                 chars[2] = '.';
@@ -161,13 +160,11 @@ namespace PumpSteering
 
         public static byte[] EncodePrice(string priceStr)
         {
-             string p = priceStr.Trim();
+             var p = priceStr.Trim();
              // Validate format XX.XX
              if (p.Length != 5 || p[2] != '.') throw new ArgumentException("Price must be XX.XX");
-             string digits = p.Replace(".", "");
-             if (digits.Length != 4) throw new ArgumentException("Price must have 4 digits");
-
-             return new byte[] { (byte)digits[3], (byte)digits[2], (byte)digits[1], (byte)digits[0] };
+             var digits = p.Replace(".", "");
+             return digits.Length != 4 ? throw new ArgumentException("Price must have 4 digits") : [(byte)digits[3], (byte)digits[2], (byte)digits[1], (byte)digits[0]];
         }
 
         public static (bool OpenForDelivery, bool StartButtonPressed, bool AutoMode) InterpretState(byte stateByte)
@@ -176,9 +173,9 @@ namespace PumpSteering
             // bit2 (0x04) -> start
             // bit3 (0x08) -> auto
             
-            bool open = (stateByte & 0x02) != 0;
-            bool start = (stateByte & 0x04) != 0;
-            bool auto = (stateByte & 0x08) != 0;
+            var open = (stateByte & 0x02) != 0;
+            var start = (stateByte & 0x04) != 0;
+            var auto = (stateByte & 0x08) != 0;
             return (open, start, auto);
         }
     }
